@@ -29,6 +29,47 @@ type OrderItemWithProduct = {
   product: { name: string; unit: string } | null;
 };
 
+const compressImage = async (file: File): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_DIM = 1000;
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round(height * (MAX_DIM / width));
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round(width * (MAX_DIM / height));
+            height = MAX_DIM;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }));
+          } else {
+            resolve(file); // fallback
+          }
+        }, 'image/jpeg', 0.6); // 60% quality jpeg
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function Dispatches() {
   const toast = useToast();
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
@@ -205,7 +246,7 @@ export default function Dispatches() {
     }
   };
 
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     const imgs = files.filter((f) => f.type.startsWith('image/'));
@@ -213,8 +254,16 @@ export default function Dispatches() {
       toast('Please select image files only', 'error');
       return;
     }
-    setPhotoFiles((prev) => [...prev, ...imgs]);
-    setPhotoPreviews((prev) => [...prev, ...imgs.map((f) => URL.createObjectURL(f))]);
+    
+    setUploading(true);
+    try {
+      const compressedImgs = await Promise.all(imgs.map(compressImage));
+      setPhotoFiles((prev) => [...prev, ...compressedImgs]);
+      setPhotoPreviews((prev) => [...prev, ...compressedImgs.map((f) => URL.createObjectURL(f))]);
+    } catch (err) {
+      toast('Failed to compress images', 'error');
+    }
+    setUploading(false);
   };
 
   const removeQueuedPhoto = (idx: number) => {
@@ -666,11 +715,11 @@ export default function Dispatches() {
                     <div className="mb-3 space-y-3 rounded-lg border border-slate-200 p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                         <div className="flex-1">
-                          <label className="label">Select Photos</label>
+                          <label className="label">Take Photo</label>
                           <input
                             type="file"
                             accept="image/*"
-                            multiple
+                            capture="environment"
                             onChange={onPickFile}
                             className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-amber-700 hover:file:bg-amber-200"
                           />
