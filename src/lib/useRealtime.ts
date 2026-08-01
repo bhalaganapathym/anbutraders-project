@@ -9,8 +9,11 @@ export function useRealtime(table: string, onChange: () => void) {
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+    const apiUrl = import.meta.env.VITE_API_URL || '';
+    const wsBase = apiUrl 
+      ? apiUrl.replace(/^http/, 'ws') 
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1`;
+    const wsUrl = `${wsBase}/ws`;
     
     let ws: WebSocket;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
