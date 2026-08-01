@@ -1,0 +1,187 @@
+from sqlalchemy import Column, String, Integer, Numeric, ForeignKey, DateTime, Boolean, text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+from db.base_class import Base
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="Cashier")  # Admin, Manager, Cashier
+    is_active = Column(Boolean, default=True)
+
+class Customer(Base):
+    __tablename__ = "customers"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    name = Column(String, nullable=False)
+    phone = Column(String)
+    address = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+
+class Supplier(Base):
+    __tablename__ = "suppliers"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    name = Column(String, nullable=False)
+    email = Column(String)
+    phone = Column(String)
+    address = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+
+class Product(Base):
+    __tablename__ = "products"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    name = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    unit = Column(String, default='piece', nullable=False)
+    stock_qty = Column(Numeric, default=0, nullable=False)
+    price = Column(Numeric, default=0, nullable=False)
+    brand = Column(String)
+    size = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+
+class Order(Base):
+    __tablename__ = "orders"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String, default="pending", nullable=False)
+    delivery_address = Column(String)
+    notes = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    
+    customer = relationship("Customer")
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    quantity = Column(Numeric, default=1, nullable=False)
+    
+    order = relationship("Order", back_populates="items")
+
+class Vehicle(Base):
+    __tablename__ = "vehicles"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    vehicle_number = Column(String, nullable=False)
+    driver_name = Column(String, nullable=False)
+    driver_mobile = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+
+class Dispatch(Base):
+    __tablename__ = "dispatches"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    dispatch_no = Column(String, nullable=False)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    delivery_address = Column(String)
+    status = Column(String, default="pending", nullable=False)
+    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"))
+    loading_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    dispatch_team = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    
+    customer = relationship("Customer")
+    items = relationship("DispatchItem", back_populates="dispatch", cascade="all, delete-orphan")
+    weights = relationship("Weight", back_populates="dispatch", cascade="all, delete-orphan")
+    photos = relationship("Photo", back_populates="dispatch", cascade="all, delete-orphan")
+
+class DispatchItem(Base):
+    __tablename__ = "dispatch_items"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    product_name = Column(String, nullable=False)
+    quantity = Column(Numeric, default=1, nullable=False)
+    unit = Column(String, default="piece", nullable=False)
+    
+    dispatch = relationship("Dispatch", back_populates="items")
+
+class Weight(Base):
+    __tablename__ = "weights"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False)
+    actual_weight = Column(Numeric, nullable=False)
+    weighed_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    notes = Column(String)
+    
+    dispatch = relationship("Dispatch", back_populates="weights")
+
+class Photo(Base):
+    __tablename__ = "photos"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False)
+    url = Column(String, nullable=False)
+    caption = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    
+    dispatch = relationship("Dispatch", back_populates="photos")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="SET NULL"))
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"))
+    customer_name = Column(String)
+    read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+
+# New Tables for Billing Module
+class Sale(Base):
+    __tablename__ = "sales"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True) # Cashier
+    total_amount = Column(Numeric, default=0, nullable=False)
+    status = Column(String, default="completed", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    
+    items = relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
+
+class SaleItem(Base):
+    __tablename__ = "sale_items"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    sale_id = Column(UUID(as_uuid=True), ForeignKey("sales.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    quantity = Column(Numeric, default=1, nullable=False)
+    unit_price = Column(Numeric, nullable=False)
+    subtotal = Column(Numeric, nullable=False)
+    
+    sale = relationship("Sale", back_populates="items")
+
+class Purchase(Base):
+    __tablename__ = "purchases"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    supplier_id = Column(UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    total_amount = Column(Numeric, default=0, nullable=False)
+    status = Column(String, default="completed", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    
+    items = relationship("PurchaseItem", back_populates="purchase", cascade="all, delete-orphan")
+
+class PurchaseItem(Base):
+    __tablename__ = "purchase_items"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    purchase_id = Column(UUID(as_uuid=True), ForeignKey("purchases.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    quantity = Column(Numeric, default=1, nullable=False)
+    unit_cost = Column(Numeric, nullable=False)
+    subtotal = Column(Numeric, nullable=False)
+    
+    purchase = relationship("Purchase", back_populates="items")
+
+class StockMovement(Base):
+    __tablename__ = "stock_movements"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    movement_type = Column(String, nullable=False) # 'IN' or 'OUT'
+    quantity = Column(Numeric, nullable=False)
+    reference_id = Column(UUID(as_uuid=True), nullable=True) # Sale ID or Purchase ID
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
