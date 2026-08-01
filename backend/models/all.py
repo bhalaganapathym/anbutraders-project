@@ -82,6 +82,7 @@ class Dispatch(Base):
     delivery_address = Column(String)
     status = Column(String, default="pending", nullable=False)
     vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"))
+    vehicle_number = Column(String, nullable=True)
     loading_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     dispatch_team = Column(String)

@@ -92,6 +92,9 @@ export default function Dispatches() {
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [editVehicleNo, setEditVehicleNo] = useState('');
+
   // Per-item prices
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
 
@@ -136,11 +139,12 @@ export default function Dispatches() {
   const openCreate = () => {
     loadConfirmedOrders();
     setSelectedOrder('');
+    setVehicleNumber('');
     setCreateOpen(true);
   };
 
   const filtered = dispatches.filter((d) =>
-    [d.dispatch_no, d.customer?.name ?? '', d.delivery_address ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
+    [d.dispatch_no, d.customer?.name ?? '', d.delivery_address ?? '', d.vehicle_number ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
   );
 
   const createDispatch = async () => {
@@ -159,7 +163,7 @@ export default function Dispatches() {
         setCreating(false);
         return;
       }
-      const num = dispatches.length + 1; // Simplistic ID generation based on count
+      const num = dispatches.length + 1;
       const dispatchNo = `DSP-${String(num).padStart(4, '0')}`;
       
       const payload = {
@@ -167,6 +171,7 @@ export default function Dispatches() {
         order_id: selectedOrder,
         customer_id: order.customer_id,
         delivery_address: order.delivery_address,
+        vehicle_number: vehicleNumber.trim() || null,
         status: 'confirmed',
         items: orderItems.map((it) => ({
           product_id: it.product_id,
@@ -188,14 +193,13 @@ export default function Dispatches() {
 
   const openDetail = async (d: DispatchRow) => {
     setDetail(d);
+    setEditVehicleNo(d.vehicle_number ?? '');
     setWeightValue('');
     setWeightNotes('');
     setPhotoCaption('');
     setPhotoFiles([]);
     setPhotoPreviews([]);
 
-    
-    // Dispatches API already includes these via joinedload
     const di = (d.items ?? []) as DispatchItem[];
     setDetailItems(di);
     const prices: Record<string, string> = {};
@@ -203,6 +207,20 @@ export default function Dispatches() {
     setItemPrices(prices);
     setDetailWeights((d.weights ?? []) as Weight[]);
     setDetailPhotos((d.photos ?? []) as Photo[]);
+  };
+
+  const updateVehicleNumber = async () => {
+    if (!detail) return;
+    try {
+      await api.put(`/dispatches/${detail.id}`, {
+        ...detail,
+        vehicle_number: editVehicleNo.trim() || null,
+      });
+      toast('Vehicle details updated', 'success');
+      refreshDetail();
+    } catch {
+      toast('Failed to update vehicle details', 'error');
+    }
   };
 
   const refreshDetail = async () => {
@@ -508,6 +526,7 @@ export default function Dispatches() {
               <tr>
                 <th className="th">Dispatch No</th>
                 <th className="th">Customer</th>
+                <th className="th">Vehicle</th>
                 <th className="th">Total</th>
                 <th className="th">Status</th>
                 <th className="th">Created</th>
@@ -525,6 +544,15 @@ export default function Dispatches() {
                       </button>
                     </td>
                     <td className="td">{d.customer?.name ?? 'Unknown'}</td>
+                    <td className="td">
+                      {d.vehicle_number ? (
+                        <span className="flex items-center gap-1 font-semibold text-slate-700">
+                          <Truck size={14} className="text-amber-600" /> {d.vehicle_number}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">Not set</span>
+                      )}
+                    </td>
                     <td className="td">{itemTotal != null ? `₹${itemTotal.toFixed(2)}` : '—'}</td>
                     <td className="td"><DispatchStatusBadge status={d.status} /></td>
                     <td className="td">{new Date(d.created_at).toLocaleDateString()}</td>
@@ -557,17 +585,31 @@ export default function Dispatches() {
               No confirmed orders available. Confirm an order first.
             </div>
           ) : (
-            <div>
-              <label className="label">Confirmed Order *</label>
-              <select value={selectedOrder} onChange={(e) => setSelectedOrder(e.target.value)} className="input">
-                <option value="">Select an order...</option>
-                {confirmedOrders.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.customer?.name ?? 'Unknown'} — {new Date(o.created_at).toLocaleDateString()}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <>
+              <div>
+                <label className="label">Confirmed Order *</label>
+                <select value={selectedOrder} onChange={(e) => setSelectedOrder(e.target.value)} className="input">
+                  <option value="">Select an order...</option>
+                  {confirmedOrders.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.customer?.name ?? 'Unknown'} — {new Date(o.created_at).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label flex items-center gap-1">
+                  <Truck size={14} className="text-amber-600" /> Vehicle Details / Number
+                </label>
+                <input
+                  type="text"
+                  value={vehicleNumber}
+                  onChange={(e) => setVehicleNumber(e.target.value)}
+                  placeholder="e.g. TN 38 AB 1234 (Driver: Ramesh)"
+                  className="input"
+                />
+              </div>
+            </>
           )}
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setCreateOpen(false)} className="btn-secondary">Cancel</button>
@@ -582,12 +624,31 @@ export default function Dispatches() {
         {detail && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 p-4">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-5">
                 <div>
                   <p className="label">Customer</p>
                   <p className="flex items-center gap-1.5 font-semibold text-slate-800">
                     <User size={13} className="text-slate-400" /> {detail.customer?.name ?? 'Unknown'}
                   </p>
+                </div>
+                <div>
+                  <p className="label">Vehicle Details</p>
+                  {detail.status !== 'completed' ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={editVehicleNo}
+                        onChange={(e) => setEditVehicleNo(e.target.value)}
+                        onBlur={updateVehicleNumber}
+                        className="w-32 rounded border border-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-800"
+                        placeholder="Vehicle No"
+                      />
+                    </div>
+                  ) : (
+                    <p className="flex items-center gap-1 font-semibold text-slate-800">
+                      <Truck size={13} className="text-slate-400" /> {detail.vehicle_number || 'None'}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="label">Status</p>

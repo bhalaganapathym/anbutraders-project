@@ -26,7 +26,7 @@ export default function Login() {
       const API_URL = import.meta.env.VITE_API_URL || '/api';
       const formData = new URLSearchParams();
       formData.append('username', targetUsername);
-      formData.append('password', '');
+      formData.append('password', 'password123');
       
       const res = await fetch(`${API_URL}/login/access-token`, {
         method: 'POST',

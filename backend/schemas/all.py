@@ -199,6 +199,7 @@ class DispatchCreate(BaseModel):
     delivery_address: Optional[str] = None
     status: Optional[str] = "pending"
     vehicle_id: Optional[UUID] = None
+    vehicle_number: Optional[str] = None
     items: Optional[List[DispatchItemCreate]] = []
 
 class DispatchResponse(BaseModel):
@@ -209,6 +210,7 @@ class DispatchResponse(BaseModel):
     status: str
     delivery_address: Optional[str] = None
     vehicle_id: Optional[UUID] = None
+    vehicle_number: Optional[str] = None
     loading_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     dispatch_team: Optional[str] = None
