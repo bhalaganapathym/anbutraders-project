@@ -101,10 +101,15 @@ def create_order(
     
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
+        # Reduce product stock
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if product:
+            product.stock_qty -= item.quantity
         
     db.commit()
     db.refresh(order)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "products"})
     return order
 
 @router.get("/orders", response_model=List[OrderResponse])
@@ -170,6 +175,18 @@ def get_dispatches(db: Session = Depends(get_db)):
         joinedload(Dispatch.weights),
         joinedload(Dispatch.photos)
     ).order_by(Dispatch.created_at.desc()).all()
+
+@router.get("/dispatches/{id}", response_model=DispatchResponse)
+def get_dispatch(id: UUID, db: Session = Depends(get_db)):
+    dispatch = db.query(Dispatch).options(
+        joinedload(Dispatch.customer),
+        joinedload(Dispatch.items),
+        joinedload(Dispatch.weights),
+        joinedload(Dispatch.photos)
+    ).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    return dispatch
 
 @router.put("/dispatches/{id}", response_model=DispatchResponse)
 def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

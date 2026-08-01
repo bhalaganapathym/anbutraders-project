@@ -219,7 +219,14 @@ export default function Dispatches() {
   };
 
   const refreshDetail = async () => {
-    if (detail) await openDetail(detail);
+    if (detail) {
+      try {
+        const freshDetail = await api.get(`/dispatches/${detail.id}`);
+        await openDetail(freshDetail as DispatchRow);
+      } catch (e) {
+        console.error("Failed to refresh detail");
+      }
+    }
   };
 
   const addWeight = async () => {
