@@ -20,20 +20,13 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username || !password) {
-      toast('Please enter username and password', 'error');
-      return;
-    }
-    
+  const quickRoleLogin = async (targetUsername: string) => {
     setLoading(true);
     try {
-      // Use standard fetch since API requires form-data for OAuth2 token endpoint
       const API_URL = import.meta.env.VITE_API_URL || '/api';
       const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
+      formData.append('username', targetUsername);
+      formData.append('password', '');
       
       const res = await fetch(`${API_URL}/login/access-token`, {
         method: 'POST',
@@ -44,7 +37,55 @@ export default function Login() {
       });
       
       if (!res.ok) {
-        throw new Error('Invalid credentials');
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || 'Login failed');
+      }
+      
+      const payload = await res.json();
+      const userRes = await fetch(`${API_URL}/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${payload.access_token}`
+        }
+      });
+      if (!userRes.ok) throw new Error('Failed to fetch user details');
+      const userData = await userRes.json();
+      
+      login(payload.access_token, userData);
+    } catch (e: any) {
+      toast(e.message || 'Login failed', 'error');
+    }
+    setLoading(false);
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username) {
+      toast('Please enter username', 'error');
+      return;
+    }
+    if (username.toLowerCase() !== 'billing' && username.toLowerCase() !== 'dispatch' && !password) {
+      toast('Please enter password', 'error');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      const formData = new URLSearchParams();
+      formData.append('username', username);
+      formData.append('password', password || '');
+      
+      const res = await fetch(`${API_URL}/login/access-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString()
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || 'Invalid credentials');
       }
       
       const payload = await res.json();
@@ -141,6 +182,28 @@ export default function Login() {
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
+
+          <div className="pt-4 border-t border-slate-100">
+            <p className="text-xs font-semibold text-slate-400 text-center uppercase tracking-wider mb-3">Quick Login (No Password Required)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => quickRoleLogin('billing')}
+                disabled={loading}
+                className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:border-amber-200 transition"
+              >
+                Billing Team
+              </button>
+              <button
+                type="button"
+                onClick={() => quickRoleLogin('dispatch')}
+                disabled={loading}
+                className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:border-amber-200 transition"
+              >
+                Dispatch Team
+              </button>
+            </div>
+          </div>
         </form>
       </div>
 

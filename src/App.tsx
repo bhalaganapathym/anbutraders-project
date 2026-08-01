@@ -45,10 +45,8 @@ function AppContent() {
     return false;
   });
 
-  // Ensure user is on a valid view
-  if (!navItems.find(n => n.id === view)) {
-    setView('dashboard');
-  }
+  const currentNav = navItems.find((n) => n.id === view) || navItems[0];
+  const activeView = currentNav?.id || 'dashboard';
 
   const navigate = (v: string) => {
     setView(v);
@@ -74,7 +72,7 @@ function AppContent() {
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {navItems.map((item) => {
-            const active = view === item.id;
+            const active = activeView === item.id;
             return (
               <button
                 key={item.id}
@@ -127,7 +125,7 @@ function AppContent() {
             <Menu size={20} />
           </button>
           <h1 className="text-lg font-bold capitalize text-slate-800">
-            {navItems.find((n) => n.id === view)?.label ?? 'Dashboard'}
+            {navItems.find((n) => n.id === activeView)?.label ?? 'Dashboard'}
           </h1>
           <div className="ml-auto hidden items-center gap-2 text-sm text-slate-500 sm:flex">
             <span className="badge bg-emerald-100 text-emerald-700 capitalize">{user.role}</span>
@@ -135,13 +133,13 @@ function AppContent() {
         </header>
 
         <main className="flex-1 overflow-auto p-4 lg:p-8">
-          {view === 'dashboard' && <Dashboard onNavigate={navigate} />}
-          {view === 'customers' && <Customers />}
-          {view === 'products' && <Products />}
-          {view === 'pricelist' && <PriceList />}
-          {view === 'orders' && <Orders />}
-          {view === 'dispatches' && <Dispatches />}
-          {view === 'notifications' && <Notifications />}
+          {activeView === 'dashboard' && <Dashboard onNavigate={navigate} />}
+          {activeView === 'customers' && <Customers />}
+          {activeView === 'products' && <Products />}
+          {activeView === 'pricelist' && <PriceList />}
+          {activeView === 'orders' && <Orders />}
+          {activeView === 'dispatches' && <Dispatches />}
+          {activeView === 'notifications' && <Notifications />}
         </main>
       </div>
     </div>

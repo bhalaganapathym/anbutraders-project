@@ -5,6 +5,8 @@ import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box } from 'lucide-react';
 
+import { useAuth } from '@/context/AuthContext';
+
 type Form = { name: string; category: string; unit: string; price: string; stock_qty: string; brand: string; size: string };
 const empty: Form = { name: '', category: 'Steel', unit: 'piece', price: '0', stock_qty: '0', brand: '', size: '' };
 
@@ -14,6 +16,9 @@ const knownSizes = ['8mm', '10mm', '12mm', '16mm', '20mm', '25mm', '32mm'];
 
 export default function Products() {
   const toast = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -118,9 +123,11 @@ export default function Products() {
           <h1 className="text-2xl font-bold text-slate-800">Products</h1>
           <p className="text-sm text-slate-500">Manage your product catalog</p>
         </div>
-        <button onClick={openNew} className="btn-primary">
-          <Plus size={16} /> Add Product
-        </button>
+        {isAdmin && (
+          <button onClick={openNew} className="btn-primary">
+            <Plus size={16} /> Add Product
+          </button>
+        )}
       </div>
 
       <div className="relative max-w-sm">
@@ -166,9 +173,11 @@ export default function Products() {
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Package size={36} className="text-slate-300" />
           <p className="text-slate-500">No {unitFilter === 'kg' ? 'kg' : unitFilter === 'piece' ? 'piece' : ''} products found.</p>
-          <button onClick={openNew} className="btn-primary">
-            <Plus size={16} /> Add product
-          </button>
+          {isAdmin && (
+            <button onClick={openNew} className="btn-primary">
+              <Plus size={16} /> Add product
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
@@ -180,7 +189,7 @@ export default function Products() {
                     <Scale size={16} className="text-amber-600" /> Kg Products
                     <span className="badge bg-amber-100 text-amber-700">{kgProducts.length}</span>
                   </h2>
-                  <ProductTable products={kgProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} />
+                  <ProductTable products={kgProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} />
                 </div>
               )}
               {pieceProducts.length > 0 && (
@@ -189,7 +198,7 @@ export default function Products() {
                     <Box size={16} className="text-amber-600" /> Piece Products
                     <span className="badge bg-amber-100 text-amber-700">{pieceProducts.length}</span>
                   </h2>
-                  <ProductTable products={pieceProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} />
+                  <ProductTable products={pieceProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} />
                 </div>
               )}
               {otherProducts.length > 0 && (
@@ -198,12 +207,12 @@ export default function Products() {
                     <Package size={16} className="text-amber-600" /> Other Products
                     <span className="badge bg-amber-100 text-amber-700">{otherProducts.length}</span>
                   </h2>
-                  <ProductTable products={otherProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} />
+                  <ProductTable products={otherProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} />
                 </div>
               )}
             </>
           ) : (
-            <ProductTable products={visible} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} />
+            <ProductTable products={visible} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} />
           )}
         </div>
       )}
@@ -311,11 +320,13 @@ function ProductTable({
   categoryColor,
   onEdit,
   onRemove,
+  isAdmin,
 }: {
   products: Product[];
   categoryColor: Record<string, string>;
   onEdit: (p: Product) => void;
   onRemove: (p: Product) => void;
+  isAdmin: boolean;
 }) {
   return (
     <div className="table-wrap">
@@ -329,7 +340,7 @@ function ProductTable({
             <th className="th">Unit</th>
             <th className="th">Price</th>
             <th className="th">Stock</th>
-            <th className="th text-right">Actions</th>
+            {isAdmin && <th className="th text-right">Actions</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -363,14 +374,16 @@ function ProductTable({
                   {p.stock_qty}
                 </span>
               </td>
-              <td className="td text-right">
-                <button onClick={() => onEdit(p)} className="btn-ghost p-1.5" aria-label="Edit">
-                  <Pencil size={15} />
-                </button>
-                <button onClick={() => onRemove(p)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
-                  <Trash2 size={15} />
-                </button>
-              </td>
+              {isAdmin && (
+                <td className="td text-right">
+                  <button onClick={() => onEdit(p)} className="btn-ghost p-1.5" aria-label="Edit">
+                    <Pencil size={15} />
+                  </button>
+                  <button onClick={() => onRemove(p)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
+                    <Trash2 size={15} />
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

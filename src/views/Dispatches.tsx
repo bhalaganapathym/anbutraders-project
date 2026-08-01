@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRealtime } from '@/lib/useRealtime';
 import {
   api,
@@ -240,24 +240,47 @@ export default function Dispatches() {
     }
   };
 
-  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    const imgs = files.filter((f) => f.type.startsWith('image/'));
-    if (imgs.length === 0) {
-      toast('Please select image files only', 'error');
-      return;
-    }
-    
-    setUploading(true);
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+
+  const startCamera = async () => {
     try {
-      const compressedImgs = await Promise.all(imgs.map(compressImage));
-      setPhotoFiles((prev) => [...prev, ...compressedImgs]);
-      setPhotoPreviews((prev) => [...prev, ...compressedImgs.map((f) => URL.createObjectURL(f))]);
-    } catch (err) {
-      toast('Failed to compress images', 'error');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }
+      });
+      setCameraStream(stream);
+      setCameraModalOpen(true);
+    } catch (e) {
+      toast('Could not access camera. Please check permissions.', 'error');
     }
-    setUploading(false);
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+    setCameraModalOpen(false);
+  };
+
+  const capturePhotoFromCamera = (videoEl: HTMLVideoElement | null) => {
+    if (!videoEl) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoEl.videoWidth || 640;
+    canvas.height = videoEl.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(async (blob) => {
+      if (blob) {
+        const file = new File([blob], `dispatch_camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const compressed = await compressImage(file);
+        setPhotoFiles((prev) => [...prev, compressed]);
+        setPhotoPreviews((prev) => [...prev, URL.createObjectURL(compressed)]);
+        toast('Photo captured from camera', 'success');
+        stopCamera();
+      }
+    }, 'image/jpeg', 0.85);
   };
 
   const removeQueuedPhoto = (idx: number) => {
@@ -653,13 +676,9 @@ export default function Dispatches() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                         <div className="flex-1">
                           <label className="label">Take Photo</label>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={onPickFile}
-                            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-amber-700 hover:file:bg-amber-200"
-                          />
+                          <button onClick={startCamera} className="btn-primary flex items-center justify-center gap-2 w-full">
+                            <Camera size={16} /> Open Camera (Live Only)
+                          </button>
                         </div>
                         <div className="flex-1">
                           <label className="label">Caption (applies to all)</label>
@@ -667,7 +686,7 @@ export default function Dispatches() {
                             value={photoCaption}
                             onChange={(e) => setPhotoCaption(e.target.value)}
                             className="input"
-                            placeholder="Optional"
+                            placeholder="Optional caption"
                           />
                         </div>
                         <button onClick={addPhoto} disabled={uploading || photoFiles.length === 0} className="btn-primary whitespace-nowrap">
@@ -829,6 +848,57 @@ export default function Dispatches() {
           </div>
         </div>
       </Modal>
+
+      <LiveCameraModal
+        open={cameraModalOpen}
+        stream={cameraStream}
+        onClose={stopCamera}
+        onCapture={capturePhotoFromCamera}
+      />
     </div>
+  );
+}
+
+function LiveCameraModal({
+  open,
+  stream,
+  onClose,
+  onCapture,
+}: {
+  open: boolean;
+  stream: MediaStream | null;
+  onClose: () => void;
+  onCapture: (video: HTMLVideoElement | null) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  if (!open) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Live Camera Photo Capture" size="md">
+      <div className="space-y-4 text-center">
+        <div className="relative overflow-hidden rounded-xl bg-black">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            className="w-full h-64 object-cover"
+          />
+        </div>
+        <p className="text-xs text-slate-500 font-medium">Position camera over dispatch item and tap Snap Photo.</p>
+        <div className="flex justify-end gap-3 pt-2">
+          <button onClick={onClose} className="btn-secondary">Cancel</button>
+          <button onClick={() => onCapture(videoRef.current)} className="btn-primary flex items-center gap-2">
+            <Camera size={16} /> Snap Photo
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
