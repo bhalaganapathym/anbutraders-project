@@ -186,10 +186,12 @@ export default function Orders() {
       }
       setOpen(false);
       load();
-    } catch {
-      toast('Failed to save order', 'error');
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to save order';
+      toast(msg.includes('Internal Server Error') ? 'Server error — please try again' : msg, 'error');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const confirmOrder = async (o: OrderWithCustomer) => {

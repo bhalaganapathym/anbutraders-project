@@ -104,7 +104,8 @@ def create_order(
         # Reduce product stock
         product = db.query(Product).filter(Product.id == item.product_id).first()
         if product:
-            product.stock_qty -= item.quantity
+            from decimal import Decimal
+            product.stock_qty = product.stock_qty - Decimal(str(item.quantity))
         
     db.commit()
     db.refresh(order)
