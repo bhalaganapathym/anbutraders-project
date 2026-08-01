@@ -61,6 +61,7 @@ class OrderItem(Base):
     quantity = Column(Numeric, default=1, nullable=False)
     
     order = relationship("Order", back_populates="items")
+    product = relationship("Product")
 
 class Vehicle(Base):
     __tablename__ = "vehicles"
