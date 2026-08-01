@@ -119,12 +119,13 @@ def get_orders(db: Session = Depends(get_db)):
         joinedload(Order.items).joinedload(OrderItem.product)
     ).order_by(Order.created_at.desc()).all()
 
-@router.put("/orders/{id}", response_model=OrderResponse)
+@router.put("/orders/{id}")
 def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
+    old_status = order.status
     order_data = order_in.model_dump(exclude={"items"})
     for key, value in order_data.items():
         setattr(order, key, value)
@@ -132,6 +133,19 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
     db.query(OrderItem).filter(OrderItem.order_id == id).delete()
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
+        
+    if old_status != "confirmed" and order.status == "confirmed":
+        customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+        customer_name = customer.name if customer else "Unknown"
+        notification = Notification(
+            type="order_confirmed",
+            title="New Order Confirmed",
+            message=f"Order {str(order.id)[:8]} for {customer_name} has been confirmed and is ready for dispatch.",
+            order_id=order.id,
+            customer_name=customer_name
+        )
+        db.add(notification)
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
         
     db.commit()
     db.refresh(order)

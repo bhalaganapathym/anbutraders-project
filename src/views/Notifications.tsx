@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api, type Notification } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { useAuth } from '@/context/AuthContext';
 import {
   Bell, CheckCircle2, Trash2, X, Truck, IndianRupee, Clock,
 } from 'lucide-react';
 
 export default function Notifications() {
+  const { user } = useAuth();
   const toast = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,12 +18,21 @@ export default function Notifications() {
     setLoading(true);
     try {
       const data = await api.get('/notifications');
-      setNotifications(data as Notification[]);
+      
+      // Filter notifications based on role if needed (though backend might already filter them)
+      // For now, dispatch team only cares about 'order_confirmed' and billing cares about 'dispatch_completed'
+      const myNotifications = (data as Notification[]).filter(n => {
+        if (user?.role === 'dispatch') return n.type === 'order_confirmed';
+        if (user?.role === 'billing') return n.type === 'dispatch_completed';
+        return true; // admin sees all
+      });
+      
+      setNotifications(myNotifications);
     } catch {
       toast('Failed to load notifications', 'error');
     }
     setLoading(false);
-  }, [toast]);
+  }, [toast, user]);
 
   useEffect(() => {
     load();
@@ -61,20 +72,25 @@ export default function Notifications() {
 
   const filtered = filter === 'unread' ? notifications.filter((n) => !n.read) : notifications;
   const unreadCount = notifications.filter((n) => !n.read).length;
+  
+  const title = user?.role === 'dispatch' ? 'Dispatch Notifications' : 'Billing Notifications';
+  const subtitle = user?.role === 'dispatch' 
+    ? 'Alerts from the billing team when orders are ready' 
+    : 'Alerts from the dispatch team when orders are ready for billing';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-800">
-            Billing Notifications
+            {title}
             {unreadCount > 0 && (
               <span className="rounded-full bg-rose-500 px-2 py-0.5 text-sm font-bold text-white">
                 {unreadCount}
               </span>
             )}
           </h1>
-          <p className="text-sm text-slate-500">Alerts from the dispatch team when orders are ready for billing</p>
+          <p className="text-sm text-slate-500">{subtitle}</p>
         </div>
         {unreadCount > 0 && (
           <button onClick={markAllRead} className="btn-secondary">

@@ -14,6 +14,13 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: Optional[str] = "Cashier"
+    secret_question: Optional[str] = None
+    secret_answer: Optional[str] = None
+
+class PasswordResetRequest(BaseModel):
+    username: str
+    secret_answer: str
+    new_password: str
 
 class UserResponse(BaseModel):
     id: UUID

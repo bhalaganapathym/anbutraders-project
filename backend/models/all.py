@@ -9,7 +9,9 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(String, default="Cashier")  # Admin, Manager, Cashier
+    secret_question = Column(String, nullable=True)
+    secret_answer_hash = Column(String, nullable=True)
+    role = Column(String, default="Cashier")  # admin, billing, dispatch
     is_active = Column(Boolean, default=True)
 
 class Customer(Base):

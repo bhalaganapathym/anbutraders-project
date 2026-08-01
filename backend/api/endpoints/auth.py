@@ -7,7 +7,7 @@ from core.config import settings
 from db.session import SessionLocal
 from api.deps import get_db
 from models.all import User
-from schemas.all import Token, UserCreate, UserResponse
+from schemas.all import Token, UserCreate, UserResponse, PasswordResetRequest
 
 router = APIRouter()
 
@@ -42,9 +42,31 @@ def register_user(
         username=user_in.username,
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
-        role=user_in.role
+        role=user_in.role,
+        secret_question=user_in.secret_question,
+        secret_answer_hash=security.get_password_hash(user_in.secret_answer.lower()) if user_in.secret_answer else None
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
+@router.post("/reset-password")
+def reset_password(req: PasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == req.username).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+    if not user.secret_answer_hash:
+        raise HTTPException(status_code=400, detail="No secret question configured for this user")
+    if not security.verify_password(req.secret_answer.lower(), user.secret_answer_hash):
+        raise HTTPException(status_code=400, detail="Incorrect secret answer")
+    
+    user.hashed_password = security.get_password_hash(req.new_password)
+    db.commit()
+    return {"message": "Password updated successfully"}
+
+from api.deps import get_current_active_user
+
+@router.get("/users/me", response_model=UserResponse)
+def read_users_me(current_user: User = Depends(get_current_active_user)):
+    return current_user

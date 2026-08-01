@@ -1,12 +1,19 @@
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 async function fetchApi(endpoint: string, options: RequestInit = {}) {
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -23,8 +30,12 @@ export const api = {
   upload: async (endpoint: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
+      headers,
       body: formData,
     });
     if (!res.ok) throw new Error('Upload failed');

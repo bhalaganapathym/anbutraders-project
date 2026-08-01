@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { ToastProvider } from '@/components/Toast';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import {
-  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, X, HardHat, Tags, Bell,
+  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut
 } from 'lucide-react';
 import Dashboard from '@/views/Dashboard';
 import Customers from '@/views/Customers';
@@ -10,10 +11,11 @@ import Orders from '@/views/Orders';
 import Dispatches from '@/views/Dispatches';
 import PriceList from '@/views/PriceList';
 import Notifications from '@/views/Notifications';
+import Login from '@/views/Login';
 
 type NavItem = { id: string; label: string; icon: typeof LayoutDashboard };
 
-const navItems: NavItem[] = [
+const allNavItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'products', label: 'Products', icon: Package },
@@ -23,9 +25,30 @@ const navItems: NavItem[] = [
   { id: 'notifications', label: 'Notifications', icon: Bell },
 ];
 
-function App() {
+function AppContent() {
+  const { user, logout } = useAuth();
   const [view, setView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  if (!user) {
+    return <Login />;
+  }
+
+  const navItems = allNavItems.filter(item => {
+    if (user.role === 'admin') return true;
+    if (user.role === 'billing') {
+      return ['dashboard', 'customers', 'products', 'orders', 'notifications'].includes(item.id);
+    }
+    if (user.role === 'dispatch') {
+      return ['dashboard', 'products', 'dispatches', 'notifications'].includes(item.id);
+    }
+    return false;
+  });
+
+  // Ensure user is on a valid view
+  if (!navItems.find(n => n.id === view)) {
+    setView('dashboard');
+  }
 
   const navigate = (v: string) => {
     setView(v);
@@ -33,83 +56,104 @@ function App() {
   };
 
   return (
-    <ToastProvider>
-      <div className="flex min-h-screen bg-slate-100">
-        {/* Sidebar */}
-        <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-        >
-          <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-600 text-white shadow-sm">
-              <HardHat size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-bold leading-tight text-slate-800">Anbu Traders</p>
-              <p className="text-xs text-slate-500">Shop Management</p>
-            </div>
+    <div className="flex min-h-screen bg-slate-100">
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } flex flex-col`}
+      >
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-600 text-white shadow-sm">
+            <HardHat size={20} />
           </div>
-          <nav className="space-y-1 p-3">
-            {navItems.map((item) => {
-              const active = view === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => navigate(item.id)}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                    active
-                      ? 'bg-amber-50 text-amber-700'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
-                  }`}
-                >
-                  <item.icon size={18} />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="absolute bottom-0 left-0 right-0 border-t border-slate-200 p-4">
-            <p className="text-xs text-slate-400">Order & Dispatch System</p>
+          <div>
+            <p className="text-sm font-bold leading-tight text-slate-800">Anbu Traders</p>
+            <p className="text-xs text-slate-500 capitalize">{user.role} Panel</p>
           </div>
-        </aside>
-
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* Main */}
-        <div className="flex flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur lg:px-8">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="btn-ghost p-2 lg:hidden"
-              aria-label="Open menu"
-            >
-              <Menu size={20} />
-            </button>
-            <h1 className="text-lg font-bold capitalize text-slate-800">
-              {navItems.find((n) => n.id === view)?.label ?? 'Dashboard'}
-            </h1>
-            <div className="ml-auto hidden items-center gap-2 text-sm text-slate-500 sm:flex">
-              <span className="badge bg-emerald-100 text-emerald-700">Operational</span>
-            </div>
-          </header>
-
-          <main className="flex-1 p-4 lg:p-8">
-            {view === 'dashboard' && <Dashboard onNavigate={navigate} />}
-            {view === 'customers' && <Customers />}
-            {view === 'products' && <Products />}
-            {view === 'pricelist' && <PriceList />}
-            {view === 'orders' && <Orders />}
-            {view === 'dispatches' && <Dispatches />}
-            {view === 'notifications' && <Notifications />}
-          </main>
         </div>
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+          {navItems.map((item) => {
+            const active = view === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.id)}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                  active
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <item.icon size={18} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        
+        <div className="shrink-0 border-t border-slate-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-slate-700">{user.username}</p>
+              <p className="text-xs text-slate-500">{user.email}</p>
+            </div>
+            <button 
+              onClick={logout}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-rose-600 transition"
+              title="Logout"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <header className="sticky top-0 z-20 flex shrink-0 h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur lg:px-8">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="btn-ghost p-2 lg:hidden"
+            aria-label="Open menu"
+          >
+            <Menu size={20} />
+          </button>
+          <h1 className="text-lg font-bold capitalize text-slate-800">
+            {navItems.find((n) => n.id === view)?.label ?? 'Dashboard'}
+          </h1>
+          <div className="ml-auto hidden items-center gap-2 text-sm text-slate-500 sm:flex">
+            <span className="badge bg-emerald-100 text-emerald-700 capitalize">{user.role}</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-auto p-4 lg:p-8">
+          {view === 'dashboard' && <Dashboard onNavigate={navigate} />}
+          {view === 'customers' && <Customers />}
+          {view === 'products' && <Products />}
+          {view === 'pricelist' && <PriceList />}
+          {view === 'orders' && <Orders />}
+          {view === 'dispatches' && <Dispatches />}
+          {view === 'notifications' && <Notifications />}
+        </main>
       </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ToastProvider>
   );
 }
