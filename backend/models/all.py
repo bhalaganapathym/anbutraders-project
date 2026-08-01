@@ -101,6 +101,7 @@ class DispatchItem(Base):
     product_name = Column(String, nullable=False)
     quantity = Column(Numeric, default=1, nullable=False)
     unit = Column(String, default="piece", nullable=False)
+    price = Column(Numeric, default=0, nullable=True)
     
     dispatch = relationship("Dispatch", back_populates="items")
 

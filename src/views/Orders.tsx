@@ -229,11 +229,21 @@ export default function Orders() {
   const productName = (pid: string) => products.find((p) => p.id === pid)?.name ?? 'Unknown';
   const productPrice = (pid: string) => products.find((p) => p.id === pid)?.price ?? 0;
 
+  // Brands with multiple size variants (steels, etc.)
   const brandedProducts = products.filter((p) => p.brand && p.brand.trim() !== '');
   const unbrandedProducts = products.filter((p) => !p.brand || p.brand.trim() === '');
-  const brands = Array.from(new Set(brandedProducts.map((p) => p.brand!).filter(Boolean))).sort();
-  const sizesForBrand = (brand: string) => brandedProducts.filter((p) => p.brand === brand).sort((a, b) => (a.size ?? '').localeCompare(b.size ?? '', undefined, { numeric: true }));
+  const allBrands = Array.from(new Set(brandedProducts.map((p) => p.brand!).filter(Boolean))).sort();
+  const sizesForBrand = (brand: string) =>
+    brandedProducts.filter((p) => p.brand === brand).sort((a, b) =>
+      (a.size ?? '').localeCompare(b.size ?? '', undefined, { numeric: true })
+    );
+  // Brands that have size variants (steel etc.)
+  const brandsWithSizes = allBrands.filter((b) => sizesForBrand(b).some((p) => p.size && p.size.trim() !== '' && p.size.toLowerCase() !== 'n/a'));
+  // Brands that have NO size variants — can be added directly by brand selection
+  const brandsWithoutSizes = allBrands.filter((b) => !brandsWithSizes.includes(b));
   const selectedProduct = sizesForBrand(selBrand).find((p) => p.size === selSize);
+  // For no-size brands, the product is just the first (and only) one for that brand
+  const noSizeBrandProduct = (brand: string) => sizesForBrand(brand)[0] ?? null;
 
   const orderTotal = lines.reduce((sum, l) => sum + productPrice(l.product_id) * l.quantity, 0);
 
@@ -459,61 +469,94 @@ export default function Orders() {
           </div>
 
           <div>
-            <label className="label">Add Products by Brand</label>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
-              {brands.length === 0 && unbrandedProducts.length === 0 && (
-                <p className="text-sm text-slate-400">No products available. Add products with brand and size from the Products page first.</p>
+            <label className="label">Add Products by Name</label>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-4">
+              {allBrands.length === 0 && unbrandedProducts.length === 0 && (
+                <p className="text-sm text-slate-400">No products available. Add products from the Products page first.</p>
               )}
-              {brands.length > 0 && (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <div className="flex-1">
-                    <label className="label">Brand</label>
-                    <select
-                      value={selBrand}
-                      onChange={(e) => { setSelBrand(e.target.value); setSelSize(''); }}
-                      className="input"
+
+              {/* Steel / size-based brands */}
+              {brandsWithSizes.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">By Brand &amp; Size (Steel, etc.)</p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div className="flex-1">
+                      <label className="label">Brand</label>
+                      <select
+                        value={selBrand}
+                        onChange={(e) => { setSelBrand(e.target.value); setSelSize(''); }}
+                        className="input"
+                      >
+                        <option value="">Select brand…</option>
+                        {brandsWithSizes.map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="label">Size</label>
+                      <select
+                        value={selSize}
+                        onChange={(e) => setSelSize(e.target.value)}
+                        className="input"
+                        disabled={!selBrand}
+                      >
+                        <option value="">Select size…</option>
+                        {sizesForBrand(selBrand)
+                          .filter((p) => p.size && p.size.trim() !== '' && p.size.toLowerCase() !== 'n/a')
+                          .map((p) => (
+                            <option key={p.id} value={p.size ?? ''}>
+                              {p.size} — ₹{(p.price ?? 0).toFixed(2)}/{p.unit}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (selectedProduct) {
+                          addLine(selectedProduct.id);
+                          setSelBrand('');
+                          setSelSize('');
+                        } else {
+                          toast('Select a brand and size first', 'error');
+                        }
+                      }}
+                      disabled={!selectedProduct}
+                      className="btn-primary whitespace-nowrap"
                     >
-                      <option value="">Select brand…</option>
-                      {brands.map((b) => (
-                        <option key={b} value={b}>{b}</option>
-                      ))}
-                    </select>
+                      <Plus size={16} /> Add
+                    </button>
                   </div>
-                  <div className="flex-1">
-                    <label className="label">Size</label>
-                    <select
-                      value={selSize}
-                      onChange={(e) => setSelSize(e.target.value)}
-                      className="input"
-                      disabled={!selBrand}
-                    >
-                      <option value="">Select size…</option>
-                      {sizesForBrand(selBrand).map((p) => (
-                        <option key={p.id} value={p.size ?? ''}>
-                          {p.size ?? 'N/A'} — ₹{(p.price ?? 0).toFixed(2)}/{p.unit}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (selectedProduct) {
-                        addLine(selectedProduct.id);
-                        setSelSize('');
-                      } else {
-                        toast('Select a brand and size first', 'error');
-                      }
-                    }}
-                    disabled={!selectedProduct}
-                    className="btn-primary whitespace-nowrap"
-                  >
-                    <Plus size={16} /> Add
-                  </button>
                 </div>
               )}
+
+              {/* Non-size brands (cement, paint, etc.) — click to add directly */}
+              {brandsWithoutSizes.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">By Brand (Cement, etc.)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {brandsWithoutSizes.map((b) => {
+                      const prod = noSizeBrandProduct(b);
+                      if (!prod) return null;
+                      return (
+                        <button
+                          key={b}
+                          onClick={() => addLine(prod.id)}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-amber-400 hover:bg-amber-50"
+                        >
+                          <Plus size={12} className="mr-1 inline" />
+                          {b} — ₹{(prod.price ?? 0).toFixed(2)}/{prod.unit}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Completely unbranded products */}
               {unbrandedProducts.length > 0 && (
                 <div>
-                  <p className="mb-1.5 text-xs font-medium text-slate-500">Other products (no brand):</p>
+                  <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Other Products</p>
                   <div className="flex flex-wrap gap-2">
                     {unbrandedProducts.map((p) => (
                       <button
@@ -522,7 +565,7 @@ export default function Orders() {
                         className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-amber-400 hover:bg-amber-50"
                       >
                         <Plus size={12} className="mr-1 inline" />
-                        {p.name}
+                        {p.name} — ₹{(p.price ?? 0).toFixed(2)}/{p.unit}
                       </button>
                     ))}
                   </div>

@@ -178,6 +178,7 @@ export default function Dispatches() {
           product_name: it.product?.name ?? 'Unknown',
           quantity: it.quantity,
           unit: it.product?.unit ?? 'piece',
+          price: Number(it.product?.price ?? 0),
         }))
       };
       
@@ -311,44 +312,47 @@ export default function Dispatches() {
 
   const addPhoto = async () => {
     if (photoFiles.length === 0) {
-      toast('Please select at least one photo', 'error');
+      toast('Please capture at least one photo first', 'error');
       return;
     }
     setUploading(true);
     const caption = photoCaption.trim() || null;
-    let ok = 0;
-    let fail = 0;
-    const newPhotos = [];
+    const newPhotos: { url: string; caption: string | null }[] = [];
+
     for (const f of photoFiles) {
       try {
-        const res = await api.upload('/storage/upload', f);
-        newPhotos.push({
-          url: res.url,
-          caption,
+        // Convert file to base64 data URL — works without any cloud storage
+        const dataUrl: string = await new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result as string);
+          reader.onerror = rej;
+          reader.readAsDataURL(f);
         });
-        ok++;
+        newPhotos.push({ url: dataUrl, caption });
       } catch {
-        fail++;
+        // skip failed conversions
       }
     }
+
     if (newPhotos.length > 0) {
       try {
         await api.put(`/dispatches/${detail!.id}`, {
           ...detail,
           photos: [...(detail?.photos || []), ...newPhotos]
         });
+        toast(`${newPhotos.length} photo${newPhotos.length === 1 ? '' : 's'} saved`, 'success');
       } catch (e) {
-        toast('Failed to save photo records', 'error');
+        toast('Failed to save photos', 'error');
       }
+    } else {
+      toast('No photos could be processed', 'error');
     }
+
     setUploading(false);
     photoPreviews.forEach((p) => URL.revokeObjectURL(p));
     setPhotoFiles([]);
     setPhotoPreviews([]);
     setPhotoCaption('');
-    if (fail === 0) toast(`${ok} photo${ok === 1 ? '' : 's'} uploaded`, 'success');
-    else if (ok === 0) toast('Failed to upload photos', 'error');
-    else toast(`${ok} uploaded, ${fail} failed`, 'error');
     refreshDetail();
   };
 

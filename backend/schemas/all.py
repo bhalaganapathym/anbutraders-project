@@ -155,6 +155,7 @@ class DispatchItemCreate(BaseModel):
     product_name: str
     quantity: float
     unit: str
+    price: Optional[float] = 0
 
 class DispatchItemResponse(BaseModel):
     id: UUID
@@ -163,6 +164,7 @@ class DispatchItemResponse(BaseModel):
     product_name: str
     quantity: float
     unit: str
+    price: Optional[float] = 0
     class Config:
         from_attributes = True
 
