@@ -101,17 +101,7 @@ export default function Dispatches() {
   const [addRows, setAddRows] = useState<{ product: Product | null; qty: string }[]>([{ product: null, qty: '1' }]);
   const [addingItems, setAddingItems] = useState(false);
 
-  // Vehicle details entered on delivery
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [driverName, setDriverName] = useState('');
-  const [driverMobile, setDriverMobile] = useState('');
-  const [dispatchTeam, setDispatchTeam] = useState('');
-  const [savingVehicle, setSavingVehicle] = useState(false);
 
-  // WhatsApp send prompt after completion
-  const [whatsappOpen, setWhatsappOpen] = useState(false);
-  const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [whatsappMessage, setWhatsappMessage] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -150,7 +140,7 @@ export default function Dispatches() {
   };
 
   const filtered = dispatches.filter((d) =>
-    [d.dispatch_no, d.customer?.name ?? '', d.delivery_address ?? '', d.vehicle_number ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
+    [d.dispatch_no, d.customer?.name ?? '', d.delivery_address ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
   );
 
   const createDispatch = async () => {
@@ -203,10 +193,7 @@ export default function Dispatches() {
     setPhotoCaption('');
     setPhotoFiles([]);
     setPhotoPreviews([]);
-    setVehicleNumber(d.vehicle_number ?? '');
-    setDriverName(d.driver_name ?? '');
-    setDriverMobile(d.driver_mobile ?? '');
-    setDispatchTeam(d.dispatch_team ?? '');
+
     
     // Dispatches API already includes these via joinedload
     const di = (d.items ?? []) as DispatchItem[];
@@ -348,29 +335,6 @@ export default function Dispatches() {
     }
   };
 
-  const saveVehicle = async () => {
-    if (!vehicleNumber.trim()) {
-      toast('Vehicle number is required', 'error');
-      return;
-    }
-    setSavingVehicle(true);
-    try {
-      await api.put(`/dispatches/${detail!.id}`, {
-        ...detail,
-        vehicle_number: vehicleNumber.trim(),
-        driver_name: driverName.trim() || null,
-        driver_mobile: driverMobile.trim() || null,
-        dispatch_team: dispatchTeam.trim() || null,
-      });
-      toast('Vehicle details saved', 'success');
-      refreshDetail();
-      load();
-    } catch {
-      toast('Failed to save vehicle details', 'error');
-    }
-    setSavingVehicle(false);
-  };
-
   const updateItemPrice = async (itemId: string) => {
     // We'd have to find the item in detail and update its price
     // Since we only save items on dispatch put:
@@ -466,40 +430,6 @@ export default function Dispatches() {
     } catch {
       toast('Failed to complete dispatch', 'error');
     }
-
-    // Open WhatsApp prompt pre-filled with customer's contact number
-    const customerName = detail.customer?.name ?? 'Unknown';
-    const itemsList = detailItems
-      .map((it) => `• ${it.product_name}: ${it.quantity} ${it.unit} @ ₹${(it.price ?? 0).toFixed(2)}`)
-      .join('\n');
-    const msg = [
-      `Hello ${customerName},`,
-      ``,
-      `Your dispatch *${detail.dispatch_no}* has been completed.`,
-      ``,
-      `Items:`,
-      itemsList,
-      ``,
-      `Grand Total: *₹${grandTotal.toFixed(2)}*`,
-      detail.vehicle_number ? `Vehicle: ${detail.vehicle_number}` : '',
-      detail.delivery_address ? `Delivery Address: ${detail.delivery_address}` : '',
-      ``,
-      `Thank you for your business!`,
-    ].filter(Boolean).join('\n');
-    setWhatsappNumber(detail.customer?.phone ?? '');
-    setWhatsappMessage(msg);
-    setWhatsappOpen(true);
-  };
-
-  const sendWhatsapp = () => {
-    const digits = whatsappNumber.replace(/\D/g, '');
-    if (!digits) {
-      toast('Please enter a valid phone number', 'error');
-      return;
-    }
-    const url = `https://wa.me/${digits}?text=${encodeURIComponent(whatsappMessage)}`;
-    window.open(url, '_blank');
-    setWhatsappOpen(false);
   };
 
   const removeDispatch = async (d: DispatchRow) => {
@@ -845,133 +775,13 @@ export default function Dispatches() {
                   )}
                 </section>
 
-                <section>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700">
-                    <Truck size={16} className="text-amber-600" /> Vehicle & Dispatch Team
-                    {detail.vehicle_number ? (
-                      <span className="badge bg-emerald-100 text-emerald-700">Assigned</span>
-                    ) : (
-                      <span className="badge bg-rose-100 text-rose-700">Required</span>
-                    )}
-                  </h3>
-                  {!detail.vehicle_number && (
-                    <p className="mb-3 flex items-center gap-2 text-sm text-rose-700">
-                      <AlertCircle size={15} /> Enter vehicle details before completing this dispatch.
-                    </p>
-                  )}
-                  <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-2">
-                    <div>
-                      <label className="label">Vehicle Number *</label>
-                      <input
-                        value={vehicleNumber}
-                        onChange={(e) => setVehicleNumber(e.target.value)}
-                        className="input"
-                        placeholder="e.g. MH12 AB 1234"
-                        disabled={detail.status === 'completed'}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Dispatch Team</label>
-                      <input
-                        value={dispatchTeam}
-                        onChange={(e) => setDispatchTeam(e.target.value)}
-                        className="input"
-                        placeholder="Team name"
-                        disabled={detail.status === 'completed'}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Driver Name</label>
-                      <input
-                        value={driverName}
-                        onChange={(e) => setDriverName(e.target.value)}
-                        className="input"
-                        placeholder="Driver name"
-                        disabled={detail.status === 'completed'}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Driver Mobile</label>
-                      <input
-                        value={driverMobile}
-                        onChange={(e) => setDriverMobile(e.target.value)}
-                        className="input"
-                        placeholder="Mobile number"
-                        disabled={detail.status === 'completed'}
-                      />
-                    </div>
-                  </div>
-                  {detail.status !== 'completed' && (
-                    <div className="mt-3 flex justify-end">
-                      <button onClick={saveVehicle} disabled={savingVehicle || !vehicleNumber.trim()} className="btn-primary">
-                        <Truck size={15} /> {savingVehicle ? 'Saving...' : 'Save Vehicle Details'}
-                      </button>
-                    </div>
-                  )}
-                  {detail.status === 'completed' && detail.vehicle_number && (
-                    <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                      <p className="flex items-center gap-2 text-slate-700">
-                        <Truck size={14} className="text-slate-400" /> {detail.vehicle_number}
-                      </p>
-                      {detail.dispatch_team && (
-                        <p className="flex items-center gap-2 text-slate-700">
-                          <User size={14} className="text-slate-400" /> {detail.dispatch_team}
-                        </p>
-                      )}
-                      {detail.driver_name && (
-                        <p className="flex items-center gap-2 text-slate-700">
-                          <User size={14} className="text-slate-400" /> {detail.driver_name}
-                        </p>
-                      )}
-                      {detail.driver_mobile && (
-                        <p className="flex items-center gap-2 text-slate-700">
-                          <Phone size={14} className="text-slate-400" /> {detail.driver_mobile}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </section>
+
               </div>
             </div>
           </div>
         )}
       </Modal>
-      <Modal open={whatsappOpen} onClose={() => setWhatsappOpen(false)} title="Send WhatsApp Message" size="md">
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">
-            <MessageCircle size={18} className="mt-0.5 shrink-0" />
-            <p>Dispatch completed! Send the details to your customer via WhatsApp.</p>
-          </div>
-          <div>
-            <label className="label">Phone Number</label>
-            <div className="flex items-center gap-2">
-              <Phone size={16} className="text-slate-400" />
-              <input
-                value={whatsappNumber}
-                onChange={(e) => setWhatsappNumber(e.target.value)}
-                className="input"
-                placeholder="e.g. 919876543210"
-              />
-            </div>
-            <p className="mt-1 text-xs text-slate-400">Pre-filled from customer contacts. Include country code without +.</p>
-          </div>
-          <div>
-            <label className="label">Message</label>
-            <textarea
-              value={whatsappMessage}
-              onChange={(e) => setWhatsappMessage(e.target.value)}
-              className="input min-h-[160px] resize-y font-mono text-sm"
-              rows={8}
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setWhatsappOpen(false)} className="btn-secondary">Skip</button>
-            <button onClick={sendWhatsapp} className="btn-primary bg-emerald-600 hover:bg-emerald-700">
-              <Send size={15} /> Send via WhatsApp
-            </button>
-          </div>
-        </div>
-      </Modal>
+
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Products to Dispatch" size="md">
         <div className="space-y-3">
           <p className="text-sm text-slate-500">Add multiple products to this dispatch. Each row becomes a dispatch item.</p>
