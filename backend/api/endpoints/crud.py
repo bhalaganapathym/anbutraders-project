@@ -110,22 +110,6 @@ def create_order(
     db.commit()
     db.refresh(order)
     
-    # Save to CSV
-    try:
-        import csv
-        import os
-        from datetime import datetime
-        csv_file = os.path.join("uploads", "orders.csv")
-        os.makedirs("uploads", exist_ok=True)
-        file_exists = os.path.isfile(csv_file)
-        with open(csv_file, mode='a', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            if not file_exists:
-                writer.writerow(['Order ID', 'Customer ID', 'Status', 'Date', 'Delivery Address'])
-            writer.writerow([str(order.id), str(order.customer_id), order.status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), order.delivery_address or ''])
-    except Exception as e:
-        print("Failed to write to CSV:", e)
-
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "products"})
     return order
@@ -138,13 +122,42 @@ def get_orders(db: Session = Depends(get_db)):
     ).order_by(Order.created_at.desc()).all()
 
 @router.get("/orders/export")
-def export_orders():
-    import os
-    from fastapi.responses import FileResponse
-    csv_file = os.path.join("uploads", "orders.csv")
-    if not os.path.isfile(csv_file):
-        raise HTTPException(status_code=404, detail="No exported orders found.")
-    return FileResponse(csv_file, media_type="text/csv", filename="orders_export.csv")
+def export_orders(db: Session = Depends(get_db)):
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+    
+    orders = db.query(Order).options(
+        joinedload(Order.customer),
+        joinedload(Order.items).joinedload(OrderItem.product)
+    ).order_by(Order.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Order ID', 'Customer Name', 'Items Ordered', 'Total Amount', 'Date and Time'])
+
+    for order in orders:
+        customer_name = order.customer.name if order.customer else "Unknown"
+        date_time = order.created_at.strftime("%Y-%m-%d %H:%M:%S") if order.created_at else ""
+        
+        items_list = []
+        total_amount = 0
+        for item in order.items:
+            if item.product:
+                items_list.append(f"{item.product.name} (x{item.quantity})")
+                total_amount += float(item.quantity) * float(item.product.price or 0)
+            
+        items_str = "; ".join(items_list)
+        
+        writer.writerow([str(order.id), customer_name, items_str, f"{total_amount:.2f}", date_time])
+
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=orders_export.csv"}
+    )
 
 @router.put("/orders/{id}")
 def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

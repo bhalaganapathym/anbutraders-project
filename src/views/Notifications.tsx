@@ -23,7 +23,7 @@ export default function Notifications() {
       // For now, dispatch team only cares about 'order_confirmed' and billing cares about 'dispatch_completed'
       const myNotifications = (data as Notification[]).filter(n => {
         if (user?.role === 'dispatch') return n.type === 'order_confirmed';
-        if (user?.role === 'billing') return n.type === 'dispatch_completed';
+        if (user?.role === 'billing') return n.type === 'dispatch_completed' || n.type === 'photo_uploaded' || n.type === 'billing_alert';
         return true; // admin sees all
       });
       
