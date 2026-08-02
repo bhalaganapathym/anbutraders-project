@@ -109,10 +109,10 @@ export default function Products() {
   };
 
   const categoryColor: Record<string, string> = {
-    Steel: 'bg-slate-100 text-slate-700',
+    Steel: 'bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200',
     Cement: 'bg-blue-100 text-blue-700',
-    'TMT Bars': 'bg-amber-100 text-amber-700',
-    Pipes: 'bg-emerald-100 text-emerald-700',
+    'TMT Bars': 'bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300',
+    Pipes: 'bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300',
     Other: 'bg-violet-100 text-violet-700',
   };
 
@@ -120,8 +120,8 @@ export default function Products() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Products</h1>
-          <p className="text-sm text-slate-500">Manage your product catalog</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Products</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Manage your product catalog</p>
         </div>
         {isAdmin && (
           <button onClick={openNew} className="btn-primary">
@@ -131,7 +131,7 @@ export default function Products() {
       </div>
 
       <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -144,7 +144,7 @@ export default function Products() {
         <button
           onClick={() => setUnitFilter('all')}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            unitFilter === 'all' ? 'bg-amber-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            unitFilter === 'all' ? 'bg-indigo-600/80 dark:bg-indigo-600 text-white' : 'border border-white/20 dark:border-slate-700/50 bg-white text-slate-600 dark:text-slate-300 hover:bg-white/20 dark:bg-slate-800/30'
           }`}
         >
           <Package size={14} /> All ({filtered.length})
@@ -152,7 +152,7 @@ export default function Products() {
         <button
           onClick={() => setUnitFilter('kg')}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            unitFilter === 'kg' ? 'bg-amber-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            unitFilter === 'kg' ? 'bg-indigo-600/80 dark:bg-indigo-600 text-white' : 'border border-white/20 dark:border-slate-700/50 bg-white text-slate-600 dark:text-slate-300 hover:bg-white/20 dark:bg-slate-800/30'
           }`}
         >
           <Scale size={14} /> Kg Products ({kgProducts.length})
@@ -160,7 +160,7 @@ export default function Products() {
         <button
           onClick={() => setUnitFilter('piece')}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            unitFilter === 'piece' ? 'bg-amber-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            unitFilter === 'piece' ? 'bg-indigo-600/80 dark:bg-indigo-600 text-white' : 'border border-white/20 dark:border-slate-700/50 bg-white text-slate-600 dark:text-slate-300 hover:bg-white/20 dark:bg-slate-800/30'
           }`}
         >
           <Box size={14} /> Piece Products ({pieceProducts.length})
@@ -168,11 +168,11 @@ export default function Products() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>
       ) : visible.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Package size={36} className="text-slate-300" />
-          <p className="text-slate-500">No {unitFilter === 'kg' ? 'kg' : unitFilter === 'piece' ? 'piece' : ''} products found.</p>
+          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No {unitFilter === 'kg' ? 'kg' : unitFilter === 'piece' ? 'piece' : ''} products found.</p>
           {isAdmin && (
             <button onClick={openNew} className="btn-primary">
               <Plus size={16} /> Add product
@@ -185,27 +185,27 @@ export default function Products() {
             <>
               {kgProducts.length > 0 && (
                 <div>
-                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700">
-                    <Scale size={16} className="text-amber-600" /> Kg Products
-                    <span className="badge bg-amber-100 text-amber-700">{kgProducts.length}</span>
+                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                    <Scale size={16} className="text-indigo-600 dark:text-indigo-400" /> Kg Products
+                    <span className="badge bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{kgProducts.length}</span>
                   </h2>
                   <ProductTable products={kgProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} />
                 </div>
               )}
               {pieceProducts.length > 0 && (
                 <div>
-                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700">
-                    <Box size={16} className="text-amber-600" /> Piece Products
-                    <span className="badge bg-amber-100 text-amber-700">{pieceProducts.length}</span>
+                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                    <Box size={16} className="text-indigo-600 dark:text-indigo-400" /> Piece Products
+                    <span className="badge bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{pieceProducts.length}</span>
                   </h2>
                   <ProductTable products={pieceProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} />
                 </div>
               )}
               {otherProducts.length > 0 && (
                 <div>
-                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700">
-                    <Package size={16} className="text-amber-600" /> Other Products
-                    <span className="badge bg-amber-100 text-amber-700">{otherProducts.length}</span>
+                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                    <Package size={16} className="text-indigo-600 dark:text-indigo-400" /> Other Products
+                    <span className="badge bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{otherProducts.length}</span>
                   </h2>
                   <ProductTable products={otherProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} />
                 </div>
@@ -331,7 +331,7 @@ function ProductTable({
   return (
     <div className="table-wrap">
       <table className="w-full">
-        <thead className="border-b border-slate-200 bg-slate-50">
+        <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
           <tr>
             <th className="th">Product</th>
             <th className="th">Brand</th>
@@ -345,18 +345,18 @@ function ProductTable({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {products.map((p) => (
-            <tr key={p.id} className="hover:bg-slate-50">
+            <tr key={p.id} className="hover:bg-white/20 dark:bg-slate-800/30">
               <td className="td">
                 <div className="flex items-center gap-2">
-                  <Layers size={16} className="text-slate-400" />
-                  <span className="font-medium text-slate-800">{p.name}</span>
+                  <Layers size={16} className="text-slate-400 dark:text-slate-500" />
+                  <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
                 </div>
               </td>
               <td className="td">
-                {p.brand ? <span className="badge bg-amber-100 text-amber-700">{p.brand}</span> : <span className="text-slate-300">—</span>}
+                {p.brand ? <span className="badge bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{p.brand}</span> : <span className="text-slate-300">—</span>}
               </td>
               <td className="td">
-                {p.size ? <span className="font-medium text-slate-600">{p.size}</span> : <span className="text-slate-300">—</span>}
+                {p.size ? <span className="font-medium text-slate-600 dark:text-slate-300">{p.size}</span> : <span className="text-slate-300">—</span>}
               </td>
               <td className="td">
                 <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
@@ -365,12 +365,12 @@ function ProductTable({
               </td>
               <td className="td">{p.unit}</td>
               <td className="td">
-                <span className="flex items-center font-semibold text-slate-700">
-                  <IndianRupee size={13} className="text-slate-400" />{(p.price ?? 0).toFixed(2)}
+                <span className="flex items-center font-semibold text-slate-700 dark:text-slate-200">
+                  <IndianRupee size={13} className="text-slate-400 dark:text-slate-500" />{(p.price ?? 0).toFixed(2)}
                 </span>
               </td>
               <td className="td">
-                <span className={`font-semibold ${p.stock_qty <= 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                <span className={`font-semibold ${p.stock_qty <= 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>
                   {p.stock_qty}
                 </span>
               </td>

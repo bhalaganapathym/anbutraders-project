@@ -101,7 +101,7 @@ export default function Notifications() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-800">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-800 dark:text-slate-100">
             {title}
             {unreadCount > 0 && (
               <span className="rounded-full bg-rose-500 px-2 py-0.5 text-sm font-bold text-white">
@@ -109,7 +109,7 @@ export default function Notifications() {
               </span>
             )}
           </h1>
-          <p className="text-sm text-slate-500">{subtitle}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">{subtitle}</p>
         </div>
         {unreadCount > 0 && (
           <button onClick={markAllRead} className="btn-secondary">
@@ -122,7 +122,7 @@ export default function Notifications() {
         <button
           onClick={() => setFilter('all')}
           className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            filter === 'all' ? 'bg-amber-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            filter === 'all' ? 'bg-indigo-600/80 dark:bg-indigo-600 text-white' : 'border border-white/20 dark:border-slate-700/50 bg-white text-slate-600 dark:text-slate-300 hover:bg-white/20 dark:bg-slate-800/30'
           }`}
         >
           All ({notifications.length})
@@ -130,7 +130,7 @@ export default function Notifications() {
         <button
           onClick={() => setFilter('unread')}
           className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            filter === 'unread' ? 'bg-amber-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            filter === 'unread' ? 'bg-indigo-600/80 dark:bg-indigo-600 text-white' : 'border border-white/20 dark:border-slate-700/50 bg-white text-slate-600 dark:text-slate-300 hover:bg-white/20 dark:bg-slate-800/30'
           }`}
         >
           Unread ({unreadCount})
@@ -138,11 +138,11 @@ export default function Notifications() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Bell size={36} className="text-slate-300" />
-          <p className="text-slate-500">
+          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">
             {filter === 'unread' ? 'No unread notifications.' : 'No notifications yet. Completed dispatches will appear here.'}
           </p>
         </div>
@@ -156,18 +156,18 @@ export default function Notifications() {
               }`}
             >
               <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                n.read ? 'bg-slate-100 text-slate-400' : 'bg-amber-50 text-amber-600'
+                n.read ? 'bg-white/20 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500' : 'bg-indigo-50/50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
               }`}>
                 <Truck size={20} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-slate-800 break-words">{n.title}</p>
-                    <p className="mt-0.5 text-sm text-slate-600 break-words">{n.message}</p>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100 break-words">{n.title}</p>
+                    <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300 break-words">{n.message}</p>
                     {n.image_url && (
                       <div className="mt-3">
-                        <img src={n.image_url} alt="Attached" className="h-32 w-auto max-w-full rounded-md border border-slate-200 object-cover shadow-sm" />
+                        <img src={n.image_url} alt="Attached" className="h-32 w-auto max-w-full rounded-md border border-white/20 dark:border-slate-700/50 object-cover shadow-sm" />
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button onClick={() => downloadImage(n.image_url!, n.title)} className="btn-secondary text-xs px-2 py-1 h-auto">
                             <Download size={14} /> Download
@@ -180,10 +180,10 @@ export default function Notifications() {
                     )}
                   </div>
                   {!n.read && (
-                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-50/50 dark:bg-indigo-900/300" />
                   )}
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
                   <span className="flex items-center gap-1 shrink-0">
                     <Clock size={12} />
                     {new Date(n.created_at).toLocaleString()}
@@ -200,7 +200,7 @@ export default function Notifications() {
                 {!n.read && (
                   <button
                     onClick={() => markRead(n.id)}
-                    className="btn-ghost p-1.5 text-emerald-600 hover:bg-emerald-50"
+                    className="btn-ghost p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/50 dark:bg-emerald-900/30"
                     title="Mark as read"
                   >
                     <CheckCircle2 size={16} />

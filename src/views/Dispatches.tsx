@@ -517,8 +517,8 @@ export default function Dispatches() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Dispatches</h1>
-          <p className="text-sm text-slate-500">Weight verification, prices, photos, vehicle loading and completion</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dispatches</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Weight verification, prices, photos, vehicle loading and completion</p>
         </div>
         <button onClick={openCreate} className="btn-primary">
           <Plus size={16} /> Create Dispatch
@@ -526,7 +526,7 @@ export default function Dispatches() {
       </div>
 
       <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -536,11 +536,11 @@ export default function Dispatches() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Truck size={36} className="text-slate-300" />
-          <p className="text-slate-500">No dispatches yet.</p>
+          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No dispatches yet.</p>
           <button onClick={openCreate} className="btn-primary">
             <Plus size={16} /> Create your first dispatch
           </button>
@@ -548,7 +548,7 @@ export default function Dispatches() {
       ) : (
         <div className="table-wrap">
           <table className="w-full">
-            <thead className="border-b border-slate-200 bg-slate-50">
+            <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
               <tr>
                 <th className="th">Dispatch No</th>
                 <th className="th">Customer</th>
@@ -563,20 +563,20 @@ export default function Dispatches() {
               {filtered.map((d) => {
                 const itemTotal = detailItems && d.id === detail?.id ? grandTotal : null;
                 return (
-                  <tr key={d.id} className="hover:bg-slate-50">
+                  <tr key={d.id} className="hover:bg-white/20 dark:bg-slate-800/30">
                     <td className="td">
-                      <button onClick={() => openDetail(d)} className="font-semibold text-amber-700 hover:underline">
+                      <button onClick={() => openDetail(d)} className="font-semibold text-indigo-700 dark:text-indigo-300 hover:underline">
                         {d.dispatch_no}
                       </button>
                     </td>
                     <td className="td">{d.customer?.name ?? 'Unknown'}</td>
                     <td className="td">
                       {d.vehicle_number ? (
-                        <span className="flex items-center gap-1 font-semibold text-slate-700">
-                          <Truck size={14} className="text-amber-600" /> {d.vehicle_number}
+                        <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
+                          <Truck size={14} className="text-indigo-600 dark:text-indigo-400" /> {d.vehicle_number}
                         </span>
                       ) : (
-                        <span className="text-slate-400 italic">Not set</span>
+                        <span className="text-slate-400 dark:text-slate-500 italic">Not set</span>
                       )}
                     </td>
                     <td className="td">{itemTotal != null ? `₹${itemTotal.toFixed(2)}` : '—'}</td>
@@ -602,11 +602,11 @@ export default function Dispatches() {
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create Dispatch" size="md">
         <div className="space-y-4">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
             Select a confirmed customer order to generate a dispatch list.
           </p>
           {confirmedOrders.length === 0 ? (
-            <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-700">
+            <div className="rounded-lg bg-indigo-50/50 dark:bg-indigo-900/30 p-4 text-sm text-indigo-700 dark:text-indigo-300">
               <AlertCircle size={16} className="mr-1 inline" />
               No confirmed orders available. Confirm an order first.
             </div>
@@ -625,7 +625,7 @@ export default function Dispatches() {
               </div>
               <div>
                 <label className="label flex items-center gap-1">
-                  <Truck size={14} className="text-amber-600" /> Vehicle Details / Number
+                  <Truck size={14} className="text-indigo-600 dark:text-indigo-400" /> Vehicle Details / Number
                 </label>
                 <input
                   type="text"
@@ -671,12 +671,12 @@ export default function Dispatches() {
       <Modal open={!!detail} onClose={() => setDetail(null)} title={detail ? `Dispatch ${detail.dispatch_no}` : ''} size="xl">
         {detail && (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/20 dark:bg-slate-800/30 p-4">
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-5">
                 <div>
                   <p className="label">Customer</p>
-                  <p className="flex items-center gap-1.5 font-semibold text-slate-800">
-                    <User size={13} className="text-slate-400" /> {detail.customer?.name ?? 'Unknown'}
+                  <p className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-100">
+                    <User size={13} className="text-slate-400 dark:text-slate-500" /> {detail.customer?.name ?? 'Unknown'}
                   </p>
                 </div>
                 <div className="col-span-2 sm:col-span-1">
@@ -688,7 +688,7 @@ export default function Dispatches() {
                         value={editVehicleNo}
                         onChange={(e) => setEditVehicleNo(e.target.value)}
                         onBlur={updateVehicleNumber}
-                        className="w-full rounded border border-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-800"
+                        className="w-full rounded border border-white/30 dark:border-slate-600/50 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:text-slate-100"
                         placeholder="Vehicle No"
                       />
                       <input
@@ -696,7 +696,7 @@ export default function Dispatches() {
                         value={editDriverName}
                         onChange={(e) => setEditDriverName(e.target.value)}
                         onBlur={updateVehicleNumber}
-                        className="w-full rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-800"
+                        className="w-full rounded border border-white/30 dark:border-slate-600/50 px-2 py-0.5 text-xs text-slate-800 dark:text-slate-100"
                         placeholder="Driver Name"
                       />
                       <input
@@ -704,17 +704,17 @@ export default function Dispatches() {
                         value={editDriverMobile}
                         onChange={(e) => setEditDriverMobile(e.target.value)}
                         onBlur={updateVehicleNumber}
-                        className="w-full rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-800"
+                        className="w-full rounded border border-white/30 dark:border-slate-600/50 px-2 py-0.5 text-xs text-slate-800 dark:text-slate-100"
                         placeholder="Mobile"
                       />
                     </div>
                   ) : (
                     <div className="flex flex-col gap-0.5">
-                      <p className="flex items-center gap-1 font-semibold text-slate-800">
-                        <Truck size={13} className="text-slate-400" /> {detail.vehicle_number || 'None'}
+                      <p className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-100">
+                        <Truck size={13} className="text-slate-400 dark:text-slate-500" /> {detail.vehicle_number || 'None'}
                       </p>
-                      {detail.driver_name && <p className="text-xs text-slate-600">{detail.driver_name}</p>}
-                      {detail.driver_mobile && <p className="text-xs text-slate-600">{detail.driver_mobile}</p>}
+                      {detail.driver_name && <p className="text-xs text-slate-600 dark:text-slate-300">{detail.driver_name}</p>}
+                      {detail.driver_mobile && <p className="text-xs text-slate-600 dark:text-slate-300">{detail.driver_mobile}</p>}
                     </div>
                   )}
                 </div>
@@ -724,14 +724,14 @@ export default function Dispatches() {
                 </div>
                 <div>
                   <p className="label">Created</p>
-                  <p className="flex items-center gap-1.5 text-slate-600">
-                    <Calendar size={13} className="text-slate-400" /> {new Date(detail.created_at).toLocaleDateString()}
+                  <p className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                    <Calendar size={13} className="text-slate-400 dark:text-slate-500" /> {new Date(detail.created_at).toLocaleDateString()}
                   </p>
                 </div>
                 <div>
                   <p className="label">Delivery Address</p>
-                  <p className="flex items-center gap-1.5 text-slate-600">
-                    <MapPin size={13} className="text-slate-400" /> {detail.delivery_address ?? '—'}
+                  <p className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                    <MapPin size={13} className="text-slate-400 dark:text-slate-500" /> {detail.delivery_address ?? '—'}
                   </p>
                 </div>
               </div>
@@ -743,7 +743,7 @@ export default function Dispatches() {
             </div>
 
             {detail.status === 'completed' && (
-              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/30 p-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 size={16} /> Dispatch completed on {new Date(detail.completed_at ?? '').toLocaleString()}
               </div>
             )}
@@ -752,23 +752,23 @@ export default function Dispatches() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <section>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700">
-                    <Package size={16} className="text-amber-600" /> Items & Prices
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                    <Package size={16} className="text-indigo-600 dark:text-indigo-400" /> Items & Prices
                   </h3>
                   <div className="space-y-2">
                     {detailItems.map((it) => {
                       const lineTotal = (it.price ?? 0) * it.quantity;
                       return (
-                        <div key={it.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-100 px-3 py-2.5">
-                          <span className="flex-1 text-sm font-medium text-slate-700">{it.product_name}</span>
-                          <span className="text-sm text-slate-500">{it.quantity} {it.unit}</span>
-                          <span className="text-sm text-slate-600">₹{(it.price ?? 0).toFixed(2)} per {it.unit}</span>
-                          <span className="w-24 text-right text-sm font-semibold text-slate-800">₹{lineTotal.toFixed(2)}</span>
+                        <div key={it.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/20 dark:border-slate-700/50 px-3 py-2.5">
+                          <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{it.product_name}</span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">{it.quantity} {it.unit}</span>
+                          <span className="text-sm text-slate-600 dark:text-slate-300">₹{(it.price ?? 0).toFixed(2)} per {it.unit}</span>
+                          <span className="w-24 text-right text-sm font-semibold text-slate-800 dark:text-slate-100">₹{lineTotal.toFixed(2)}</span>
                         </div>
                       );
                     })}
                   </div>
-                  <div className="mt-3 flex items-center justify-between rounded-lg bg-amber-50 px-4 py-2.5">
+                  <div className="mt-3 flex items-center justify-between rounded-lg bg-indigo-50/50 dark:bg-indigo-900/30 px-4 py-2.5">
                     <span className="text-sm font-bold text-amber-800">Grand Total</span>
                     <span className="text-lg font-bold text-amber-800">₹{grandTotal.toFixed(2)}</span>
                   </div>
@@ -780,11 +780,11 @@ export default function Dispatches() {
                 </section>
 
                 <section>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700">
-                    <Camera size={16} className="text-amber-600" /> Dispatch Photos ({detailPhotos.length})
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                    <Camera size={16} className="text-indigo-600 dark:text-indigo-400" /> Dispatch Photos ({detailPhotos.length})
                   </h3>
                   {detail.status !== 'completed' && (
-                    <div className="mb-3 space-y-3 rounded-lg border border-slate-200 p-3">
+                    <div className="mb-3 space-y-3 rounded-lg border border-white/20 dark:border-slate-700/50 p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                         <div className="flex-1">
                           <label className="label">Take Photo</label>
@@ -808,7 +808,7 @@ export default function Dispatches() {
                       {photoPreviews.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           {photoPreviews.map((src, idx) => (
-                            <div key={idx} className="relative overflow-hidden rounded-lg border border-slate-200">
+                            <div key={idx} className="relative overflow-hidden rounded-lg border border-white/20 dark:border-slate-700/50">
                               <img src={src} alt={`Selected ${idx + 1}`} className="h-20 w-28 object-cover" />
                               <button
                                 onClick={() => removeQueuedPhoto(idx)}
@@ -823,13 +823,13 @@ export default function Dispatches() {
                     </div>
                   )}
                   {detailPhotos.length === 0 ? (
-                    <p className="text-sm text-slate-400">No photos attached yet.</p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No photos attached yet.</p>
                   ) : (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       {detailPhotos.map((ph) => (
                         <div 
                           key={ph.id} 
-                          className="group relative overflow-hidden rounded-lg border border-slate-200 cursor-pointer hover:opacity-80 transition"
+                          className="group relative overflow-hidden rounded-lg border border-white/20 dark:border-slate-700/50 cursor-pointer hover:opacity-80 transition"
                           onClick={() => setViewingPhoto(ph)}
                         >
                           <img src={ph.url} alt={ph.caption ?? 'Dispatch photo'} className="h-32 w-full object-cover" />
@@ -844,14 +844,14 @@ export default function Dispatches() {
                 </div>
 
                 <section>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700">
-                    <WeightIcon size={16} className="text-amber-600" /> Weight Verification
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                    <WeightIcon size={16} className="text-indigo-600 dark:text-indigo-400" /> Weight Verification
                     {detailWeights.length > 0 && (
-                      <span className="badge bg-amber-100 text-amber-700">Total: {totalWeight} kg</span>
+                      <span className="badge bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">Total: {totalWeight} kg</span>
                     )}
                   </h3>
                   {detail.status !== 'completed' && (
-                    <div className="mb-3 flex flex-col gap-2 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-end">
+                    <div className="mb-3 flex flex-col gap-2 rounded-lg border border-white/20 dark:border-slate-700/50 p-3 sm:flex-row sm:items-end">
                       <div className="flex-1">
                         <label className="label">Actual Weight (kg)</label>
                         <input
@@ -879,17 +879,17 @@ export default function Dispatches() {
                     </div>
                   )}
                   {detailWeights.length === 0 ? (
-                    <p className="text-sm text-slate-400">No weight records yet.</p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No weight records yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {detailWeights.map((w) => (
-                        <div key={w.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+                        <div key={w.id} className="flex items-center justify-between rounded-lg border border-white/20 dark:border-slate-700/50 px-3 py-2">
                           <div>
-                            <span className="text-sm font-semibold text-slate-700">{w.actual_weight} kg</span>
-                            {w.notes && <span className="ml-2 text-xs text-slate-500">{w.notes}</span>}
+                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{w.actual_weight} kg</span>
+                            {w.notes && <span className="ml-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{w.notes}</span>}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-400">{new Date(w.weighed_at).toLocaleString()}</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(w.weighed_at).toLocaleString()}</span>
                             {detail.status !== 'completed' && (
                               <button onClick={() => deleteWeight(w.id)} className="btn-ghost p-1 text-rose-500 hover:bg-rose-50">
                                 <X size={13} />
@@ -911,7 +911,7 @@ export default function Dispatches() {
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Products to Dispatch" size="md">
         <div className="space-y-3">
-          <p className="text-sm text-slate-500">Add multiple products to this dispatch. Each row becomes a dispatch item.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Add multiple products to this dispatch. Each row becomes a dispatch item.</p>
           {addRows.map((row, idx) => (
             <div key={idx} className="flex items-end gap-2">
               <div className="flex-1">
@@ -960,7 +960,7 @@ export default function Dispatches() {
       <Modal open={!!viewingPhoto} onClose={() => setViewingPhoto(null)} title="View Photo" size="lg">
         {viewingPhoto && (
           <div className="space-y-4">
-            <div className="flex justify-center bg-slate-100 rounded-lg p-2">
+            <div className="flex justify-center bg-white/20 dark:bg-slate-800/40 rounded-lg p-2">
               <img 
                 src={viewingPhoto.url} 
                 alt={viewingPhoto.caption || ''} 
@@ -968,7 +968,7 @@ export default function Dispatches() {
               />
             </div>
             {viewingPhoto.caption && (
-              <p className="text-center text-sm font-medium text-slate-700">{viewingPhoto.caption}</p>
+              <p className="text-center text-sm font-medium text-slate-700 dark:text-slate-200">{viewingPhoto.caption}</p>
             )}
             <div className="flex justify-end gap-3 pt-2">
               <a
@@ -1036,7 +1036,7 @@ function LiveCameraModal({
             className="w-full h-64 object-cover"
           />
         </div>
-        <p className="text-xs text-slate-500 font-medium">Position camera over dispatch item and tap Snap Photo.</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium">Position camera over dispatch item and tap Snap Photo.</p>
         <div className="flex justify-end gap-3 pt-2">
           <button onClick={onClose} className="btn-secondary">Cancel</button>
           <button onClick={() => onCapture(videoRef.current)} className="btn-primary flex items-center gap-2">

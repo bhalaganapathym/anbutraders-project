@@ -39,7 +39,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: M
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-800">{title}</h2>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">{title}</h2>
           <button onClick={onClose} className="btn-ghost p-1.5" aria-label="Close">
             <X size={18} />
           </button>

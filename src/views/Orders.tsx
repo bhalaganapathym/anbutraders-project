@@ -251,8 +251,8 @@ export default function Orders() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Orders</h1>
-          <p className="text-sm text-slate-500">Create orders with new or existing customers</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Orders</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Create orders with new or existing customers</p>
         </div>
         <button onClick={openNew} className="btn-primary">
           <Plus size={16} /> New Order
@@ -260,7 +260,7 @@ export default function Orders() {
       </div>
 
       <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -270,11 +270,11 @@ export default function Orders() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <ShoppingCart size={36} className="text-slate-300" />
-          <p className="text-slate-500">No orders yet.</p>
+          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No orders yet.</p>
           <button onClick={openNew} className="btn-primary">
             <Plus size={16} /> Create your first order
           </button>
@@ -282,7 +282,7 @@ export default function Orders() {
       ) : (
         <div className="table-wrap">
           <table className="w-full">
-            <thead className="border-b border-slate-200 bg-slate-50">
+            <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
               <tr>
                 <th className="th">Customer</th>
                 <th className="th">Phone</th>
@@ -295,20 +295,20 @@ export default function Orders() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((o) => (
-                <tr key={o.id} className="hover:bg-slate-50">
+                <tr key={o.id} className="hover:bg-white/20 dark:bg-slate-800/30">
                   <td className="td">
-                    <button onClick={() => openDetail(o)} className="font-medium text-amber-700 hover:underline">
+                    <button onClick={() => openDetail(o)} className="font-medium text-indigo-700 dark:text-indigo-300 hover:underline">
                       {o.customer?.name ?? 'Unknown'}
                     </button>
                   </td>
-                  <td className="td text-slate-500">{o.customer?.phone ?? '—'}</td>
-                  <td className="td text-slate-500">—</td>
+                  <td className="td text-slate-500 dark:text-slate-400 dark:text-slate-500">{o.customer?.phone ?? '—'}</td>
+                  <td className="td text-slate-500 dark:text-slate-400 dark:text-slate-500">—</td>
                   <td className="td max-w-[200px] truncate">{o.delivery_address ?? '—'}</td>
                   <td className="td">
                     {o.status === 'confirmed' ? (
-                      <span className="badge bg-emerald-100 text-emerald-700">Confirmed</span>
+                      <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Confirmed</span>
                     ) : (
-                      <span className="badge bg-slate-100 text-slate-700">Pending</span>
+                      <span className="badge bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">Pending</span>
                     )}
                   </td>
                   <td className="td">{new Date(o.created_at).toLocaleDateString()}</td>
@@ -317,7 +317,7 @@ export default function Orders() {
                       {o.status === 'pending' && (
                         <button
                           onClick={() => confirmOrder(o)}
-                          className="btn-ghost p-1.5 text-emerald-600 hover:bg-emerald-50"
+                          className="btn-ghost p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/50 dark:bg-emerald-900/30"
                           title="Confirm order"
                         >
                           <CheckCircle2 size={15} />
@@ -342,12 +342,12 @@ export default function Orders() {
         <div className="space-y-4">
           {/* Customer section */}
           {!editing && (
-            <div className="rounded-lg border border-slate-200">
-              <div className="flex border-b border-slate-200">
+            <div className="rounded-lg border border-white/20 dark:border-slate-700/50">
+              <div className="flex border-b border-white/20 dark:border-slate-700/50">
                 <button
                   onClick={() => { setCustomerMode('search'); setSelectedCustomer(null); }}
                   className={`flex-1 px-4 py-2.5 text-sm font-medium transition ${
-                    customerMode === 'search' ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:bg-slate-50'
+                    customerMode === 'search' ? 'bg-indigo-50/50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 dark:text-slate-500 hover:bg-white/20 dark:bg-slate-800/30'
                   }`}
                 >
                   <Phone size={14} className="mr-1.5 inline" /> Search Existing Customer
@@ -355,7 +355,7 @@ export default function Orders() {
                 <button
                   onClick={() => { setCustomerMode('new'); setSelectedCustomer(null); }}
                   className={`flex-1 px-4 py-2.5 text-sm font-medium transition ${
-                    customerMode === 'new' ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:bg-slate-50'
+                    customerMode === 'new' ? 'bg-indigo-50/50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 dark:text-slate-500 hover:bg-white/20 dark:bg-slate-800/30'
                   }`}
                 >
                   <UserPlus size={14} className="mr-1.5 inline" /> New Customer
@@ -366,7 +366,7 @@ export default function Orders() {
                 <div className="space-y-3 p-4">
                   <div className="flex gap-2">
                     <div className="relative flex-1">
-                      <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                       <input
                         value={phoneSearch}
                         onChange={(e) => setPhoneSearch(e.target.value)}
@@ -381,7 +381,7 @@ export default function Orders() {
                   </div>
                   {searchResults.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-slate-500">Select a customer:</p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Select a customer:</p>
                       {searchResults.map((c) => (
                         <button
                           key={c.id}
@@ -391,27 +391,27 @@ export default function Orders() {
                           }}
                           className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
                             selectedCustomer?.id === c.id
-                              ? 'border-amber-400 bg-amber-50'
-                              : 'border-slate-200 hover:bg-slate-50'
+                              ? 'border-amber-400 bg-indigo-50/50 dark:bg-indigo-900/30'
+                              : 'border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:bg-slate-800/30'
                           }`}
                         >
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
-                            <User size={16} className="text-slate-500" />
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 dark:bg-slate-800/40">
+                            <User size={16} className="text-slate-500 dark:text-slate-400 dark:text-slate-500" />
                           </div>
                           <div className="flex-1">
-                            <p className="font-medium text-slate-800">{c.name}</p>
-                            <p className="text-sm text-slate-500">{c.phone}</p>
+                            <p className="font-medium text-slate-800 dark:text-slate-100">{c.name}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">{c.phone}</p>
                           </div>
-                          {selectedCustomer?.id === c.id && <CheckCircle2 size={18} className="text-amber-600" />}
+                          {selectedCustomer?.id === c.id && <CheckCircle2 size={18} className="text-indigo-600 dark:text-indigo-400" />}
                         </button>
                       ))}
                     </div>
                   )}
                   {searchResults.length === 0 && phoneSearch && !searching && (
-                    <p className="text-sm text-slate-400">No customers found. Try a different number or switch to New Customer.</p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No customers found. Try a different number or switch to New Customer.</p>
                   )}
                   {selectedCustomer && (
-                    <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">
+                    <div className="rounded-lg bg-emerald-50/50 dark:bg-emerald-900/30 p-3 text-sm text-emerald-700 dark:text-emerald-300">
                       <CheckCircle2 size={14} className="mr-1 inline" />
                       Selected: <strong>{selectedCustomer.name}</strong> — {selectedCustomer.phone}
                     </div>
@@ -452,9 +452,9 @@ export default function Orders() {
           )}
 
           {editing && selectedCustomer && (
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <p className="font-semibold text-slate-800">{selectedCustomer.name}</p>
-              <p className="text-slate-500">{selectedCustomer.phone}</p>
+            <div className="rounded-lg bg-white/20 dark:bg-slate-800/30 p-3 text-sm">
+              <p className="font-semibold text-slate-800 dark:text-slate-100">{selectedCustomer.name}</p>
+              <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">{selectedCustomer.phone}</p>
             </div>
           )}
 
@@ -470,15 +470,15 @@ export default function Orders() {
 
           <div>
             <label className="label">Add Products by Name</label>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-4">
+            <div className="rounded-lg border border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30 p-3 space-y-4">
               {allBrands.length === 0 && unbrandedProducts.length === 0 && (
-                <p className="text-sm text-slate-400">No products available. Add products from the Products page first.</p>
+                <p className="text-sm text-slate-400 dark:text-slate-500">No products available. Add products from the Products page first.</p>
               )}
 
               {/* Steel / size-based brands */}
               {brandsWithSizes.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">By Brand &amp; Size (Steel, etc.)</p>
+                  <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wide">By Brand &amp; Size (Steel, etc.)</p>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                     <div className="flex-1">
                       <label className="label">Brand</label>
@@ -533,7 +533,7 @@ export default function Orders() {
               {/* Non-size brands (cement, paint, etc.) — click to add directly */}
               {brandsWithoutSizes.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">By Brand (Cement, etc.)</p>
+                  <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wide">By Brand (Cement, etc.)</p>
                   <div className="flex flex-wrap gap-2">
                     {brandsWithoutSizes.map((b) => {
                       const prod = noSizeBrandProduct(b);
@@ -542,7 +542,7 @@ export default function Orders() {
                         <button
                           key={b}
                           onClick={() => addLine(prod.id)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-amber-400 hover:bg-amber-50"
+                          className="rounded-lg border border-white/20 dark:border-slate-700/50 bg-white px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 transition hover:border-amber-400 hover:bg-indigo-50/50 dark:bg-indigo-900/30"
                         >
                           <Plus size={12} className="mr-1 inline" />
                           {b} — ₹{(prod.price ?? 0).toFixed(2)}/{prod.unit}
@@ -556,13 +556,13 @@ export default function Orders() {
               {/* Completely unbranded products */}
               {unbrandedProducts.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Other Products</p>
+                  <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wide">Other Products</p>
                   <div className="flex flex-wrap gap-2">
                     {unbrandedProducts.map((p) => (
                       <button
                         key={p.id}
                         onClick={() => addLine(p.id)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-amber-400 hover:bg-amber-50"
+                        className="rounded-lg border border-white/20 dark:border-slate-700/50 bg-white px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 transition hover:border-amber-400 hover:bg-indigo-50/50 dark:bg-indigo-900/30"
                       >
                         <Plus size={12} className="mr-1 inline" />
                         {p.name} — ₹{(p.price ?? 0).toFixed(2)}/{p.unit}
@@ -577,7 +577,7 @@ export default function Orders() {
           <div>
             <label className="label">Selected Products ({lines.length})</label>
             {lines.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+              <p className="rounded-lg border border-dashed border-white/20 dark:border-slate-700/50 p-6 text-center text-sm text-slate-400 dark:text-slate-500">
                 No products selected yet. Pick a brand and size above to add.
               </p>
             ) : (
@@ -586,15 +586,15 @@ export default function Orders() {
                   const p = products.find((x) => x.id === l.product_id);
                   const lineTotal = (p?.price ?? 0) * l.quantity;
                   return (
-                    <div key={l.product_id} className="flex items-center gap-3 rounded-lg border border-slate-200 p-3">
+                    <div key={l.product_id} className="flex items-center gap-3 rounded-lg border border-white/20 dark:border-slate-700/50 p-3">
                       <div className="flex-1">
-                        <p className="font-medium text-slate-700">{productName(l.product_id)}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">{productName(l.product_id)}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                           {p?.brand && p.brand} {p?.size && `· ${p.size}`}
                           {p && ` · ₹${(p.price ?? 0).toFixed(2)}/${p.unit}`}
                         </p>
                       </div>
-                      <span className="hidden text-sm font-semibold text-slate-600 sm:inline">
+                      <span className="hidden text-sm font-semibold text-slate-600 dark:text-slate-300 sm:inline">
                         ₹{lineTotal.toFixed(2)}
                       </span>
                       <div className="flex items-center gap-1">
@@ -605,7 +605,7 @@ export default function Orders() {
                           type="number"
                           value={l.quantity}
                           onChange={(e) => setQty(l.product_id, Number(e.target.value))}
-                          className="w-16 rounded border border-slate-300 px-2 py-1 text-center text-sm"
+                          className="w-16 rounded border border-white/30 dark:border-slate-600/50 px-2 py-1 text-center text-sm"
                           min="1"
                         />
                         <button onClick={() => updateQty(l.product_id, 1)} className="btn-ghost p-1" aria-label="Increase">
@@ -618,11 +618,11 @@ export default function Orders() {
                     </div>
                   );
                 })}
-                <div className="flex items-center justify-between rounded-lg bg-amber-50 px-4 py-2.5">
+                <div className="flex items-center justify-between rounded-lg bg-indigo-50/50 dark:bg-indigo-900/30 px-4 py-2.5">
                   <span className="flex items-center gap-1.5 text-sm font-bold text-amber-800">
                     <IndianRupee size={15} /> Order Total
                   </span>
-                  <span className="text-lg font-bold text-amber-700">₹{orderTotal.toFixed(2)}</span>
+                  <span className="text-lg font-bold text-indigo-700 dark:text-indigo-300">₹{orderTotal.toFixed(2)}</span>
                 </div>
               </div>
             )}
@@ -653,39 +653,39 @@ export default function Orders() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="label">Customer</p>
-                <p className="font-semibold text-slate-800">{detailOrder.customer?.name ?? 'Unknown'}</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{detailOrder.customer?.name ?? 'Unknown'}</p>
               </div>
               <div>
                 <p className="label">Phone</p>
-                <p className="text-slate-700">{detailOrder.customer?.phone ?? '—'}</p>
+                <p className="text-slate-700 dark:text-slate-200">{detailOrder.customer?.phone ?? '—'}</p>
               </div>
               <div>
                 <p className="label">Status</p>
                 {detailOrder.status === 'confirmed' ? (
-                  <span className="badge bg-emerald-100 text-emerald-700">Confirmed</span>
+                  <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Confirmed</span>
                 ) : (
-                  <span className="badge bg-slate-100 text-slate-700">Pending</span>
+                  <span className="badge bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">Pending</span>
                 )}
               </div>
               <div className="col-span-2">
                 <p className="label">Delivery Address</p>
-                <p className="text-slate-700">{detailOrder.delivery_address ?? '—'}</p>
+                <p className="text-slate-700 dark:text-slate-200">{detailOrder.delivery_address ?? '—'}</p>
               </div>
             </div>
             <div>
               <p className="label">Products</p>
               <div className="space-y-2">
-                {detailItems.length === 0 && <p className="text-sm text-slate-400">No items.</p>}
+                {detailItems.length === 0 && <p className="text-sm text-slate-400 dark:text-slate-500">No items.</p>}
                 {detailItems.map((it) => (
-                  <div key={it.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-                    <span className="text-sm font-medium text-slate-700">{it.product?.name ?? 'Unknown'}</span>
-                    <span className="text-sm text-slate-500">Qty: {it.quantity} {it.product?.unit}</span>
+                  <div key={it.id} className="flex items-center justify-between rounded-lg border border-white/20 dark:border-slate-700/50 px-3 py-2">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{it.product?.name ?? 'Unknown'}</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Qty: {it.quantity} {it.product?.unit}</span>
                   </div>
                 ))}
               </div>
             </div>
             {detailOrder.status === 'confirmed' && (
-              <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">
+              <div className="rounded-lg bg-emerald-50/50 dark:bg-emerald-900/30 p-3 text-sm text-emerald-700 dark:text-emerald-300">
                 <Truck size={14} className="mr-1 inline" />
                 This order is confirmed and ready for dispatch creation.
               </div>

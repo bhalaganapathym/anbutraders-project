@@ -8,10 +8,10 @@ import { Search, IndianRupee, Pencil, Layers, TrendingUp } from 'lucide-react';
 const categories = ['Steel', 'Cement', 'TMT Bars', 'Pipes', 'Other'];
 
 const categoryColor: Record<string, string> = {
-  Steel: 'bg-slate-100 text-slate-700',
+  Steel: 'bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200',
   Cement: 'bg-blue-100 text-blue-700',
-  'TMT Bars': 'bg-amber-100 text-amber-700',
-  Pipes: 'bg-emerald-100 text-emerald-700',
+  'TMT Bars': 'bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300',
+  Pipes: 'bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300',
   Other: 'bg-violet-100 text-violet-700',
 };
 
@@ -81,27 +81,27 @@ export default function PriceList() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Product Price List</h1>
-        <p className="text-sm text-slate-500">View and update prices for all products</p>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Product Price List</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">View and update prices for all products</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card flex items-center gap-3 p-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50/50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
             <Layers size={20} />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-800">{products.length}</p>
-            <p className="text-xs font-medium text-slate-500">Total Products</p>
+            <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{products.length}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Total Products</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 p-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50/50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
             <IndianRupee size={20} />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-800">₹{avgPrice.toFixed(2)}</p>
-            <p className="text-xs font-medium text-slate-500">Average Price</p>
+            <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">₹{avgPrice.toFixed(2)}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Average Price</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 p-4">
@@ -109,15 +109,15 @@ export default function PriceList() {
             <TrendingUp size={20} />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-800">₹{maxPrice.toFixed(2)}</p>
-            <p className="text-xs font-medium text-slate-500">Highest Price</p>
+            <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">₹{maxPrice.toFixed(2)}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Highest Price</p>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -132,8 +132,8 @@ export default function PriceList() {
               onClick={() => setActiveCat(c)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 activeCat === c
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  ? 'bg-indigo-600/80 dark:bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 dark:text-slate-300 border border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:bg-slate-800/30'
               }`}
             >
               {c}
@@ -143,16 +143,16 @@ export default function PriceList() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <IndianRupee size={36} className="text-slate-300" />
-          <p className="text-slate-500">No products found.</p>
+          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No products found.</p>
         </div>
       ) : (
         <div className="table-wrap">
           <table className="w-full">
-            <thead className="border-b border-slate-200 bg-slate-50">
+            <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
               <tr>
                 <th className="th">Product</th>
                 <th className="th">Brand</th>
@@ -166,18 +166,18 @@ export default function PriceList() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
+                <tr key={p.id} className="hover:bg-white/20 dark:bg-slate-800/30">
                   <td className="td">
                     <div className="flex items-center gap-2">
-                      <Layers size={16} className="text-slate-400" />
-                      <span className="font-medium text-slate-800">{p.name}</span>
+                      <Layers size={16} className="text-slate-400 dark:text-slate-500" />
+                      <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
                     </div>
                   </td>
                   <td className="td">
-                    {p.brand ? <span className="badge bg-amber-100 text-amber-700">{p.brand}</span> : <span className="text-slate-300">—</span>}
+                    {p.brand ? <span className="badge bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{p.brand}</span> : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="td">
-                    {p.size ? <span className="font-medium text-slate-600">{p.size}</span> : <span className="text-slate-300">—</span>}
+                    {p.size ? <span className="font-medium text-slate-600 dark:text-slate-300">{p.size}</span> : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="td">
                     <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
@@ -186,14 +186,14 @@ export default function PriceList() {
                   </td>
                   <td className="td">{p.unit}</td>
                   <td className="td">
-                    <span className="flex items-center text-base font-bold text-amber-700">
+                    <span className="flex items-center text-base font-bold text-indigo-700 dark:text-indigo-300">
                       <IndianRupee size={14} className="text-amber-500" />
                       {(p.price ?? 0).toFixed(2)}
-                      <span className="ml-1 text-xs font-normal text-slate-400">per {p.unit}</span>
+                      <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">per {p.unit}</span>
                     </span>
                   </td>
                   <td className="td">
-                    <span className={`font-semibold ${p.stock_qty <= 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                    <span className={`font-semibold ${p.stock_qty <= 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>
                       {p.stock_qty}
                     </span>
                   </td>
@@ -212,9 +212,9 @@ export default function PriceList() {
       <Modal open={open} onClose={() => setOpen(false)} title="Update Price" size="sm">
         {editing && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-slate-50 p-3">
-              <p className="font-semibold text-slate-800">{editing.name}</p>
-              <p className="text-sm text-slate-500">
+            <div className="rounded-lg bg-white/20 dark:bg-slate-800/30 p-3">
+              <p className="font-semibold text-slate-800 dark:text-slate-100">{editing.name}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 {editing.brand && `${editing.brand} `}
                 {editing.size && `· ${editing.size} `}
                 {editing.category} · per {editing.unit}
@@ -223,7 +223,7 @@ export default function PriceList() {
             <div>
               <label className="label">Price per unit (₹)</label>
               <div className="relative">
-                <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   type="number"
                   value={price}

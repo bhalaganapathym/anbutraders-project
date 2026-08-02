@@ -89,8 +89,8 @@ export default function Customers() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Customers</h1>
-          <p className="text-sm text-slate-500">Manage your shop customers</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Customers</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Manage your shop customers</p>
         </div>
         <button onClick={openNew} className="btn-primary">
           <Plus size={16} /> Add Customer
@@ -98,7 +98,7 @@ export default function Customers() {
       </div>
 
       <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -108,11 +108,11 @@ export default function Customers() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Users size={36} className="text-slate-300" />
-          <p className="text-slate-500">No customers found.</p>
+          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No customers found.</p>
           <button onClick={openNew} className="btn-primary">
             <Plus size={16} /> Add your first customer
           </button>
@@ -127,8 +127,8 @@ export default function Customers() {
                     {c.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-semibold text-slate-800">{c.name}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
                       {new Date(c.created_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -142,18 +142,18 @@ export default function Customers() {
                   </button>
                 </div>
               </div>
-              <div className="mt-4 space-y-1.5 text-sm text-slate-600">
+              <div className="mt-4 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
                 {c.phone && (
                   <p className="flex items-center gap-2">
-                    <Phone size={14} className="text-slate-400" /> {c.phone}
+                    <Phone size={14} className="text-slate-400 dark:text-slate-500" /> {c.phone}
                   </p>
                 )}
                 {c.address && (
                   <p className="flex items-center gap-2">
-                    <MapPin size={14} className="text-slate-400" /> {c.address}
+                    <MapPin size={14} className="text-slate-400 dark:text-slate-500" /> {c.address}
                   </p>
                 )}
-                {!c.phone && !c.address && <p className="text-slate-400">No contact details</p>}
+                {!c.phone && !c.address && <p className="text-slate-400 dark:text-slate-500">No contact details</p>}
               </div>
             </div>
           ))}

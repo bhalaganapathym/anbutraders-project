@@ -82,20 +82,20 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   useRealtime('products', load);
 
   const cards = [
-    { label: 'Customers', value: stats?.customers ?? 0, icon: Users, view: 'customers', color: 'text-blue-600 bg-blue-50' },
-    { label: 'Products', value: stats?.products ?? 0, icon: Package, view: 'products', color: 'text-amber-600 bg-amber-50' },
-    { label: 'Orders', value: stats?.orders ?? 0, icon: ShoppingCart, view: 'orders', color: 'text-violet-600 bg-violet-50' },
-    { label: 'Dispatches', value: stats?.dispatches ?? 0, icon: Truck, view: 'dispatches', color: 'text-emerald-600 bg-emerald-50' },
-    { label: 'In Progress', value: stats?.pendingDispatches ?? 0, icon: Clock, view: 'dispatches', color: 'text-amber-600 bg-amber-50' },
-    { label: 'Completed', value: stats?.completedDispatches ?? 0, icon: CheckCircle2, view: 'dispatches', color: 'text-emerald-600 bg-emerald-50' },
+    { label: 'Customers', value: stats?.customers ?? 0, icon: Users, view: 'customers', color: 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30' },
+    { label: 'Products', value: stats?.products ?? 0, icon: Package, view: 'products', color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/30' },
+    { label: 'Orders', value: stats?.orders ?? 0, icon: ShoppingCart, view: 'orders', color: 'text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-900/30' },
+    { label: 'Dispatches', value: stats?.dispatches ?? 0, icon: Truck, view: 'dispatches', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/30' },
+    { label: 'In Progress', value: stats?.pendingDispatches ?? 0, icon: Clock, view: 'dispatches', color: 'text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/30' },
+    { label: 'Completed', value: stats?.completedDispatches ?? 0, icon: CheckCircle2, view: 'dispatches', color: 'text-teal-600 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-900/30' },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-sm text-slate-500">Overview of orders and dispatch operations</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 drop-shadow-sm">Dashboard</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400">Overview of orders and dispatch operations</p>
         </div>
         <button
           onClick={() => {
@@ -112,16 +112,16 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
           <button
             key={card.label}
             onClick={() => onNavigate(card.view)}
-            className="card flex flex-col items-start gap-3 p-4 text-left transition hover:shadow-md hover:-translate-y-0.5"
+            className="card flex flex-col items-start gap-3 p-4 text-left hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/5"
           >
-            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${card.color}`}>
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-inner ${card.color}`}>
               <card.icon size={20} />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">
+              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">
                 {loading ? '—' : card.value}
               </p>
-              <p className="text-xs font-medium text-slate-500">{card.label}</p>
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{card.label}</p>
             </div>
           </button>
         ))}
@@ -130,8 +130,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="card p-5">
           <div className="mb-4 flex items-center gap-2">
-            <TrendingUp size={18} className="text-amber-600" />
-            <h2 className="font-bold text-slate-800">Dispatch Status Breakdown</h2>
+            <TrendingUp size={18} className="text-indigo-600 dark:text-indigo-400" />
+            <h2 className="font-bold text-slate-800 dark:text-slate-100">Dispatch Status Breakdown</h2>
           </div>
           <div className="space-y-3">
             {statusOrder.map((s) => {
@@ -142,38 +142,38 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                 <div key={s}>
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <DispatchStatusBadge status={s} />
-                    <span className="font-semibold text-slate-700">{count}</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{count}</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-2 overflow-hidden rounded-full bg-white/50 dark:bg-slate-800/50 shadow-inner">
                     <div
-                      className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                      className="h-full rounded-full bg-indigo-500/80 dark:bg-indigo-500 transition-all duration-500 shadow-sm"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
                 </div>
               );
             })}
-            {loading && <p className="text-sm text-slate-400">Loading...</p>}
+            {loading && <p className="text-sm text-slate-500 dark:text-slate-400">Loading...</p>}
           </div>
         </div>
 
         <div className="card p-5">
           <div className="mb-4 flex items-center gap-2">
-            <Truck size={18} className="text-emerald-600" />
-            <h2 className="font-bold text-slate-800">Recent Dispatches</h2>
+            <Truck size={18} className="text-emerald-600 dark:text-emerald-400" />
+            <h2 className="font-bold text-slate-800 dark:text-slate-100">Recent Dispatches</h2>
           </div>
           {recentDispatches.length === 0 && !loading ? (
-            <p className="text-sm text-slate-400">No dispatches yet.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">No dispatches yet.</p>
           ) : (
             <div className="space-y-2">
               {recentDispatches.map((d) => (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                  className="flex items-center justify-between rounded-xl bg-white/20 dark:bg-slate-800/30 border border-white/30 dark:border-slate-700/50 px-3 py-2"
                 >
                   <div>
-                    <p className="text-sm font-semibold text-slate-700">{d.dispatch_no}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{d.dispatch_no}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
                       {d.customers?.name ?? 'Unknown customer'}
                     </p>
                   </div>

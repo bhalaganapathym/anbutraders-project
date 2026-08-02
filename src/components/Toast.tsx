@@ -37,11 +37,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             className="card animate-fade-in flex items-start gap-3 p-4 shadow-lg"
           >
-            {t.type === 'success' && <CheckCircle2 size={18} className="mt-0.5 text-emerald-600" />}
+            {t.type === 'success' && <CheckCircle2 size={18} className="mt-0.5 text-emerald-600 dark:text-emerald-400" />}
             {t.type === 'error' && <AlertTriangle size={18} className="mt-0.5 text-rose-600" />}
-            {t.type === 'info' && <Info size={18} className="mt-0.5 text-amber-600" />}
-            <p className="flex-1 text-sm text-slate-700">{t.message}</p>
-            <button onClick={() => remove(t.id)} className="text-slate-400 hover:text-slate-600">
+            {t.type === 'info' && <Info size={18} className="mt-0.5 text-indigo-600 dark:text-indigo-400" />}
+            <p className="flex-1 text-sm text-slate-700 dark:text-slate-200">{t.message}</p>
+            <button onClick={() => remove(t.id)} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300">
               <X size={14} />
             </button>
           </div>

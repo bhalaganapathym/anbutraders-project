@@ -130,16 +130,16 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
-        <div className="bg-amber-600 p-8 text-center">
-          <h1 className="text-3xl font-extrabold text-white">Anbu Traders</h1>
-          <p className="mt-2 font-medium text-amber-100">Sign in to your account</p>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl glass-panel shadow-2xl border border-white/20 dark:border-slate-700/50">
+        <div className="bg-indigo-500/20 dark:bg-indigo-500/10 backdrop-blur-md p-8 text-center border-b border-white/10 dark:border-slate-700/50">
+          <h1 className="text-3xl font-extrabold text-indigo-700 dark:text-indigo-300 drop-shadow-sm">Anbu Traders</h1>
+          <p className="mt-2 font-medium text-slate-600 dark:text-slate-400">Sign in to your account</p>
         </div>
         
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Username</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Username</label>
             <div className="relative">
               <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input
@@ -154,17 +154,17 @@ export default function Login() {
           
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <label className="block text-sm font-semibold text-slate-700">Password</label>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Password</label>
               <button 
                 type="button" 
                 onClick={() => setForgotOpen(true)}
-                className="text-sm font-medium text-amber-600 hover:text-amber-700"
+                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
               >
                 Forgot Password?
               </button>
             </div>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={18} />
               <input
                 type="password"
                 className="input pl-10"
@@ -178,19 +178,19 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-amber-600 py-3 font-bold text-white transition hover:bg-amber-700 disabled:opacity-50"
+            className="btn-primary w-full py-3 text-lg"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
 
-          <div className="pt-4 border-t border-slate-100">
-            <p className="text-xs font-semibold text-slate-400 text-center uppercase tracking-wider mb-3">Quick Login (No Password Required)</p>
+          <div className="pt-4 border-t border-white/10 dark:border-slate-700/50">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center uppercase tracking-wider mb-3">Quick Login (No Password Required)</p>
             <div className="grid grid-cols-1 gap-3">
               <button
                 type="button"
                 onClick={() => quickRoleLogin('dispatch')}
                 disabled={loading}
-                className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:border-amber-200 transition"
+                className="btn-secondary w-full py-2.5"
               >
                 Dispatch Team
               </button>
@@ -212,9 +212,9 @@ export default function Login() {
           </div>
           <div>
             <label className="label flex items-center gap-1">
-              <HelpCircle size={14} className="text-amber-600"/> Secret Question
+              <HelpCircle size={14} className="text-indigo-600 dark:text-indigo-400"/> Secret Question
             </label>
-            <p className="text-sm text-slate-600 mb-2 italic">"What is your favorite color?"</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-2 italic">"What is your favorite color?"</p>
             <input 
               type="text" 
               className="input" 

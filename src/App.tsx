@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ToastProvider } from '@/components/Toast';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import {
-  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut
+  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut, Sun, Moon
 } from 'lucide-react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api } from '@/lib/api';
@@ -33,6 +33,18 @@ function AppContent() {
   const [view, setView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Theme management
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+  const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
 
   const fetchUnread = async () => {
     try {
@@ -78,16 +90,16 @@ function AppContent() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
+    <div className="flex h-screen overflow-hidden text-slate-800 dark:text-slate-100">
       <GlobalNotificationAlert />
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 transform flex flex-col transition-transform duration-300 lg:static lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } flex flex-col`}
+        } glass-panel lg:my-4 lg:ml-4 lg:rounded-2xl rounded-r-2xl lg:border border-white/20 dark:border-slate-700/50`}
       >
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-600 text-white shadow-sm">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/20 dark:border-slate-700/50 px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500 text-white shadow-lg shadow-indigo-500/30">
             <HardHat size={20} />
           </div>
           <div>
@@ -102,10 +114,10 @@ function AppContent() {
               <button
                 key={item.id}
                 onClick={() => navigate(item.id)}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                   active
-                    ? 'bg-amber-50 text-amber-700'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                    ? 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 shadow-inner'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-white/40 dark:hover:bg-slate-800/40 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <item.icon size={18} />
@@ -121,15 +133,15 @@ function AppContent() {
           })}
         </nav>
         
-        <div className="shrink-0 border-t border-slate-200 p-4">
+        <div className="shrink-0 border-t border-white/20 dark:border-slate-700/50 p-4">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-slate-700">{user.username}</p>
-              <p className="text-xs text-slate-500">{user.email}</p>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{user.username}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
             </div>
             <button 
               onClick={logout}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-rose-600 transition"
+              className="rounded-lg p-2 text-slate-400 dark:text-slate-500 hover:bg-rose-500/20 hover:text-rose-600 dark:hover:text-rose-400 transition"
               title="Logout"
             >
               <LogOut size={18} />
@@ -140,14 +152,14 @@ function AppContent() {
 
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
+          className="fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Main */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex shrink-0 h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur lg:px-8">
+      <div className="flex flex-1 flex-col overflow-hidden relative">
+        <header className="sticky top-0 z-20 flex shrink-0 h-16 items-center gap-3 lg:mx-4 lg:mt-4 lg:rounded-2xl glass-panel px-4 lg:px-6 shadow-sm border-b lg:border border-white/20 dark:border-slate-700/50">
           <button
             onClick={() => setSidebarOpen(true)}
             className="btn-ghost p-2 lg:hidden"
@@ -155,11 +167,16 @@ function AppContent() {
           >
             <Menu size={20} />
           </button>
-          <h1 className="text-lg font-bold capitalize text-slate-800">
+          <h1 className="text-lg font-bold capitalize text-slate-800 dark:text-slate-100">
             {navItems.find((n) => n.id === activeView)?.label ?? 'Dashboard'}
           </h1>
-          <div className="ml-auto hidden items-center gap-2 text-sm text-slate-500 sm:flex">
-            <span className="badge bg-emerald-100 text-emerald-700 capitalize">{user.role}</span>
+          <div className="ml-auto flex items-center gap-3 text-sm text-slate-500">
+            <button onClick={toggleTheme} className="btn-ghost p-2 rounded-full" title="Toggle Theme">
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <span className="hidden sm:inline-flex badge bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 capitalize backdrop-blur-md border border-indigo-500/30">
+              {user.role}
+            </span>
           </div>
         </header>
 
