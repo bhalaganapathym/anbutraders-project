@@ -134,11 +134,12 @@ def export_orders(db: Session = Depends(get_db)):
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Order ID', 'Customer Name', 'Items Ordered', 'Total Amount', 'Date and Time'])
+    writer.writerow(['Order ID', 'Customer Name', 'Items Ordered', 'Total Amount', 'Status', 'Delivery Address', 'Date and Time'])
 
     for order in orders:
         customer_name = order.customer.name if order.customer else "Unknown"
-        date_time = order.created_at.strftime("%Y-%m-%d %H:%M:%S") if order.created_at else ""
+        # Format date nicely; prepend a space so Excel treats it as text and doesn't show ######
+        date_time = f" {order.created_at.strftime('%d-%b-%Y %I:%M %p')}" if order.created_at else ""
         
         items_list = []
         total_amount = 0
@@ -149,7 +150,15 @@ def export_orders(db: Session = Depends(get_db)):
             
         items_str = "; ".join(items_list)
         
-        writer.writerow([str(order.id), customer_name, items_str, f"{total_amount:.2f}", date_time])
+        writer.writerow([
+            str(order.id), 
+            customer_name, 
+            items_str, 
+            f"{total_amount:.2f}", 
+            order.status.capitalize(),
+            order.delivery_address or "N/A",
+            date_time
+        ])
 
     output.seek(0)
     

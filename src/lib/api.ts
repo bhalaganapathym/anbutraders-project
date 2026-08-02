@@ -78,7 +78,7 @@ export type OrderItem = {
   order_id: string;
   product_id: string;
   quantity: number;
-  product?: Product;
+  product?: Product | null;
 };
 
 export type Vehicle = {
@@ -150,6 +150,7 @@ export type Notification = {
   dispatch_id: string | null;
   order_id: string | null;
   customer_name: string | null;
+  image_url?: string | null;
   read: boolean;
   created_at: string;
 };

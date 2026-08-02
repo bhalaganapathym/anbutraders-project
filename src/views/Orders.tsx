@@ -106,7 +106,7 @@ export default function Orders() {
     setNotes(o.notes ?? '');
     // Items are included in the OrderResponse
     const data = o.items || [];
-    setLines(data.map((x: OrderItemWithProduct) => ({ product_id: x.product_id, quantity: x.quantity })));
+    setLines(data.map((x: any) => ({ product_id: x.product_id, quantity: x.quantity })));
     // Load the existing customer for editing
     if (o.customer) {
       setSelectedCustomer(o.customer as Customer);
