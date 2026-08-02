@@ -38,7 +38,7 @@ const compressImage = async (file: File): Promise<File> => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const MAX_DIM = 1000;
+        const MAX_DIM = 600;
         if (width > height) {
           if (width > MAX_DIM) {
             height = Math.round(height * (MAX_DIM / width));
@@ -60,7 +60,7 @@ const compressImage = async (file: File): Promise<File> => {
           } else {
             resolve(file); // fallback
           }
-        }, 'image/jpeg', 0.6); // 60% quality jpeg
+        }, 'image/jpeg', 0.5); // 50% quality jpeg
       };
       img.onerror = () => resolve(file);
       img.src = e.target?.result as string;
