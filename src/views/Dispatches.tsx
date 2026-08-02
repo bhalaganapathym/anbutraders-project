@@ -15,7 +15,7 @@ import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import { useToast } from '@/components/Toast';
 import {
   Plus, Search, Truck, Weight as WeightIcon, Camera, CheckCircle2, AlertCircle,
-  Trash2, X, Package, User, MapPin, Calendar, IndianRupee, Phone, MessageCircle, Send,
+  Trash2, X, Package, User, MapPin, Calendar, IndianRupee, Phone, MessageCircle, Send, Download,
 } from 'lucide-react';
 
 type DispatchRow = Dispatch & { customer: Pick<Customer, 'name' | 'phone'> | null };
@@ -84,6 +84,7 @@ export default function Dispatches() {
   const [detailItems, setDetailItems] = useState<DispatchItem[]>([]);
   const [detailWeights, setDetailWeights] = useState<Weight[]>([]);
   const [detailPhotos, setDetailPhotos] = useState<Photo[]>([]);
+  const [viewingPhoto, setViewingPhoto] = useState<Photo | null>(null);
 
   const [weightValue, setWeightValue] = useState('');
   const [weightNotes, setWeightNotes] = useState('');
@@ -826,18 +827,14 @@ export default function Dispatches() {
                   ) : (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       {detailPhotos.map((ph) => (
-                        <div key={ph.id} className="group relative overflow-hidden rounded-lg border border-slate-200">
+                        <div 
+                          key={ph.id} 
+                          className="group relative overflow-hidden rounded-lg border border-slate-200 cursor-pointer hover:opacity-80 transition"
+                          onClick={() => setViewingPhoto(ph)}
+                        >
                           <img src={ph.url} alt={ph.caption ?? 'Dispatch photo'} className="h-32 w-full object-cover" />
                           {ph.caption && (
-                            <p className="absolute bottom-0 left-0 right-0 bg-slate-900/60 px-2 py-1 text-xs text-white">{ph.caption}</p>
-                          )}
-                          {detail.status !== 'completed' && (
-                            <button
-                              onClick={() => deletePhoto(ph.id, ph.url)}
-                              className="absolute right-1 top-1 rounded-full bg-rose-600 p-1 text-white opacity-0 transition group-hover:opacity-100"
-                            >
-                              <X size={12} />
-                            </button>
+                            <p className="absolute bottom-0 left-0 right-0 bg-slate-900/60 px-2 py-1 text-xs text-white truncate">{ph.caption}</p>
                           )}
                         </div>
                       ))}
@@ -958,6 +955,43 @@ export default function Dispatches() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={!!viewingPhoto} onClose={() => setViewingPhoto(null)} title="View Photo" size="lg">
+        {viewingPhoto && (
+          <div className="space-y-4">
+            <div className="flex justify-center bg-slate-100 rounded-lg p-2">
+              <img 
+                src={viewingPhoto.url} 
+                alt={viewingPhoto.caption || ''} 
+                className="max-w-full rounded-lg max-h-[60vh] object-contain" 
+              />
+            </div>
+            {viewingPhoto.caption && (
+              <p className="text-center text-sm font-medium text-slate-700">{viewingPhoto.caption}</p>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <a
+                href={viewingPhoto.url}
+                download={`dispatch_${detail?.dispatch_no}_${viewingPhoto.id}.jpg`}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <Download size={16} /> Download
+              </a>
+              {detail?.status !== 'completed' && (
+                <button
+                  onClick={() => {
+                    deletePhoto(viewingPhoto.id, viewingPhoto.url);
+                    setViewingPhoto(null);
+                  }}
+                  className="btn-primary bg-rose-600 hover:bg-rose-700 focus:ring-rose-200 border-none flex items-center gap-2"
+                >
+                  <Trash2 size={16} /> Delete from Server
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
 
       <LiveCameraModal
