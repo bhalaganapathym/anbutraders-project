@@ -354,16 +354,7 @@ export default function Dispatches() {
           await api.post('/notifications', {
             title: 'New Dispatch Photo',
             message: `A new photo was uploaded for dispatch ${detail!.dispatch_no}.`,
-            target_role: 'billing',
-            dispatch_id: detail!.id,
-            order_id: detail!.order_id,
-            customer_name: detail!.customer?.name ?? 'Unknown',
-            image_url: p.url,
-          });
-          await api.post('/notifications', {
-            title: 'New Dispatch Photo',
-            message: `A new photo was uploaded for dispatch ${detail!.dispatch_no}.`,
-            target_role: 'admin',
+            type: 'photo_uploaded',
             dispatch_id: detail!.id,
             order_id: detail!.order_id,
             customer_name: detail!.customer?.name ?? 'Unknown',

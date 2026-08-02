@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ToastProvider } from '@/components/Toast';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut
 } from 'lucide-react';
+import { useRealtime } from '@/lib/useRealtime';
+import { api } from '@/lib/api';
 import Dashboard from '@/views/Dashboard';
 import Customers from '@/views/Customers';
 import Products from '@/views/Products';
@@ -30,6 +32,27 @@ function AppContent() {
   const { user, logout } = useAuth();
   const [view, setView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnread = async () => {
+    try {
+      if (!user) return;
+      const data = await api.get('/notifications');
+      // Simple frontend filtering for unread notifications applicable to the user
+      const applicable = data.filter((n: any) => {
+        if (user.role === 'dispatch') return n.type === 'order_confirmed';
+        if (user.role === 'billing') return n.type === 'dispatch_completed' || n.type === 'photo_uploaded' || n.type === 'billing_alert';
+        return true;
+      });
+      setUnreadCount(applicable.filter((n: any) => !n.read).length);
+    } catch { }
+  };
+
+  useEffect(() => {
+    if (user) fetchUnread();
+  }, [user]);
+
+  useRealtime('notifications', fetchUnread);
 
   if (!user) {
     return <Login />;
@@ -87,6 +110,12 @@ function AppContent() {
               >
                 <item.icon size={18} />
                 {item.label}
+                {item.id === 'notifications' && unreadCount > 0 && (
+                  <span className="ml-auto flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500"></span>
+                  </span>
+                )}
               </button>
             );
           })}

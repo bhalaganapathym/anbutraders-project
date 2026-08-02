@@ -137,6 +137,15 @@ def get_orders(db: Session = Depends(get_db)):
         joinedload(Order.items).joinedload(OrderItem.product)
     ).order_by(Order.created_at.desc()).all()
 
+@router.get("/orders/export")
+def export_orders():
+    import os
+    from fastapi.responses import FileResponse
+    csv_file = os.path.join("uploads", "orders.csv")
+    if not os.path.isfile(csv_file):
+        raise HTTPException(status_code=404, detail="No exported orders found.")
+    return FileResponse(csv_file, media_type="text/csv", filename="orders_export.csv")
+
 @router.put("/orders/{id}")
 def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == id).first()

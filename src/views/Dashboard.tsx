@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
+  Download,
 } from 'lucide-react';
 
 type Stats = {
@@ -91,9 +92,19 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
-        <p className="text-sm text-slate-500">Overview of orders and dispatch operations</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
+          <p className="text-sm text-slate-500">Overview of orders and dispatch operations</p>
+        </div>
+        <button
+          onClick={() => {
+            window.location.href = `${import.meta.env.VITE_API_URL || (window.location.protocol === 'https:' ? 'https:' : 'http:') + '//' + window.location.hostname + ':8000/api/v1'}/orders/export`;
+          }}
+          className="btn-secondary flex items-center gap-2"
+        >
+          <Download size={16} /> Export Orders (CSV)
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
