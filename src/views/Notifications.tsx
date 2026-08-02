@@ -160,20 +160,20 @@ export default function Notifications() {
               }`}>
                 <Truck size={20} />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-slate-800">{n.title}</p>
-                    <p className="mt-0.5 text-sm text-slate-600">{n.message}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-800 break-words">{n.title}</p>
+                    <p className="mt-0.5 text-sm text-slate-600 break-words">{n.message}</p>
                     {n.image_url && (
                       <div className="mt-3">
                         <img src={n.image_url} alt="Attached" className="h-32 w-auto max-w-full rounded-md border border-slate-200 object-cover shadow-sm" />
-                        <div className="mt-2 flex gap-2">
+                        <div className="mt-2 flex flex-wrap gap-2">
                           <button onClick={() => downloadImage(n.image_url!, n.title)} className="btn-secondary text-xs px-2 py-1 h-auto">
                             <Download size={14} /> Download
                           </button>
                           <button onClick={() => deleteImage(n.id)} className="btn-secondary text-rose-600 text-xs px-2 py-1 h-auto hover:bg-rose-50 border-rose-200">
-                            <Trash2 size={14} /> Delete from Server
+                            <Trash2 size={14} /> Delete
                           </button>
                         </div>
                       </div>
@@ -183,20 +183,20 @@ export default function Notifications() {
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
                   )}
                 </div>
-                <div className="mt-2 flex items-center gap-3 text-xs text-slate-400">
-                  <span className="flex items-center gap-1">
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                  <span className="flex items-center gap-1 shrink-0">
                     <Clock size={12} />
                     {new Date(n.created_at).toLocaleString()}
                   </span>
                   {n.customer_name && (
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 shrink-0">
                       <IndianRupee size={12} />
                       {n.customer_name}
                     </span>
                   )}
                 </div>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex flex-col sm:flex-row shrink-0 gap-1">
                 {!n.read && (
                   <button
                     onClick={() => markRead(n.id)}
