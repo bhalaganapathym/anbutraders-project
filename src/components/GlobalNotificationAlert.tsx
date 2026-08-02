@@ -82,14 +82,14 @@ export default function GlobalNotificationAlert() {
       
       {/* Prominent Alert */}
       <div className="fixed left-0 right-0 top-8 z-[110] flex justify-center px-4 pointer-events-none">
-        <div className="w-full max-w-md animate-bounce pointer-events-auto">
-          <div className="flex items-start gap-4 rounded-xl border-2 border-amber-500 bg-white p-4 shadow-2xl">
+        <div className="w-full max-w-md pointer-events-auto">
+          <div className="flex items-start gap-4 rounded-xl border-2 border-amber-500 bg-white p-4 shadow-2xl animate-bounce">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
               <Bell size={24} className="animate-pulse" />
             </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-slate-800">{latestNotif.title}</h3>
-              <p className="mt-1 text-sm font-medium text-slate-600">{latestNotif.message}</p>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-bold text-slate-800 break-words">{latestNotif.title}</h3>
+              <p className="mt-1 text-sm font-medium text-slate-600 break-words">{latestNotif.message}</p>
             </div>
           </div>
         </div>
