@@ -185,15 +185,7 @@ export default function Login() {
 
           <div className="pt-4 border-t border-slate-100">
             <p className="text-xs font-semibold text-slate-400 text-center uppercase tracking-wider mb-3">Quick Login (No Password Required)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => quickRoleLogin('billing')}
-                disabled={loading}
-                className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:border-amber-200 transition"
-              >
-                Billing Team
-              </button>
+            <div className="grid grid-cols-1 gap-3">
               <button
                 type="button"
                 onClick={() => quickRoleLogin('dispatch')}

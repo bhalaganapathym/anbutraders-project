@@ -83,6 +83,8 @@ class Dispatch(Base):
     status = Column(String, default="pending", nullable=False)
     vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"))
     vehicle_number = Column(String, nullable=True)
+    driver_name = Column(String, nullable=True)
+    driver_mobile = Column(String, nullable=True)
     loading_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     dispatch_team = Column(String)
@@ -134,6 +136,7 @@ class Notification(Base):
     dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="SET NULL"))
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"))
     customer_name = Column(String)
+    image_url = Column(String, nullable=True)
     read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 

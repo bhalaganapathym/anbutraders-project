@@ -12,6 +12,7 @@ import Dispatches from '@/views/Dispatches';
 import PriceList from '@/views/PriceList';
 import Notifications from '@/views/Notifications';
 import Login from '@/views/Login';
+import GlobalNotificationAlert from '@/components/GlobalNotificationAlert';
 
 type NavItem = { id: string; label: string; icon: typeof LayoutDashboard };
 
@@ -55,6 +56,7 @@ function AppContent() {
 
   return (
     <div className="flex min-h-screen bg-slate-100">
+      <GlobalNotificationAlert />
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0 ${

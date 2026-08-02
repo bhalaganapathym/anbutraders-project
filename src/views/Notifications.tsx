@@ -4,7 +4,7 @@ import { api, type Notification } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import {
-  Bell, CheckCircle2, Trash2, X, Truck, IndianRupee, Clock,
+  Bell, CheckCircle2, Trash2, X, Truck, IndianRupee, Clock, Download
 } from 'lucide-react';
 
 export default function Notifications() {
@@ -68,6 +68,25 @@ export default function Notifications() {
     } catch {
       toast('Failed to delete notification', 'error');
     }
+  };
+
+  const deleteImage = async (id: string) => {
+    try {
+      await api.delete(`/notifications/${id}/image`);
+      toast('Image deleted from server', 'success');
+      load();
+    } catch {
+      toast('Failed to delete image', 'error');
+    }
+  };
+
+  const downloadImage = (url: string, title: string) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dispatch_image_${title.replace(/\s+/g, '_')}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const filtered = filter === 'unread' ? notifications.filter((n) => !n.read) : notifications;
@@ -146,6 +165,19 @@ export default function Notifications() {
                   <div>
                     <p className="font-semibold text-slate-800">{n.title}</p>
                     <p className="mt-0.5 text-sm text-slate-600">{n.message}</p>
+                    {n.image_url && (
+                      <div className="mt-3">
+                        <img src={n.image_url} alt="Attached" className="h-32 w-auto max-w-full rounded-md border border-slate-200 object-cover shadow-sm" />
+                        <div className="mt-2 flex gap-2">
+                          <button onClick={() => downloadImage(n.image_url!, n.title)} className="btn-secondary text-xs px-2 py-1 h-auto">
+                            <Download size={14} /> Download
+                          </button>
+                          <button onClick={() => deleteImage(n.id)} className="btn-secondary text-rose-600 text-xs px-2 py-1 h-auto hover:bg-rose-50 border-rose-200">
+                            <Trash2 size={14} /> Delete from Server
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {!n.read && (
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500" />

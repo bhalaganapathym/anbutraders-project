@@ -93,7 +93,11 @@ export default function Dispatches() {
   const [uploading, setUploading] = useState(false);
 
   const [vehicleNumber, setVehicleNumber] = useState('');
+  const [driverName, setDriverName] = useState('');
+  const [driverMobile, setDriverMobile] = useState('');
   const [editVehicleNo, setEditVehicleNo] = useState('');
+  const [editDriverName, setEditDriverName] = useState('');
+  const [editDriverMobile, setEditDriverMobile] = useState('');
 
   // Per-item prices
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
@@ -172,6 +176,8 @@ export default function Dispatches() {
         customer_id: order.customer_id,
         delivery_address: order.delivery_address,
         vehicle_number: vehicleNumber.trim() || null,
+        driver_name: driverName.trim() || null,
+        driver_mobile: driverMobile.trim() || null,
         status: 'confirmed',
         items: orderItems.map((it) => ({
           product_id: it.product_id,
@@ -195,6 +201,8 @@ export default function Dispatches() {
   const openDetail = async (d: DispatchRow) => {
     setDetail(d);
     setEditVehicleNo(d.vehicle_number ?? '');
+    setEditDriverName(d.driver_name ?? '');
+    setEditDriverMobile(d.driver_mobile ?? '');
     setWeightValue('');
     setWeightNotes('');
     setPhotoCaption('');
@@ -216,6 +224,8 @@ export default function Dispatches() {
       await api.put(`/dispatches/${detail.id}`, {
         ...detail,
         vehicle_number: editVehicleNo.trim() || null,
+        driver_name: editDriverName.trim() || null,
+        driver_mobile: editDriverMobile.trim() || null,
       });
       toast('Vehicle details updated', 'success');
       refreshDetail();
@@ -340,6 +350,26 @@ export default function Dispatches() {
           ...detail,
           photos: [...(detail?.photos || []), ...newPhotos]
         });
+        for (const p of newPhotos) {
+          await api.post('/notifications', {
+            title: 'New Dispatch Photo',
+            message: `A new photo was uploaded for dispatch ${detail!.dispatch_no}.`,
+            target_role: 'billing',
+            dispatch_id: detail!.id,
+            order_id: detail!.order_id,
+            customer_name: detail!.customer?.name ?? 'Unknown',
+            image_url: p.url,
+          });
+          await api.post('/notifications', {
+            title: 'New Dispatch Photo',
+            message: `A new photo was uploaded for dispatch ${detail!.dispatch_no}.`,
+            target_role: 'admin',
+            dispatch_id: detail!.id,
+            order_id: detail!.order_id,
+            customer_name: detail!.customer?.name ?? 'Unknown',
+            image_url: p.url,
+          });
+        }
         toast(`${newPhotos.length} photo${newPhotos.length === 1 ? '' : 's'} saved`, 'success');
       } catch (e) {
         toast('Failed to save photos', 'error');
@@ -609,9 +639,31 @@ export default function Dispatches() {
                   type="text"
                   value={vehicleNumber}
                   onChange={(e) => setVehicleNumber(e.target.value)}
-                  placeholder="e.g. TN 38 AB 1234 (Driver: Ramesh)"
-                  className="input"
+                  placeholder="e.g. TN 38 AB 1234"
+                  className="input mb-3"
                 />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label text-xs">Driver Name</label>
+                    <input
+                      type="text"
+                      value={driverName}
+                      onChange={(e) => setDriverName(e.target.value)}
+                      placeholder="e.g. Ramesh"
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Driver Mobile</label>
+                    <input
+                      type="text"
+                      value={driverMobile}
+                      onChange={(e) => setDriverMobile(e.target.value)}
+                      placeholder="e.g. 9876543210"
+                      className="input"
+                    />
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -635,23 +687,43 @@ export default function Dispatches() {
                     <User size={13} className="text-slate-400" /> {detail.customer?.name ?? 'Unknown'}
                   </p>
                 </div>
-                <div>
-                  <p className="label">Vehicle Details</p>
+                <div className="col-span-2 sm:col-span-1">
+                  <p className="label">Vehicle & Driver</p>
                   {detail.status !== 'completed' ? (
-                    <div className="flex items-center gap-1">
+                    <div className="flex flex-col gap-1.5 mt-1">
                       <input
                         type="text"
                         value={editVehicleNo}
                         onChange={(e) => setEditVehicleNo(e.target.value)}
                         onBlur={updateVehicleNumber}
-                        className="w-32 rounded border border-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-800"
+                        className="w-full rounded border border-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-800"
                         placeholder="Vehicle No"
+                      />
+                      <input
+                        type="text"
+                        value={editDriverName}
+                        onChange={(e) => setEditDriverName(e.target.value)}
+                        onBlur={updateVehicleNumber}
+                        className="w-full rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-800"
+                        placeholder="Driver Name"
+                      />
+                      <input
+                        type="text"
+                        value={editDriverMobile}
+                        onChange={(e) => setEditDriverMobile(e.target.value)}
+                        onBlur={updateVehicleNumber}
+                        className="w-full rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-800"
+                        placeholder="Mobile"
                       />
                     </div>
                   ) : (
-                    <p className="flex items-center gap-1 font-semibold text-slate-800">
-                      <Truck size={13} className="text-slate-400" /> {detail.vehicle_number || 'None'}
-                    </p>
+                    <div className="flex flex-col gap-0.5">
+                      <p className="flex items-center gap-1 font-semibold text-slate-800">
+                        <Truck size={13} className="text-slate-400" /> {detail.vehicle_number || 'None'}
+                      </p>
+                      {detail.driver_name && <p className="text-xs text-slate-600">{detail.driver_name}</p>}
+                      {detail.driver_mobile && <p className="text-xs text-slate-600">{detail.driver_mobile}</p>}
+                    </div>
                   )}
                 </div>
                 <div>
@@ -698,24 +770,7 @@ export default function Dispatches() {
                         <div key={it.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-100 px-3 py-2.5">
                           <span className="flex-1 text-sm font-medium text-slate-700">{it.product_name}</span>
                           <span className="text-sm text-slate-500">{it.quantity} {it.unit}</span>
-                          {detail.status !== 'completed' ? (
-                            <div className="flex items-center gap-1">
-                              <IndianRupee size={13} className="text-slate-400" />
-                              <input
-                                type="number"
-                                value={itemPrices[it.id] ?? '0'}
-                                onChange={(e) => setItemPrices({ ...itemPrices, [it.id]: e.target.value })}
-                                onBlur={() => updateItemPrice(it.id)}
-                                className="w-24 rounded border border-slate-300 px-2 py-1 text-center text-sm"
-                                min="0"
-                                step="0.01"
-                                placeholder="Price"
-                              />
-                              <span className="text-xs text-slate-400">per {it.unit}</span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-slate-600">₹{(it.price ?? 0).toFixed(2)} per {it.unit}</span>
-                          )}
+                          <span className="text-sm text-slate-600">₹{(it.price ?? 0).toFixed(2)} per {it.unit}</span>
                           <span className="w-24 text-right text-sm font-semibold text-slate-800">₹{lineTotal.toFixed(2)}</span>
                         </div>
                       );

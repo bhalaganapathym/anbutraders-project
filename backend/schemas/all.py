@@ -202,7 +202,11 @@ class DispatchCreate(BaseModel):
     status: Optional[str] = "pending"
     vehicle_id: Optional[UUID] = None
     vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_mobile: Optional[str] = None
     items: Optional[List[DispatchItemCreate]] = []
+    weights: Optional[List[WeightCreate]] = []
+    photos: Optional[List[PhotoCreate]] = []
 
 class DispatchResponse(BaseModel):
     id: UUID
@@ -213,6 +217,8 @@ class DispatchResponse(BaseModel):
     delivery_address: Optional[str] = None
     vehicle_id: Optional[UUID] = None
     vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_mobile: Optional[str] = None
     loading_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     dispatch_team: Optional[str] = None
@@ -268,6 +274,7 @@ class NotificationCreate(BaseModel):
     dispatch_id: Optional[UUID] = None
     order_id: Optional[UUID] = None
     customer_name: Optional[str] = None
+    image_url: Optional[str] = None
     read: Optional[bool] = False
 
 class NotificationResponse(NotificationCreate):

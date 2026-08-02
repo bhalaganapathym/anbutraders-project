@@ -109,6 +109,23 @@ def create_order(
         
     db.commit()
     db.refresh(order)
+    
+    # Save to CSV
+    try:
+        import csv
+        import os
+        from datetime import datetime
+        csv_file = os.path.join("uploads", "orders.csv")
+        os.makedirs("uploads", exist_ok=True)
+        file_exists = os.path.isfile(csv_file)
+        with open(csv_file, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(['Order ID', 'Customer ID', 'Status', 'Date', 'Delivery Address'])
+            writer.writerow([str(order.id), str(order.customer_id), order.status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), order.delivery_address or ''])
+    except Exception as e:
+        print("Failed to write to CSV:", e)
+
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "products"})
     return order
@@ -209,7 +226,7 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
     if not dispatch:
         raise HTTPException(status_code=404, detail="Dispatch not found")
         
-    d_data = dispatch_in.model_dump(exclude={"items"})
+    d_data = dispatch_in.model_dump(exclude={"items", "weights", "photos"})
     for key, value in d_data.items():
         if value is not None: # Don't overwrite with none blindly if it wasn't provided, though pydantic will supply defaults
             setattr(dispatch, key, value)
@@ -217,6 +234,14 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
     db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
     for item in dispatch_in.items:
         db.add(DispatchItem(dispatch_id=dispatch.id, **item.model_dump()))
+
+    db.query(Weight).filter(Weight.dispatch_id == id).delete()
+    for w in dispatch_in.weights:
+        db.add(Weight(dispatch_id=dispatch.id, **w.model_dump()))
+
+    db.query(Photo).filter(Photo.dispatch_id == id).delete()
+    for p in dispatch_in.photos:
+        db.add(Photo(dispatch_id=dispatch.id, **p.model_dump()))
         
     db.commit()
     db.refresh(dispatch)
@@ -269,4 +294,24 @@ def delete_notification(id: UUID, background_tasks: BackgroundTasks, db: Session
         db.delete(notification)
         db.commit()
         background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return {"status": "ok"}
+
+@router.delete("/notifications/{id}/image")
+def delete_notification_image(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    notification = db.query(Notification).filter(Notification.id == id).first()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+        
+    image_url = notification.image_url
+    if image_url:
+        if notification.dispatch_id:
+            photo = db.query(Photo).filter(Photo.dispatch_id == notification.dispatch_id, Photo.url == image_url).first()
+            if photo:
+                db.delete(photo)
+        
+        notification.image_url = None
+        db.commit()
+        db.refresh(notification)
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    
     return {"status": "ok"}
