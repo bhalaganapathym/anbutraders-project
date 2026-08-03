@@ -168,6 +168,22 @@ export default function Orders() {
       toast('Add at least one product', 'error');
       return;
     }
+
+    // Check if any line exceeds stock
+    for (const line of lines) {
+      const product = products.find(p => p.id === line.product_id);
+      if (product) {
+        const originalLine = editing?.items?.find(i => i.product_id === line.product_id);
+        const originalQty = originalLine ? Number(originalLine.quantity) : 0;
+        const availableStock = Number(product.stock_qty) + originalQty;
+        
+        if (line.quantity > availableStock) {
+          toast(`Quantity for ${product.name} exceeds available stock (${availableStock})`, 'error');
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     try {
       const addr = deliveryAddress.trim() || (customerMode === 'new' ? newAddress.trim() : selectedCustomer?.address ?? '') || null;

@@ -106,6 +106,15 @@ def create_order(
         if product:
             from decimal import Decimal
             product.stock_qty = product.stock_qty - Decimal(str(item.quantity))
+            if product.stock_qty < 0:
+                notification = Notification(
+                    type="stock_alert",
+                    title="Negative Stock Alert",
+                    message=f"Stock for product '{product.name}' has gone negative ({product.stock_qty}). Please update.",
+                    order_id=order.id
+                )
+                db.add(notification)
+                background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
         
     db.commit()
     db.refresh(order)
@@ -139,7 +148,14 @@ def export_orders(db: Session = Depends(get_db), skip: int = 0, limit: int = 100
     for order in orders:
         customer_name = order.customer.name if order.customer else "Unknown"
         # Format date nicely; prepend a space so Excel treats it as text and doesn't show ######
-        date_time = f" {order.created_at.strftime('%d-%b-%Y %I:%M %p')}" if order.created_at else ""
+        date_time = ""
+        if order.created_at:
+            from zoneinfo import ZoneInfo
+            dt = order.created_at
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+            local_dt = dt.astimezone(ZoneInfo("Asia/Kolkata"))
+            date_time = f" {local_dt.strftime('%d-%b-%Y %I:%M %p')}"
         
         items_list = []
         total_amount = 0
