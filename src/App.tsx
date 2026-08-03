@@ -90,21 +90,21 @@ function AppContent() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950">
+    <div className="flex min-h-screen bg-slate-100 text-slate-800">
       <GlobalNotificationAlert />
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 transform flex flex-col transition-transform duration-300 lg:static lg:translate-x-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-sm ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        } flex flex-col`}
       >
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 dark:border-slate-800 px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/25">
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-600 text-white shadow-sm">
             <HardHat size={20} />
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight text-slate-900 dark:text-slate-100">Anbu Traders</p>
-            <p className="text-xs font-medium text-slate-500 capitalize">{user.role} Panel</p>
+            <p className="text-sm font-bold leading-tight text-slate-800">Anbu Traders</p>
+            <p className="text-xs text-slate-500 capitalize">{user.role} Panel</p>
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
@@ -114,10 +114,10 @@ function AppContent() {
               <button
                 key={item.id}
                 onClick={() => navigate(item.id)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                   active
-                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
                 }`}
               >
                 <item.icon size={18} />
@@ -133,15 +133,15 @@ function AppContent() {
           })}
         </nav>
         
-        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-4">
+        <div className="shrink-0 border-t border-slate-200 p-4">
           <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{user.username}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+            <div>
+              <p className="text-sm font-bold text-slate-700">{user.username}</p>
+              <p className="text-xs text-slate-500">{user.email}</p>
             </div>
             <button 
               onClick={logout}
-              className="rounded-xl p-2 text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-rose-600 transition"
               title="Logout"
             >
               <LogOut size={18} />
@@ -152,14 +152,14 @@ function AppContent() {
 
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-45 bg-slate-900/50 lg:hidden"
+          className="fixed inset-0 z-45 bg-slate-900/40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Main Container */}
-      <div className="flex flex-1 flex-col overflow-hidden relative">
-        <header className="sticky top-0 z-20 flex shrink-0 h-16 items-center gap-3 bg-white dark:bg-slate-900 px-4 lg:px-6 shadow-sm border-b border-slate-200 dark:border-slate-800">
+      {/* Main */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <header className="sticky top-0 z-20 flex shrink-0 h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur lg:px-8">
           <button
             onClick={() => setSidebarOpen(true)}
             className="btn-ghost p-2 lg:hidden"
@@ -167,28 +167,22 @@ function AppContent() {
           >
             <Menu size={20} />
           </button>
-          <h1 className="text-lg font-bold capitalize text-slate-900 dark:text-slate-100">
+          <h1 className="text-lg font-bold capitalize text-slate-800">
             {navItems.find((n) => n.id === activeView)?.label ?? 'Dashboard'}
           </h1>
-          <div className="ml-auto flex items-center gap-3 text-sm text-slate-500">
-            <button onClick={toggleTheme} className="btn-ghost p-2 rounded-xl" title="Toggle Theme">
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-            <span className="hidden sm:inline-flex badge bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 capitalize">
-              {user.role}
-            </span>
+          <div className="ml-auto hidden items-center gap-2 text-sm text-slate-500 sm:flex">
+            <span className="badge bg-emerald-100 text-emerald-700 capitalize">{user.role}</span>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <div className="mx-auto max-w-7xl animate-fade-in-up">
-            {activeView === 'dashboard' && <Dashboard onNavigate={navigate} />}
-            {activeView === 'customers' && <Customers />}
-            {activeView === 'products' && <Products />}
-            {activeView === 'orders' && <Orders />}
-            {activeView === 'dispatches' && <Dispatches />}
-            {activeView === 'notifications' && <Notifications />}
-          </div>
+        <main className="flex-1 overflow-auto p-4 lg:p-8">
+          {activeView === 'dashboard' && <Dashboard onNavigate={navigate} />}
+          {activeView === 'customers' && <Customers />}
+          {activeView === 'products' && <Products />}
+          {activeView === 'pricelist' && <PriceList />}
+          {activeView === 'orders' && <Orders />}
+          {activeView === 'dispatches' && <Dispatches />}
+          {activeView === 'notifications' && <Notifications />}
         </main>
       </div>
     </div>

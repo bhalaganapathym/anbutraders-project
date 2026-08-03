@@ -5,101 +5,66 @@
 @layer base {
   :root {
     color-scheme: light;
-    --bg-main: #f8fafc;
-  }
-  .dark {
-    color-scheme: dark;
-    --bg-main: #090d16;
   }
   html, body, #root {
     height: 100%;
   }
   body {
-    @apply text-slate-800 dark:text-slate-100 antialiased transition-colors duration-300 min-h-screen;
-    background-color: var(--bg-main);
+    @apply bg-slate-100 text-slate-800 antialiased;
     font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
 }
 
 @layer components {
-  /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white focus:ring-indigo-500 shadow-indigo-500/25 shadow-md hover:shadow-indigo-500/35 hover:-translate-y-0.5;
+    @apply btn bg-amber-600 text-white hover:bg-amber-700 focus:ring-amber-500 shadow-sm;
   }
   .btn-secondary {
-    @apply btn bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 focus:ring-slate-400 hover:-translate-y-0.5;
+    @apply btn bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus:ring-slate-400 shadow-sm;
   }
   .btn-danger {
-    @apply btn bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white focus:ring-rose-500 shadow-rose-500/25 shadow-md hover:shadow-rose-500/35 hover:-translate-y-0.5;
+    @apply btn bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-500 shadow-sm;
   }
   .btn-ghost {
-    @apply btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus:ring-slate-300 shadow-none;
+    @apply btn text-slate-600 hover:bg-slate-100 focus:ring-slate-300;
   }
-
-  /* Form Elements */
   .input {
-    @apply w-full rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 shadow-sm transition-all duration-200 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20;
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm transition focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500;
   }
   .label {
-    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400;
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500;
   }
-
-  /* Performance Panels & Cards */
   .glass-panel {
-    @apply bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm rounded-2xl transition-all duration-200;
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
   }
   .card {
-    @apply glass-panel hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5;
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
   }
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide transition-all;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
   .table-wrap {
-    @apply overflow-x-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm;
+    @apply overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm;
   }
   .th {
-    @apply px-4 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-200/80 dark:border-slate-800 whitespace-nowrap;
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap;
   }
   .td {
-    @apply px-4 py-3.5 text-sm text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800/60 whitespace-nowrap transition-colors;
+    @apply px-4 py-3 text-sm text-slate-700 whitespace-nowrap;
   }
 }
 
-/* Animations */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
 }
 
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-scale-in {
-  animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Scrollbars */
-::-webkit-scrollbar { height: 8px; width: 8px; }
-::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-slate-700 rounded-full hover:bg-slate-400 dark:hover:bg-slate-600; }
+::-webkit-scrollbar { height: 10px; width: 10px; }
+::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
 ::-webkit-scrollbar-track { @apply bg-transparent; }
