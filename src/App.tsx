@@ -94,7 +94,9 @@ function AppContent() {
       <GlobalNotificationAlert />
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 transform flex flex-col transition-transform duration-300 lg:static lg:translate-x-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-sm`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform flex flex-col transition-transform duration-300 lg:static lg:translate-x-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-sm ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
       >
         <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 dark:border-slate-800 px-5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/25">
@@ -150,7 +152,7 @@ function AppContent() {
 
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-slate-900/50 lg:hidden"
+          className="fixed inset-0 z-45 bg-slate-900/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}

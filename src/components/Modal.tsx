@@ -33,18 +33,23 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: M
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+    <div 
+      className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
-        className={`card animate-fade-in mt-10 w-full ${sizeClasses[size]} p-6`}
+        className={`card animate-fade-in my-auto w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col p-6`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between shrink-0">
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">{title}</h2>
           <button onClick={onClose} className="btn-ghost p-1.5" aria-label="Close">
             <X size={18} />
           </button>
         </div>
-        {children}
+        <div className="overflow-y-auto flex-1 pr-1">
+          {children}
+        </div>
       </div>
     </div>
   );
