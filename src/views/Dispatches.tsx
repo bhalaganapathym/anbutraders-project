@@ -15,22 +15,15 @@ import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import { useToast } from '@/components/Toast';
 import {
   Plus, Search, Truck, Weight as WeightIcon, Camera, CheckCircle2, AlertCircle,
-  Trash2, X, Package, User, MapPin, Calendar, IndianRupee, Phone, MessageCircle, Send, Download,
+  Trash2, X, Package, User, MapPin, Calendar, Download,
 } from 'lucide-react';
 
 type DispatchRow = Dispatch & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type ConfirmedOrder = Order & { customer: Pick<Customer, 'name'> | null };
 
-type OrderItemWithProduct = {
-  id: string;
-  order_id: string;
-  product_id: string;
-  quantity: number;
-  product: { name: string; unit: string } | null;
-};
 
 const compressImage = async (file: File): Promise<File> => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -116,7 +109,7 @@ export default function Dispatches() {
     try {
       const data = await api.get('/dispatches');
       setDispatches(data as DispatchRow[]);
-    } catch (e) {
+    } catch {
       toast('Failed to load dispatches', 'error');
     }
     setLoading(false);
@@ -136,7 +129,7 @@ export default function Dispatches() {
       const data: ConfirmedOrder[] = await api.get('/orders');
       const confirmed = data.filter(o => o.status === 'confirmed');
       setConfirmedOrders(confirmed);
-    } catch (e) {
+    } catch {
       toast('Failed to load confirmed orders', 'error');
     }
   }, [toast]);
@@ -240,7 +233,7 @@ export default function Dispatches() {
       try {
         const freshDetail = await api.get(`/dispatches/${detail.id}`);
         await openDetail(freshDetail as DispatchRow);
-      } catch (e) {
+      } catch {
         console.error("Failed to refresh detail");
       }
     }
@@ -280,7 +273,7 @@ export default function Dispatches() {
       });
       setCameraStream(stream);
       setCameraModalOpen(true);
-    } catch (e) {
+    } catch {
       toast('Could not access camera. Please check permissions.', 'error');
     }
   };
@@ -363,7 +356,7 @@ export default function Dispatches() {
           });
         }
         toast(`${newPhotos.length} photo${newPhotos.length === 1 ? '' : 's'} saved`, 'success');
-      } catch (e) {
+      } catch {
         toast('Failed to save photos', 'error');
       }
     } else {
@@ -378,7 +371,7 @@ export default function Dispatches() {
     refreshDetail();
   };
 
-  const deletePhoto = async (id: string, url: string) => {
+  const deletePhoto = async (id: string) => {
     try {
       await api.put(`/dispatches/${detail!.id}`, {
         ...detail,
@@ -402,22 +395,6 @@ export default function Dispatches() {
     }
   };
 
-  const updateItemPrice = async (itemId: string) => {
-    // We'd have to find the item in detail and update its price
-    // Since we only save items on dispatch put:
-    const price = Number(itemPrices[itemId] ?? 0) || 0;
-    try {
-      const updatedItems = detailItems.map(it => it.id === itemId ? { ...it, price } : it);
-      await api.put(`/dispatches/${detail!.id}`, {
-        ...detail,
-        items: updatedItems
-      });
-      toast('Price updated', 'success');
-      refreshDetail();
-    } catch {
-      toast('Failed to update price', 'error');
-    }
-  };
 
   const openAddProducts = async () => {
     if (allProducts.length === 0) {
@@ -488,7 +465,7 @@ export default function Dispatches() {
           order_id: detail.order_id,
           customer_name: customerName,
         });
-      } catch (e) {
+      } catch {
         toast('Dispatch completed, but billing notification failed to send', 'error');
       }
       toast('Dispatch completed — billing team notified', 'success');
@@ -981,7 +958,7 @@ export default function Dispatches() {
               {detail?.status !== 'completed' && (
                 <button
                   onClick={() => {
-                    deletePhoto(viewingPhoto.id, viewingPhoto.url);
+                    deletePhoto(viewingPhoto.id);
                     setViewingPhoto(null);
                   }}
                   className="btn-primary bg-rose-600 hover:bg-rose-700 focus:ring-rose-200 border-none flex items-center gap-2"
