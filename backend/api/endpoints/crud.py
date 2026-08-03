@@ -24,8 +24,8 @@ def create_customer(
     return customer
 
 @router.get("/customers", response_model=List[CustomerResponse])
-def get_customers(db: Session = Depends(get_db)):
-    return db.query(Customer).order_by(Customer.created_at.desc()).all()
+def get_customers(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
+    return db.query(Customer).order_by(Customer.created_at.desc()).offset(skip).limit(limit).all()
 
 @router.put("/customers/{id}", response_model=CustomerResponse)
 def update_customer(id: UUID, customer_in: CustomerCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -63,8 +63,8 @@ def create_product(
     return product
 
 @router.get("/products", response_model=List[ProductResponse])
-def get_products(db: Session = Depends(get_db)):
-    return db.query(Product).order_by(Product.created_at.desc()).all()
+def get_products(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
+    return db.query(Product).order_by(Product.created_at.desc()).offset(skip).limit(limit).all()
 
 @router.put("/products/{id}", response_model=ProductResponse)
 def update_product(id: UUID, product_in: ProductCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -115,14 +115,14 @@ def create_order(
     return order
 
 @router.get("/orders", response_model=List[OrderResponse])
-def get_orders(db: Session = Depends(get_db)):
+def get_orders(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
     return db.query(Order).options(
         joinedload(Order.customer),
         joinedload(Order.items).joinedload(OrderItem.product)
-    ).order_by(Order.created_at.desc()).all()
+    ).order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
 
 @router.get("/orders/export")
-def export_orders(db: Session = Depends(get_db)):
+def export_orders(db: Session = Depends(get_db), skip: int = 0, limit: int = 10000):
     import csv
     import io
     from fastapi.responses import StreamingResponse
@@ -130,7 +130,7 @@ def export_orders(db: Session = Depends(get_db)):
     orders = db.query(Order).options(
         joinedload(Order.customer),
         joinedload(Order.items).joinedload(OrderItem.product)
-    ).order_by(Order.created_at.desc()).all()
+    ).order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -231,13 +231,13 @@ def create_dispatch(
     return dispatch
 
 @router.get("/dispatches", response_model=List[DispatchResponse])
-def get_dispatches(db: Session = Depends(get_db)):
+def get_dispatches(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
     return db.query(Dispatch).options(
         joinedload(Dispatch.customer),
         joinedload(Dispatch.items),
         joinedload(Dispatch.weights),
         joinedload(Dispatch.photos)
-    ).order_by(Dispatch.created_at.desc()).all()
+    ).order_by(Dispatch.created_at.desc()).offset(skip).limit(limit).all()
 
 @router.get("/dispatches/{id}", response_model=DispatchResponse)
 def get_dispatch(id: UUID, db: Session = Depends(get_db)):
@@ -303,8 +303,8 @@ def create_notification(
     return notification
 
 @router.get("/notifications", response_model=List[NotificationResponse])
-def get_notifications(db: Session = Depends(get_db)):
-    return db.query(Notification).order_by(Notification.created_at.desc()).all()
+def get_notifications(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
+    return db.query(Notification).order_by(Notification.created_at.desc()).offset(skip).limit(limit).all()
 
 @router.put("/notifications/{id}", response_model=NotificationResponse)
 def update_notification(id: UUID, notification_in: NotificationCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

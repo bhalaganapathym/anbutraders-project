@@ -46,7 +46,7 @@ class Product(Base):
 class Order(Base):
     __tablename__ = "orders"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     status = Column(String, default="pending", nullable=False)
     delivery_address = Column(String)
     notes = Column(String)
@@ -58,8 +58,8 @@ class Order(Base):
 class OrderItem(Base):
     __tablename__ = "order_items"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     quantity = Column(Numeric, default=1, nullable=False)
     
     order = relationship("Order", back_populates="items")
@@ -76,9 +76,9 @@ class Vehicle(Base):
 class Dispatch(Base):
     __tablename__ = "dispatches"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    dispatch_no = Column(String, nullable=False)
-    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    dispatch_no = Column(String, nullable=False, index=True)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     delivery_address = Column(String)
     status = Column(String, default="pending", nullable=False)
     vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"))
@@ -98,8 +98,8 @@ class Dispatch(Base):
 class DispatchItem(Base):
     __tablename__ = "dispatch_items"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False)
-    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     product_name = Column(String, nullable=False)
     quantity = Column(Numeric, default=1, nullable=False)
     unit = Column(String, default="piece", nullable=False)
@@ -110,7 +110,7 @@ class DispatchItem(Base):
 class Weight(Base):
     __tablename__ = "weights"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False)
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False, index=True)
     actual_weight = Column(Numeric, nullable=False)
     weighed_at = Column(DateTime(timezone=True), server_default=text("now()"))
     notes = Column(String)
@@ -120,7 +120,7 @@ class Weight(Base):
 class Photo(Base):
     __tablename__ = "photos"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False)
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False, index=True)
     url = Column(String, nullable=False)
     caption = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
@@ -133,8 +133,8 @@ class Notification(Base):
     type = Column(String, nullable=False)
     title = Column(String, nullable=False)
     message = Column(String, nullable=False)
-    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="SET NULL"))
-    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"))
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="SET NULL"), index=True)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), index=True)
     customer_name = Column(String)
     image_url = Column(String, nullable=True)
     read = Column(Boolean, default=False)
@@ -144,8 +144,8 @@ class Notification(Base):
 class Sale(Base):
     __tablename__ = "sales"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True) # Cashier
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True) # Cashier
     total_amount = Column(Numeric, default=0, nullable=False)
     status = Column(String, default="completed", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
@@ -155,8 +155,8 @@ class Sale(Base):
 class SaleItem(Base):
     __tablename__ = "sale_items"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    sale_id = Column(UUID(as_uuid=True), ForeignKey("sales.id", ondelete="CASCADE"), nullable=False)
-    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    sale_id = Column(UUID(as_uuid=True), ForeignKey("sales.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     quantity = Column(Numeric, default=1, nullable=False)
     unit_price = Column(Numeric, nullable=False)
     subtotal = Column(Numeric, nullable=False)
@@ -166,8 +166,8 @@ class SaleItem(Base):
 class Purchase(Base):
     __tablename__ = "purchases"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    supplier_id = Column(UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    supplier_id = Column(UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     total_amount = Column(Numeric, default=0, nullable=False)
     status = Column(String, default="completed", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
@@ -177,8 +177,8 @@ class Purchase(Base):
 class PurchaseItem(Base):
     __tablename__ = "purchase_items"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    purchase_id = Column(UUID(as_uuid=True), ForeignKey("purchases.id", ondelete="CASCADE"), nullable=False)
-    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    purchase_id = Column(UUID(as_uuid=True), ForeignKey("purchases.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     quantity = Column(Numeric, default=1, nullable=False)
     unit_cost = Column(Numeric, nullable=False)
     subtotal = Column(Numeric, nullable=False)
@@ -188,8 +188,8 @@ class PurchaseItem(Base):
 class StockMovement(Base):
     __tablename__ = "stock_movements"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     movement_type = Column(String, nullable=False) # 'IN' or 'OUT'
     quantity = Column(Numeric, nullable=False)
-    reference_id = Column(UUID(as_uuid=True), nullable=True) # Sale ID or Purchase ID
+    reference_id = Column(UUID(as_uuid=True), nullable=True, index=True) # Sale ID or Purchase ID
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
