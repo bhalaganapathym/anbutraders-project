@@ -4,7 +4,7 @@ import { api, type Customer, type Order, type OrderItem, type Product } from '@/
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import {
-  Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, IndianRupee, Tag,
+  Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag,
 } from 'lucide-react';
 
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
@@ -247,7 +247,7 @@ export default function Orders() {
   };
 
   const productName = (pid: string) => products.find((p) => p.id === pid)?.name ?? 'Unknown';
-  const productPrice = (pid: string) => products.find((p) => p.id === pid)?.price ?? 0;
+
 
   // Brands with multiple size variants (steels, etc.)
   const brandedProducts = products.filter((p) => p.brand && p.brand.trim() !== '');
@@ -265,7 +265,7 @@ export default function Orders() {
   // For no-size brands, the product is just the first (and only) one for that brand
   const noSizeBrandProduct = (brand: string) => sizesForBrand(brand)[0] ?? null;
 
-  const orderTotal = lines.reduce((sum, l) => sum + productPrice(l.product_id) * l.quantity, 0);
+
 
   return (
     <div className="space-y-6">
@@ -526,7 +526,7 @@ export default function Orders() {
                           .filter((p) => p.size && p.size.trim() !== '' && p.size.toLowerCase() !== 'n/a')
                           .map((p) => (
                             <option key={p.id} value={p.size ?? ''}>
-                              {p.size} — ₹{(p.price ?? 0).toFixed(2)}/{p.unit}
+                              {p.size}
                             </option>
                           ))}
                       </select>
@@ -565,7 +565,7 @@ export default function Orders() {
                           className="rounded-lg border border-white/20 dark:border-slate-700/50 bg-white px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 transition hover:border-amber-400 hover:bg-indigo-50/50 dark:bg-indigo-900/30"
                         >
                           <Plus size={12} className="mr-1 inline" />
-                          {b} — ₹{(prod.price ?? 0).toFixed(2)}/{prod.unit}
+                          {b}
                         </button>
                       );
                     })}
@@ -585,7 +585,7 @@ export default function Orders() {
                         className="rounded-lg border border-white/20 dark:border-slate-700/50 bg-white px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 transition hover:border-amber-400 hover:bg-indigo-50/50 dark:bg-indigo-900/30"
                       >
                         <Plus size={12} className="mr-1 inline" />
-                        {p.name} — ₹{(p.price ?? 0).toFixed(2)}/{p.unit}
+                        {p.name}
                       </button>
                     ))}
                   </div>
@@ -604,19 +604,14 @@ export default function Orders() {
               <div className="space-y-2">
                 {lines.map((l) => {
                   const p = products.find((x) => x.id === l.product_id);
-                  const lineTotal = (p?.price ?? 0) * l.quantity;
                   return (
                     <div key={l.product_id} className="flex items-center gap-3 rounded-lg border border-white/20 dark:border-slate-700/50 p-3">
                       <div className="flex-1">
                         <p className="font-medium text-slate-700 dark:text-slate-200">{productName(l.product_id)}</p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                           {p?.brand && p.brand} {p?.size && `· ${p.size}`}
-                          {p && ` · ₹${(p.price ?? 0).toFixed(2)}/${p.unit}`}
                         </p>
                       </div>
-                      <span className="hidden text-sm font-semibold text-slate-600 dark:text-slate-300 sm:inline">
-                        ₹{lineTotal.toFixed(2)}
-                      </span>
                       <div className="flex items-center gap-1">
                         <button onClick={() => updateQty(l.product_id, -1)} className="btn-ghost p-1" aria-label="Decrease">
                           <Minus size={14} />
@@ -645,12 +640,7 @@ export default function Orders() {
                     </div>
                   );
                 })}
-                <div className="flex items-center justify-between rounded-lg bg-indigo-50/50 dark:bg-indigo-900/30 px-4 py-2.5">
-                  <span className="flex items-center gap-1.5 text-sm font-bold text-amber-800">
-                    <IndianRupee size={15} /> Order Total
-                  </span>
-                  <span className="text-lg font-bold text-indigo-700 dark:text-indigo-300">₹{orderTotal.toFixed(2)}</span>
-                </div>
+
               </div>
             )}
           </div>
