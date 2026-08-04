@@ -225,7 +225,7 @@ class DispatchResponse(BaseModel):
     dispatch_team: Optional[str] = None
     created_at: datetime
     
-    order: Optional[OrderResponse] = None
+    order: Optional["OrderResponse"] = None
     customer: Optional[CustomerResponse] = None
     items: List[DispatchItemResponse] = []
     weights: List[WeightResponse] = []
