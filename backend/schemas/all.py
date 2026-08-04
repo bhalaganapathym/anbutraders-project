@@ -236,12 +236,14 @@ class DispatchResponse(BaseModel):
 class OrderItemCreate(BaseModel):
     product_id: UUID
     quantity: float
+    unit: Optional[str] = None
 
 class OrderItemResponse(BaseModel):
     id: UUID
     order_id: UUID
     product_id: UUID
     quantity: float
+    unit: Optional[str] = None
     product: Optional[ProductResponse] = None
     class Config:
         from_attributes = True

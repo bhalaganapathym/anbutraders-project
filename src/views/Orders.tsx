@@ -10,7 +10,7 @@ import {
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type OrderItemWithProduct = OrderItem & { product: Product | null };
 
-type Line = { product_id: string; quantity: number };
+type Line = { product_id: string; quantity: number; unit: string };
 
 export default function Orders() {
   const toast = useToast();
@@ -106,7 +106,7 @@ export default function Orders() {
     setNotes(o.notes ?? '');
     // Items are included in the OrderResponse
     const data = o.items || [];
-    setLines(data.map((x: any) => ({ product_id: x.product_id, quantity: x.quantity })));
+    setLines(data.map((x: any) => ({ product_id: x.product_id, quantity: x.quantity, unit: x.unit ?? products.find(p => p.id === x.product_id)?.unit ?? 'piece' })));
     // Load the existing customer for editing
     if (o.customer) {
       setSelectedCustomer(o.customer as Customer);
@@ -120,7 +120,7 @@ export default function Orders() {
       toast('Product already added', 'info');
       return;
     }
-    setLines([...lines, { product_id: pid, quantity: 1 }]);
+    setLines([...lines, { product_id: pid, quantity: 1, unit: products.find(p => p.id === pid)?.unit ?? 'piece' }]);
   };
 
   const updateQty = (pid: string, delta: number) => {
@@ -132,6 +132,10 @@ export default function Orders() {
   };
 
   const removeLine = (pid: string) => setLines(lines.filter((l) => l.product_id !== pid));
+
+  const setUnit = (pid: string, unit: string) => {
+    setLines(lines.map((l) => (l.product_id === pid ? { ...l, unit } : l)));
+  };
 
   const resolveCustomer = async (): Promise<string | null> => {
     if (editing && selectedCustomer) return selectedCustomer.id;
@@ -191,7 +195,7 @@ export default function Orders() {
         customer_id: custId,
         delivery_address: addr,
         notes: notes.trim() || null,
-        items: lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity }))
+        items: lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity, unit: l.unit }))
       };
       if (editing) {
         await api.put(`/orders/${editing.id}`, payload);
@@ -217,7 +221,7 @@ export default function Orders() {
         delivery_address: o.delivery_address,
         notes: o.notes,
         status: 'confirmed',
-        items: o.items?.map(i => ({ product_id: i.product_id, quantity: i.quantity })) || []
+        items: o.items?.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit: i.unit })) || []
       });
       toast('Order confirmed', 'success');
       load();
@@ -624,6 +628,13 @@ export default function Orders() {
                           className="w-16 rounded border border-white/30 dark:border-slate-600/50 px-2 py-1 text-center text-sm"
                           min="1"
                         />
+                        <input
+                          type="text"
+                          value={l.unit}
+                          onChange={(e) => setUnit(l.product_id, e.target.value)}
+                          className="w-16 rounded border border-white/30 dark:border-slate-600/50 px-2 py-1 text-center text-sm"
+                          placeholder="Unit"
+                        />
                         <button onClick={() => updateQty(l.product_id, 1)} className="btn-ghost p-1" aria-label="Increase">
                           <Plus size={14} />
                         </button>
@@ -695,7 +706,7 @@ export default function Orders() {
                 {detailItems.map((it) => (
                   <div key={it.id} className="flex items-center justify-between rounded-lg border border-white/20 dark:border-slate-700/50 px-3 py-2">
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{it.product?.name ?? 'Unknown'}</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Qty: {it.quantity} {it.product?.unit}</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Qty: {it.quantity} {it.unit ?? it.product?.unit}</span>
                   </div>
                 ))}
               </div>

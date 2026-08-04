@@ -78,6 +78,7 @@ export type OrderItem = {
   order_id: string;
   product_id: string;
   quantity: number;
+  unit?: string | null;
   product?: Product | null;
 };
 

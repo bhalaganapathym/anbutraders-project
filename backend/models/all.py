@@ -61,6 +61,7 @@ class OrderItem(Base):
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
     product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     quantity = Column(Numeric, default=1, nullable=False)
+    unit = Column(String, nullable=True)
     
     order = relationship("Order", back_populates="items")
     product = relationship("Product")
