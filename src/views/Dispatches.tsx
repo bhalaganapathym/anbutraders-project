@@ -235,7 +235,7 @@ export default function Dispatches() {
                   <option value="">Select an order...</option>
                   {confirmedOrders.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.customer?.name ?? 'Unknown'} — {new Date(o.created_at).toLocaleDateString()}
+                      {o.order_no || o.id.split('-')[0].toUpperCase()} — {o.customer?.name ?? 'Unknown'}
                     </option>
                   ))}
                 </select>

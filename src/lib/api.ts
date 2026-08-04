@@ -66,6 +66,7 @@ export type Product = {
 
 export type Order = {
   id: string;
+  order_no: string;
   customer_id: string;
   status: 'pending' | 'confirmed';
   delivery_address: string | null;
@@ -110,9 +111,11 @@ export type Dispatch = {
   driver_name: string | null;
   driver_mobile: string | null;
   loading_at: string | null;
-  completed_at: string | null;
-  dispatch_team: string | null;
+  completed_at?: string;
+  dispatch_team?: string;
   created_at: string;
+  order?: Order;
+  customer?: Customer;
   items?: DispatchItem[];
   weights?: Weight[];
   photos?: Photo[];

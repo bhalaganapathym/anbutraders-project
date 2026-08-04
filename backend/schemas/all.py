@@ -225,6 +225,7 @@ class DispatchResponse(BaseModel):
     dispatch_team: Optional[str] = None
     created_at: datetime
     
+    order: Optional[OrderResponse] = None
     customer: Optional[CustomerResponse] = None
     items: List[DispatchItemResponse] = []
     weights: List[WeightResponse] = []
@@ -251,6 +252,7 @@ class OrderItemResponse(BaseModel):
 
 class OrderCreate(BaseModel):
     customer_id: UUID
+    order_no: Optional[str] = None
     delivery_address: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = "pending"
@@ -258,6 +260,7 @@ class OrderCreate(BaseModel):
 
 class OrderResponse(BaseModel):
     id: UUID
+    order_no: Optional[str] = None
     customer_id: UUID
     status: str
     delivery_address: Optional[str] = None

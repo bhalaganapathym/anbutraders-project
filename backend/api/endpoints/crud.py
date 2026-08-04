@@ -108,8 +108,16 @@ def create_order(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
+    from datetime import datetime
+    today = datetime.now()
+    today_str = today.strftime("%d%m%Y")
+    start_of_day = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    count_today = db.query(Order).filter(Order.created_at >= start_of_day).count()
+    new_order_no = f"ORD{count_today + 1}-{today_str}"
+    
     order_data = order_in.model_dump(exclude={"items"})
-    order = Order(**order_data)
+    order = Order(**order_data, order_no=new_order_no)
     db.add(order)
     db.flush()
     

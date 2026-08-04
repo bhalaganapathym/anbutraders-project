@@ -47,6 +47,7 @@ class Product(Base):
 class Order(Base):
     __tablename__ = "orders"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    order_no = Column(String, unique=True, nullable=False, index=True)
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
     status = Column(String, default="pending", nullable=False)
     delivery_address = Column(String)
@@ -92,6 +93,7 @@ class Dispatch(Base):
     dispatch_team = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     
+    order = relationship("Order")
     customer = relationship("Customer")
     items = relationship("DispatchItem", back_populates="dispatch", cascade="all, delete-orphan")
     weights = relationship("Weight", back_populates="dispatch", cascade="all, delete-orphan")

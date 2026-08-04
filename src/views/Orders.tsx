@@ -304,6 +304,7 @@ export default function Orders() {
           <table className="w-full">
             <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
               <tr>
+                <th className="th">Order No</th>
                 <th className="th">Customer</th>
                 <th className="th">Phone</th>
                 <th className="th">Items</th>
@@ -316,10 +317,15 @@ export default function Orders() {
             <tbody className="divide-y divide-slate-100">
               {filtered.map((o) => (
                 <tr key={o.id} className="hover:bg-white/20 dark:bg-slate-800/30">
-                  <td className="td">
-                    <button onClick={() => openDetail(o)} className="font-medium text-indigo-700 dark:text-indigo-300 hover:underline">
-                      {o.customer?.name ?? 'Unknown'}
+                  <td className="td font-mono font-medium text-slate-800 dark:text-slate-200">
+                    <button onClick={() => openDetail(o)} className="hover:underline">
+                      {o.order_no || o.id.split('-')[0].toUpperCase()}
                     </button>
+                  </td>
+                  <td className="td">
+                    <div className="font-medium text-indigo-700 dark:text-indigo-300">
+                      {o.customer?.name ?? 'Unknown'}
+                    </div>
                   </td>
                   <td className="td text-slate-500 dark:text-slate-400 dark:text-slate-500">{o.customer?.phone ?? '—'}</td>
                   <td className="td text-slate-500 dark:text-slate-400 dark:text-slate-500">—</td>

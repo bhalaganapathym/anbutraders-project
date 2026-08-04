@@ -300,8 +300,8 @@ export default function DispatchDashboard({
             <div className="flex items-center gap-2 text-slate-500 mb-2">
               <Search size={16} /> <span className="text-sm font-medium">Order ID</span>
             </div>
-            <p className="font-bold font-mono text-lg text-slate-800 dark:text-white truncate" title={detail.order_id}>
-              {detail.order_id.split('-')[0].toUpperCase()}
+            <p className="font-bold font-mono text-lg text-slate-800 dark:text-white truncate" title={detail.order?.order_no || detail.order_id}>
+              {detail.order?.order_no || detail.order_id.split('-')[0].toUpperCase()}
             </p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-4 shadow-sm hover:shadow-md transition">
