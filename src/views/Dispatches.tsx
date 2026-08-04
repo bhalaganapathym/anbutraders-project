@@ -93,8 +93,7 @@ export default function Dispatches() {
   const [editDriverName, setEditDriverName] = useState('');
   const [editDriverMobile, setEditDriverMobile] = useState('');
 
-  // Per-item prices
-  const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
+
 
   // Add products to an existing dispatch
   const [addOpen, setAddOpen] = useState(false);
@@ -205,9 +204,7 @@ export default function Dispatches() {
 
     const di = (d.items ?? []) as DispatchItem[];
     setDetailItems(di);
-    const prices: Record<string, string> = {};
-    di.forEach((it) => { prices[it.id] = String(it.price ?? 0); });
-    setItemPrices(prices);
+
     setDetailWeights((d.weights ?? []) as Weight[]);
     setDetailPhotos((d.photos ?? []) as Photo[]);
   };
@@ -460,7 +457,7 @@ export default function Dispatches() {
         await api.post('/notifications', {
           type: 'billing_alert',
           title: `Dispatch ${detail.dispatch_no} completed`,
-          message: `Dispatch ${detail.dispatch_no} for ${customerName} is ready for billing. Grand total: ₹${grandTotal.toFixed(2)}.`,
+          message: `Dispatch ${detail.dispatch_no} for ${customerName} is ready for billing.`,
           dispatch_id: detail.id,
           order_id: detail.order_id,
           customer_name: customerName,
@@ -488,7 +485,7 @@ export default function Dispatches() {
   };
 
   const totalWeight = detailWeights.reduce((s, w) => s + w.actual_weight, 0);
-  const grandTotal = detailItems.reduce((s, it) => s + (it.price ?? 0) * it.quantity, 0);
+
 
   return (
     <div className="space-y-6">
@@ -530,7 +527,7 @@ export default function Dispatches() {
                 <th className="th">Dispatch No</th>
                 <th className="th">Customer</th>
                 <th className="th">Vehicle</th>
-                <th className="th">Total</th>
+
                 <th className="th">Status</th>
                 <th className="th">Created</th>
                 <th className="th text-right">Actions</th>
@@ -538,7 +535,7 @@ export default function Dispatches() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((d) => {
-                const itemTotal = detailItems && d.id === detail?.id ? grandTotal : null;
+
                 return (
                   <tr key={d.id} className="hover:bg-white/20 dark:bg-slate-800/30">
                     <td className="td">
@@ -556,7 +553,7 @@ export default function Dispatches() {
                         <span className="text-slate-400 dark:text-slate-500 italic">Not set</span>
                       )}
                     </td>
-                    <td className="td">{itemTotal != null ? `₹${itemTotal.toFixed(2)}` : '—'}</td>
+
                     <td className="td"><DispatchStatusBadge status={d.status} /></td>
                     <td className="td">{new Date(d.created_at).toLocaleDateString()}</td>
                     <td className="td text-right">
@@ -730,25 +727,17 @@ export default function Dispatches() {
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <section>
                   <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
-                    <Package size={16} className="text-indigo-600 dark:text-indigo-400" /> Items & Prices
+                    <Package size={16} className="text-indigo-600 dark:text-indigo-400" /> Items
                   </h3>
                   <div className="space-y-2">
-                    {detailItems.map((it) => {
-                      const lineTotal = (it.price ?? 0) * it.quantity;
-                      return (
-                        <div key={it.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/20 dark:border-slate-700/50 px-3 py-2.5">
-                          <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{it.product_name}</span>
-                          <span className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">{it.quantity} {it.unit}</span>
-                          <span className="text-sm text-slate-600 dark:text-slate-300">₹{(it.price ?? 0).toFixed(2)} per {it.unit}</span>
-                          <span className="w-24 text-right text-sm font-semibold text-slate-800 dark:text-slate-100">₹{lineTotal.toFixed(2)}</span>
-                        </div>
-                      );
-                    })}
+                    {detailItems.map((it) => (
+                      <div key={it.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/20 dark:border-slate-700/50 px-3 py-2.5">
+                        <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{it.product_name}</span>
+                        <span className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">{it.quantity} {it.unit}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="mt-3 flex items-center justify-between rounded-lg bg-indigo-50/50 dark:bg-indigo-900/30 px-4 py-2.5">
-                    <span className="text-sm font-bold text-amber-800">Grand Total</span>
-                    <span className="text-lg font-bold text-amber-800">₹{grandTotal.toFixed(2)}</span>
-                  </div>
+
                   {detail.status !== 'completed' && (
                     <button onClick={openAddProducts} className="btn-secondary mt-3 w-full">
                       <Plus size={15} /> Add Products
