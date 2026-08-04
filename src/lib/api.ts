@@ -60,6 +60,7 @@ export type Product = {
   stock_qty: number;
   brand: string | null;
   size: string | null;
+  standard_weight?: number;
   created_at: string;
 };
 

@@ -74,6 +74,7 @@ class ProductBase(BaseModel):
     price: Optional[float] = 0
     brand: Optional[str] = None
     size: Optional[str] = None
+    standard_weight: Optional[float] = 0
 
 class ProductCreate(ProductBase):
     pass

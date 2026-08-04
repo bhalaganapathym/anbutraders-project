@@ -41,6 +41,7 @@ class Product(Base):
     price = Column(Numeric, default=0, nullable=False)
     brand = Column(String)
     size = Column(String)
+    standard_weight = Column(Numeric, default=0, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
 class Order(Base):

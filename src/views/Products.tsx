@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api, type Product } from '@/lib/api';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
-import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box } from 'lucide-react';
+import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box, Upload } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
 
-type Form = { name: string; category: string; unit: string; price: string; stock_qty: string; brand: string; size: string };
-const empty: Form = { name: '', category: 'Steel', unit: 'piece', price: '0', stock_qty: '0', brand: '', size: '' };
+type Form = { name: string; category: string; unit: string; price: string; stock_qty: string; brand: string; size: string; standard_weight: string };
+const empty: Form = { name: '', category: 'Steel', unit: 'piece', price: '0', stock_qty: '0', brand: '', size: '', standard_weight: '0' };
 
 const categories = ['Steel', 'Cement', 'TMT Bars', 'Pipes', 'Other'];
 const knownBrands = ['Tata Steel', 'iSteel', 'Sumangala', 'Suryadev'];
@@ -26,6 +26,69 @@ export default function Products() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<Form>(empty);
   const [saving, setSaving] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length < 2) throw new Error('CSV is empty or missing headers');
+        
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const nameIdx = headers.indexOf('name');
+        if (nameIdx === -1) throw new Error('CSV must contain a "name" column');
+        
+        const catIdx = headers.indexOf('category');
+        const unitIdx = headers.indexOf('unit');
+        const priceIdx = headers.indexOf('price');
+        const qtyIdx = headers.indexOf('stock_qty');
+        const brandIdx = headers.indexOf('brand');
+        const sizeIdx = headers.indexOf('size');
+        const weightIdx = headers.indexOf('standard_weight');
+
+        const productsToUpload = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(c => c.trim());
+          if (!cols[nameIdx]) continue;
+          
+          productsToUpload.push({
+            name: cols[nameIdx],
+            category: (catIdx !== -1 && cols[catIdx]) ? cols[catIdx] : 'Other',
+            unit: (unitIdx !== -1 && cols[unitIdx]) ? cols[unitIdx] : 'piece',
+            price: (priceIdx !== -1 && !isNaN(Number(cols[priceIdx]))) ? Number(cols[priceIdx]) : 0,
+            stock_qty: (qtyIdx !== -1 && !isNaN(Number(cols[qtyIdx]))) ? Number(cols[qtyIdx]) : 0,
+            brand: (brandIdx !== -1 && cols[brandIdx]) ? cols[brandIdx] : null,
+            size: (sizeIdx !== -1 && cols[sizeIdx]) ? cols[sizeIdx] : null,
+            standard_weight: (weightIdx !== -1 && !isNaN(Number(cols[weightIdx]))) ? Number(cols[weightIdx]) : 0,
+          });
+        }
+        
+        if (productsToUpload.length === 0) throw new Error('No valid products found to upload');
+        
+        await api.post('/products/bulk', productsToUpload);
+        toast(`Successfully imported ${productsToUpload.length} products`, 'success');
+        load();
+      } catch (err: any) {
+        toast(err.message || 'Failed to upload CSV', 'error');
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.onerror = () => {
+      toast('Failed to read file', 'error');
+      setUploading(false);
+    };
+    reader.readAsText(file);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,7 +130,7 @@ export default function Products() {
 
   const openEdit = (p: Product) => {
     setEditing(p);
-    setForm({ name: p.name, category: p.category, unit: p.unit, price: String(p.price ?? 0), stock_qty: String(p.stock_qty), brand: p.brand ?? '', size: p.size ?? '' });
+    setForm({ name: p.name, category: p.category, unit: p.unit, price: String(p.price ?? 0), stock_qty: String(p.stock_qty), brand: p.brand ?? '', size: p.size ?? '', standard_weight: String(p.standard_weight ?? 0) });
     setOpen(true);
   };
 
@@ -78,8 +141,9 @@ export default function Products() {
     }
     const qty = Number(form.stock_qty) || 0;
     const price = Number(form.price) || 0;
+    const stdWt = Number(form.standard_weight) || 0;
     setSaving(true);
-    const payload = { name: form.name.trim(), category: form.category, unit: form.unit, price, stock_qty: qty, brand: form.brand.trim() || null, size: form.size.trim() || null };
+    const payload = { name: form.name.trim(), category: form.category, unit: form.unit, price, stock_qty: qty, brand: form.brand.trim() || null, size: form.size.trim() || null, standard_weight: stdWt };
     try {
       if (editing) {
         await api.put(`/products/${editing.id}`, payload);
@@ -124,9 +188,21 @@ export default function Products() {
           <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Manage your product catalog</p>
         </div>
         {isAdmin && (
-          <button onClick={openNew} className="btn-primary">
-            <Plus size={16} /> Add Product
-          </button>
+          <div className="flex gap-2">
+            <input 
+              type="file" 
+              accept=".csv" 
+              ref={fileInputRef} 
+              onChange={handleFileUpload} 
+              className="hidden" 
+            />
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-secondary">
+              <Upload size={16} /> {uploading ? 'Importing...' : 'Import CSV'}
+            </button>
+            <button onClick={openNew} className="btn-primary">
+              <Plus size={16} /> Add Product
+            </button>
+          </div>
         )}
       </div>
 
@@ -282,6 +358,20 @@ export default function Products() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="label">Standard Weight (kg)</label>
+              <input
+                type="number"
+                value={form.standard_weight}
+                onChange={(e) => setForm({ ...form, standard_weight: e.target.value })}
+                className="input"
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div className="hidden"></div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <label className="label">Price per unit (₹)</label>
               <input
                 type="number"
@@ -338,6 +428,7 @@ function ProductTable({
             <th className="th">Size</th>
             <th className="th">Category</th>
             <th className="th">Unit</th>
+            <th className="th">Std Wt (kg)</th>
             <th className="th">Price</th>
             <th className="th">Stock</th>
             {isAdmin && <th className="th text-right">Actions</th>}
@@ -364,6 +455,11 @@ function ProductTable({
                 </span>
               </td>
               <td className="td">{p.unit}</td>
+              <td className="td">
+                <span className="font-medium text-slate-600 dark:text-slate-300">
+                  {p.standard_weight ? `${p.standard_weight} kg` : '—'}
+                </span>
+              </td>
               <td className="td">
                 <span className="flex items-center font-semibold text-slate-700 dark:text-slate-200">
                   <IndianRupee size={13} className="text-slate-400 dark:text-slate-500" />{(p.price ?? 0).toFixed(2)}

@@ -62,6 +62,20 @@ def create_product(
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "products"})
     return product
 
+@router.post("/products/bulk", response_model=List[ProductResponse])
+def bulk_create_products(
+    products_in: List[ProductCreate],
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    products = [Product(**p.model_dump()) for p in products_in]
+    db.add_all(products)
+    db.commit()
+    for product in products:
+        db.refresh(product)
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "products"})
+    return products
+
 @router.get("/products", response_model=List[ProductResponse])
 def get_products(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
     return db.query(Product).order_by(Product.created_at.desc()).offset(skip).limit(limit).all()
