@@ -268,8 +268,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
           <div className="flex-1 space-y-6">
             
             {/* Customer Section */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="rounded-t-xl border-b border-slate-100 bg-slate-50/50 px-5 py-4">
                 <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                   <User size={18} className="text-blue-600" /> Customer Information
                 </h2>
@@ -322,8 +322,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             </div>
 
             {/* Address Section */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-4 flex items-center justify-between">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="rounded-t-xl border-b border-slate-100 bg-slate-50/50 px-5 py-4 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                   <MapPin size={18} className="text-blue-600" /> Delivery Address
                 </h2>
@@ -354,8 +354,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             </div>
 
             {/* Products Section */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="rounded-t-xl border-b border-slate-100 bg-slate-50/50 px-5 py-4">
                 <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                   <ShoppingBag size={18} className="text-blue-600" /> Order Items
                 </h2>
@@ -471,8 +471,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             </div>
 
             {/* Notes Section */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-4">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="rounded-t-xl border-b border-slate-100 bg-slate-50/50 px-5 py-4">
                 <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                   <FileText size={18} className="text-blue-600" /> Additional Notes
                 </h2>
