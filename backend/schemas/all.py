@@ -266,6 +266,7 @@ class OrderResponse(BaseModel):
     delivery_address: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
+    confirmed_at: Optional[datetime] = None
     
     customer: Optional[CustomerResponse] = None
     items: List[OrderItemResponse] = []

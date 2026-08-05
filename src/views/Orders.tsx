@@ -380,7 +380,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                     {o.status === 'confirmed' ? (
                       <div>
                         <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Confirmed</span>
-                        <WaitClock timestamp={o.created_at} />
+                        <WaitClock timestamp={o.confirmed_at || o.created_at} />
                       </div>
                     ) : (
                       <span className="badge bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">Pending</span>

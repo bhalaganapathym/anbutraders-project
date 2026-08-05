@@ -127,6 +127,8 @@ def create_order(
     
     order_data = order_in.model_dump(exclude={"items"})
     order = Order(**order_data, order_no=new_order_no)
+    if order.status == "confirmed":
+        order.confirmed_at = datetime.now()
     db.add(order)
     db.flush()
     
@@ -228,6 +230,12 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
         if value is not None or key == "delivery_address" or key == "notes":
             setattr(order, key, value)
             
+    from datetime import datetime
+    if old_status != "confirmed" and order.status == "confirmed":
+        order.confirmed_at = datetime.now()
+    elif order.status != "confirmed":
+        order.confirmed_at = None
+        
     # Restore stock for old items if the order was confirmed
     if old_status == "confirmed":
         old_items = db.query(OrderItem).filter(OrderItem.order_id == id).all()

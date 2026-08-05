@@ -53,6 +53,7 @@ class Order(Base):
     delivery_address = Column(String)
     notes = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
     
     customer = relationship("Customer")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")

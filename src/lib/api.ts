@@ -72,6 +72,7 @@ export type Order = {
   delivery_address: string | null;
   notes: string | null;
   created_at: string;
+  confirmed_at?: string | null;
   items?: OrderItem[];
 };
 
