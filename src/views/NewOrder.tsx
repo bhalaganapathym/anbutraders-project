@@ -3,7 +3,7 @@ import { api, type Customer, type Product, type Order } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import {
   ArrowLeft, Search, Plus, Trash2, CheckCircle2, User, Phone, MapPin, 
-  Minus, Plus as PlusIcon, ShoppingBag, Send
+  Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText
 } from 'lucide-react';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
@@ -26,6 +26,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   // Customer Selection
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isCustomerSearchFocused, setIsCustomerSearchFocused] = useState(false);
   
   // Address
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -56,8 +57,6 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       setNextOrderId(orderToEdit.order_no || 'Unknown');
       setDeliveryAddress(orderToEdit.delivery_address || '');
       setNotes(orderToEdit.notes || '');
-      // If we are editing, we need to load the customer and items. 
-      // The parent component should probably pass the full order object.
     }
   }, [orderToEdit]);
 
@@ -71,7 +70,6 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       setCustomers(c as Customer[]);
       
       if (orderToEdit) {
-        // Hydrate order editing data if necessary
         if (orderToEdit.customer_id) {
           const cust = (c as Customer[]).find(x => x.id === orderToEdit.customer_id);
           if (cust) setSelectedCustomer(cust);
@@ -98,11 +96,10 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     }
   };
   
-  // Auto-save debouncer could be added here for local storage or draft status.
   useEffect(() => {
     if (lines.length > 0 || selectedCustomer || deliveryAddress || notes) {
       setDraftStatus('Saving...');
-      const t = setTimeout(() => setDraftStatus('Saved'), 1000);
+      const t = setTimeout(() => setDraftStatus('Saved'), 800);
       return () => clearTimeout(t);
     }
   }, [lines, selectedCustomer, deliveryAddress, notes]);
@@ -138,7 +135,6 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       unit: itemUnit || selectedProduct.unit || 'piece',
       product: selectedProduct 
     }]);
-    // Reset inputs
     setSelectedProduct(null);
     setProductSearch('');
     setItemQty(1);
@@ -150,6 +146,51 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   
   const removeLine = (pid: string) => {
     setLines(lines.filter(l => l.product_id !== pid));
+  };
+
+  // WhatsApp Integration
+  const generateWhatsAppMessage = () => {
+    let msg = `*Estimate from Anbu Traders*\n`;
+    msg += `Order ID: ${nextOrderId}\n`;
+    if (selectedCustomer) {
+      msg += `Customer: ${selectedCustomer.name}\n`;
+    }
+    msg += `--------------------------\n`;
+    lines.forEach((l, idx) => {
+      msg += `${idx + 1}. ${l.product.name}\n`;
+      msg += `   ${l.quantity} x ₹${l.product.price} = ₹${(l.quantity * Number(l.product.price)).toLocaleString()}\n`;
+    });
+    msg += `--------------------------\n`;
+    msg += `Total Items: ${lines.length}\n`;
+    const estimatedWeight = lines.reduce((acc, l) => acc + (l.quantity * Number(l.product.standard_weight || 0)), 0);
+    msg += `Estimated Weight: ${estimatedWeight} kg\n`;
+    const subtotal = lines.reduce((acc, l) => acc + (l.quantity * Number(l.product.price || 0)), 0);
+    const gst = subtotal * 0.18; 
+    msg += `*Grand Total: ₹${(subtotal + gst).toLocaleString()}*\n`;
+    
+    if (notes) {
+      msg += `\nNotes: ${notes}\n`;
+    }
+    return encodeURIComponent(msg);
+  };
+
+  const handleWhatsApp = () => {
+    if (!selectedCustomer) {
+      toast('Please select a customer first', 'error');
+      return;
+    }
+    if (lines.length === 0) {
+      toast('Please add items to send an estimate', 'error');
+      return;
+    }
+    const phone = selectedCustomer.phone?.replace(/\D/g, '') || '';
+    if (!phone) {
+      toast('Customer has no phone number, opening WhatsApp without recipient', 'info');
+      window.open(`https://wa.me/?text=${generateWhatsAppMessage()}`, '_blank');
+      return;
+    }
+    const finalPhone = phone.length === 10 ? `91${phone}` : phone;
+    window.open(`https://wa.me/${finalPhone}?text=${generateWhatsAppMessage()}`, '_blank');
   };
 
   const handleSaveOrder = async () => {
@@ -190,297 +231,344 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const totalQty = lines.reduce((acc, l) => acc + l.quantity, 0);
   const estimatedWeight = lines.reduce((acc, l) => acc + (l.quantity * Number(l.product.standard_weight || 0)), 0);
   const subtotal = lines.reduce((acc, l) => acc + (l.quantity * Number(l.product.price || 0)), 0);
-  const gst = subtotal * 0.18; // Assuming 18% GST for example. Modify as per actual rules if needed. Or keep 0.
+  const gst = subtotal * 0.18; 
   const grandTotal = subtotal + gst;
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 text-slate-800">
-      {/* Sticky Top Header */}
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm lg:px-8">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="rounded-full p-2 hover:bg-slate-100">
-            <ArrowLeft size={20} className="text-slate-600" />
-          </button>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">{orderToEdit ? 'Edit Order' : 'New Order'}</h1>
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <span className="font-mono">{nextOrderId}</span>
-              <span>•</span>
-              <span className={draftStatus === 'Saved' ? 'text-green-600' : 'text-amber-500'}>{draftStatus}</span>
+    <div className="min-h-screen bg-[#F7F9FC] text-slate-800 pb-32">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/90 backdrop-blur shadow-sm">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 shadow-sm">
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">{orderToEdit ? 'Edit Order' : 'Create Order'}</h1>
+              <div className="flex items-center gap-2 mt-0.5 text-xs font-medium text-slate-500">
+                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-mono border border-slate-200">{nextOrderId}</span>
+                <span>•</span>
+                <span className={draftStatus === 'Saved' ? 'text-emerald-600' : 'text-amber-500'}>{draftStatus}</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 border border-green-200">
-            <div className="h-2 w-2 rounded-full bg-green-500"></div> Online
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 border border-emerald-100">
+              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div> Online
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8 pb-32">
-          <div className="mx-auto max-w-4xl space-y-6">
+      {/* Main Content */}
+      <main className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-8 lg:flex-row">
+          
+          {/* Left Column (Forms) */}
+          <div className="flex-1 space-y-6">
             
             {/* Customer Section */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-800">
-                <User size={18} className="text-blue-600" /> Customer Details
-              </h2>
-              {selectedCustomer ? (
-                <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-                  <div>
-                    <p className="font-medium text-slate-900">{selectedCustomer.name}</p>
-                    <p className="text-sm text-slate-600">{selectedCustomer.phone || 'No phone'}</p>
-                  </div>
-                  <button onClick={() => setSelectedCustomer(null)} className="text-sm font-medium text-blue-600 hover:text-blue-700">Change</button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      className="w-full rounded-xl border border-slate-300 py-3 pl-10 pr-4 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                      placeholder="Search customer by name or phone..."
-                      value={customerSearch}
-                      onChange={e => setCustomerSearch(e.target.value)}
-                    />
-                  </div>
-                  {customerSearch && filteredCustomers.length > 0 && (
-                    <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm">
-                      {filteredCustomers.map(c => (
-                        <button
-                          key={c.id}
-                          className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-slate-50"
-                          onClick={() => setSelectedCustomer(c)}
-                        >
-                          <div>
-                            <p className="font-medium text-slate-900">{c.name}</p>
-                            <p className="text-sm text-slate-500">{c.phone}</p>
-                          </div>
-                        </button>
-                      ))}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-4">
+                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                  <User size={18} className="text-blue-600" /> Customer Information
+                </h2>
+              </div>
+              <div className="p-5">
+                {selectedCustomer ? (
+                  <div className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50/30 p-4">
+                    <div>
+                      <p className="font-semibold text-slate-900 text-lg">{selectedCustomer.name}</p>
+                      <p className="flex items-center gap-1.5 text-sm text-slate-600 mt-1">
+                        <Phone size={14} className="text-slate-400" /> {selectedCustomer.phone || 'No phone'}
+                      </p>
                     </div>
-                  )}
-                  <button className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
-                    <PlusIcon size={16} /> New Customer
-                  </button>
-                </div>
-              )}
-            </section>
+                    <button onClick={() => setSelectedCustomer(null)} className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-200 shadow-sm hover:bg-blue-50 transition">Change</button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Search Customer</label>
+                    <div className="relative">
+                      <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-4 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                        placeholder="Type name or phone number..."
+                        value={customerSearch}
+                        onChange={e => setCustomerSearch(e.target.value)}
+                        onFocus={() => setIsCustomerSearchFocused(true)}
+                        onBlur={() => setTimeout(() => setIsCustomerSearchFocused(false), 200)}
+                      />
+                    </div>
+                    {isCustomerSearchFocused && customerSearch && filteredCustomers.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                        {filteredCustomers.map(c => (
+                          <button
+                            key={c.id}
+                            className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-slate-50"
+                            onClick={() => setSelectedCustomer(c)}
+                          >
+                            <div>
+                              <p className="font-semibold text-slate-900">{c.name}</p>
+                              <p className="text-sm text-slate-500">{c.phone}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
-            {/* Delivery Address Section */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-800">
+            {/* Address Section */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-4 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
                   <MapPin size={18} className="text-blue-600" /> Delivery Address
                 </h2>
                 {selectedCustomer?.address && (
-                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-slate-900 transition">
                     <input 
                       type="checkbox" 
                       checked={useCustomerAddress} 
                       onChange={e => handleUseCustomerAddress(e.target.checked)} 
                       className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
                     />
-                    Use customer address
+                    Same as customer address
                   </label>
                 )}
               </div>
-              <textarea
-                value={deliveryAddress}
-                onChange={e => {
-                  setDeliveryAddress(e.target.value);
-                  setUseCustomerAddress(false);
-                }}
-                rows={3}
-                className="w-full resize-none rounded-xl border border-slate-300 p-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                placeholder="Enter full delivery address..."
-              />
-              <div className="mt-1 text-right text-xs text-slate-400">
-                {deliveryAddress.length} characters
+              <div className="p-5">
+                <textarea
+                  value={deliveryAddress}
+                  onChange={e => {
+                    setDeliveryAddress(e.target.value);
+                    setUseCustomerAddress(false);
+                  }}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-slate-300 p-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  placeholder="Enter full delivery address, plot number, street..."
+                />
               </div>
-            </section>
+            </div>
 
-            {/* Add Products Section */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-800">
-                <ShoppingBag size={18} className="text-blue-600" /> Add Products
-              </h2>
-              <div className="grid gap-4 md:grid-cols-12">
-                <div className="md:col-span-3">
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Brand</label>
-                  <select
-                    className="w-full rounded-xl border border-slate-300 p-2.5 outline-none focus:border-blue-500"
-                    value={selectedBrand}
-                    onChange={e => setSelectedBrand(e.target.value)}
-                  >
-                    <option value="">All Brands</option>
-                    {brands.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                </div>
-                <div className="md:col-span-5 relative">
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Product Search</label>
-                  <input
-                    type="text"
-                    className="w-full rounded-xl border border-slate-300 p-2.5 outline-none focus:border-blue-500"
-                    placeholder="Search product..."
-                    value={productSearch}
-                    onChange={e => setProductSearch(e.target.value)}
-                  />
-                  {productSearch && !selectedProduct && filteredProducts.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-lg">
-                      {filteredProducts.map(p => (
-                        <button
-                          key={p.id}
-                          className="w-full px-4 py-2 text-left hover:bg-slate-50"
-                          onClick={() => {
-                            setSelectedProduct(p);
-                            setProductSearch(p.name);
-                            setItemUnit(p.unit);
-                          }}
-                        >
-                          {p.name} <span className="text-xs text-slate-400">({p.brand})</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Qty</label>
-                  <input
-                    type="number"
-                    min="1"
-                    className="w-full rounded-xl border border-slate-300 p-2.5 outline-none focus:border-blue-500"
-                    value={itemQty}
-                    onChange={e => setItemQty(Number(e.target.value))}
-                  />
-                </div>
-                <div className="md:col-span-2 flex items-end">
-                  <button 
-                    onClick={handleAddItem}
-                    disabled={!selectedProduct}
-                    className="w-full rounded-xl bg-slate-900 p-2.5 font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
-                  >
-                    Add
-                  </button>
-                </div>
+            {/* Products Section */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-4">
+                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                  <ShoppingBag size={18} className="text-blue-600" /> Order Items
+                </h2>
               </div>
-            </section>
-
-            {/* Selected Items */}
-            {lines.length > 0 && (
-              <section className="space-y-3">
-                <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Selected Items ({lines.length})</h3>
-                {lines.map((line, idx) => (
-                  <div key={`${line.product_id}-${idx}`} className="flex flex-col sm:flex-row items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md">
-                    <div className="flex-1 w-full">
-                      <p className="font-semibold text-slate-900">{line.product.name}</p>
-                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
-                        <span>Unit: {line.product.standard_weight} kg</span>
-                        <span>Price: ₹{line.product.price}</span>
-                        <span>Total: {line.quantity * Number(line.product.standard_weight || 0)} kg</span>
-                      </div>
+              
+              <div className="p-5 border-b border-slate-100 bg-slate-50/30">
+                <div className="grid gap-4 md:grid-cols-12">
+                  <div className="md:col-span-3">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Brand</label>
+                    <select
+                      className="w-full rounded-lg border border-slate-300 p-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white"
+                      value={selectedBrand}
+                      onChange={e => setSelectedBrand(e.target.value)}
+                    >
+                      <option value="">All Brands</option>
+                      {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div className="md:col-span-6 relative">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Search Product</label>
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                        placeholder="Type product name..."
+                        value={productSearch}
+                        onChange={e => setProductSearch(e.target.value)}
+                      />
                     </div>
-                    
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-6">
-                      <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1">
-                        <button onClick={() => updateLineQty(line.product_id, -1)} className="rounded p-1 hover:bg-slate-200 text-slate-600"><Minus size={16} /></button>
-                        <span className="w-10 text-center font-medium">{line.quantity}</span>
-                        <button onClick={() => updateLineQty(line.product_id, 1)} className="rounded p-1 hover:bg-slate-200 text-slate-600"><Plus size={16} /></button>
+                    {productSearch && !selectedProduct && filteredProducts.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white shadow-xl overflow-hidden">
+                        {filteredProducts.map(p => (
+                          <button
+                            key={p.id}
+                            className="flex w-full flex-col px-4 py-2.5 text-left transition hover:bg-slate-50"
+                            onClick={() => {
+                              setSelectedProduct(p);
+                              setProductSearch(p.name);
+                              setItemUnit(p.unit);
+                            }}
+                          >
+                            <span className="font-medium text-slate-900">{p.name}</span>
+                            <span className="text-xs text-slate-500">{p.brand} • ₹{p.price}/{p.unit}</span>
+                          </button>
+                        ))}
                       </div>
-                      <div className="text-right sm:w-24">
-                        <p className="font-bold text-slate-900">₹{(line.quantity * Number(line.product.price)).toLocaleString()}</p>
-                      </div>
-                      <button onClick={() => removeLine(line.product_id)} className="text-red-500 hover:text-red-700 p-2">
-                        <Trash2 size={18} />
+                    )}
+                  </div>
+                  <div className="md:col-span-3 flex gap-2">
+                    <div className="flex-1">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">Qty</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="w-full rounded-lg border border-slate-300 p-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                        value={itemQty}
+                        onChange={e => setItemQty(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button 
+                        onClick={handleAddItem}
+                        disabled={!selectedProduct}
+                        className="rounded-lg bg-blue-600 p-2.5 font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 shadow-sm"
+                        title="Add Product"
+                      >
+                        <PlusIcon size={20} />
                       </button>
                     </div>
                   </div>
-                ))}
-              </section>
-            )}
+                </div>
+              </div>
+
+              {/* Added Lines */}
+              <div className="p-0">
+                {lines.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-slate-400">
+                    <ShoppingBag size={32} className="mx-auto mb-3 text-slate-200" />
+                    No products added yet.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {lines.map((line, idx) => (
+                      <div key={`${line.product_id}-${idx}`} className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 transition hover:bg-slate-50/50">
+                        <div className="flex-1">
+                          <p className="font-semibold text-slate-900">{line.product.name}</p>
+                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium text-slate-500">
+                            <span>₹{line.product.price} / {line.product.unit}</span>
+                            <span className="text-slate-300">|</span>
+                            <span>{line.product.standard_weight} kg</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-6">
+                          <div className="flex items-center rounded-lg border border-slate-200 bg-white shadow-sm">
+                            <button onClick={() => updateLineQty(line.product_id, -1)} className="rounded-l-lg p-2 hover:bg-slate-100 text-slate-600 transition"><Minus size={14} /></button>
+                            <span className="w-12 text-center font-semibold text-slate-900">{line.quantity}</span>
+                            <button onClick={() => updateLineQty(line.product_id, 1)} className="rounded-r-lg p-2 hover:bg-slate-100 text-slate-600 transition"><Plus size={14} /></button>
+                          </div>
+                          <div className="w-24 text-right">
+                            <p className="font-bold text-slate-900 text-lg">₹{(line.quantity * Number(line.product.price)).toLocaleString()}</p>
+                          </div>
+                          <button onClick={() => removeLine(line.product_id)} className="text-slate-400 hover:text-red-600 transition p-2 hover:bg-red-50 rounded-lg">
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Notes Section */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-base font-semibold text-slate-800">Notes</h2>
-              <textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                rows={4}
-                className="w-full resize-none rounded-xl border border-slate-300 p-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                placeholder="Special delivery instructions, unloading notes, payment terms..."
-              />
-            </section>
-            
-          </div>
-        </main>
-
-        {/* Desktop Sidebar Summary */}
-        <aside className="hidden w-80 border-l border-slate-200 bg-white p-6 lg:block">
-          <div className="sticky top-24 space-y-6">
-            <h2 className="text-lg font-semibold text-slate-900">Order Summary</h2>
-            
-            <div className="space-y-3 text-sm text-slate-600">
-              <div className="flex justify-between">
-                <span>Total Items</span>
-                <span className="font-medium text-slate-900">{totalItems}</span>
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-5 py-4">
+                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                  <FileText size={18} className="text-blue-600" /> Additional Notes
+                </h2>
               </div>
-              <div className="flex justify-between">
-                <span>Total Quantity</span>
-                <span className="font-medium text-slate-900">{totalQty}</span>
+              <div className="p-5">
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-slate-300 p-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                  placeholder="Special instructions for delivery or payment..."
+                />
               </div>
-              <div className="flex justify-between">
-                <span>Estimated Weight</span>
-                <span className="font-medium text-slate-900">{estimatedWeight} kg</span>
-              </div>
-            </div>
-            
-            <div className="my-4 border-t border-slate-100"></div>
-            
-            <div className="space-y-3 text-sm text-slate-600">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span className="font-medium text-slate-900">₹{subtotal.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>GST (18%)</span>
-                <span className="font-medium text-slate-900">₹{gst.toLocaleString()}</span>
-              </div>
-            </div>
-            
-            <div className="my-4 border-t border-slate-200"></div>
-            
-            <div className="flex justify-between text-lg font-bold text-slate-900">
-              <span>Total</span>
-              <span className="text-blue-600">₹{grandTotal.toLocaleString()}</span>
             </div>
           </div>
-        </aside>
-      </div>
 
-      {/* Sticky Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200 bg-white p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] lg:left-64 lg:pr-80">
-        
-        {/* Mobile Summary (Hidden on Desktop) */}
-        <div className="w-full flex items-center justify-between lg:hidden px-2 mb-2">
-           <div className="text-sm text-slate-500">
-             <span className="font-semibold text-slate-900">{totalItems} items</span> • {estimatedWeight} kg
-           </div>
-           <div className="text-lg font-bold text-blue-600">₹{grandTotal.toLocaleString()}</div>
+          {/* Right Column (Summary) */}
+          <div className="w-full lg:w-80 shrink-0">
+            <div className="sticky top-24 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-slate-900 mb-6 border-b border-slate-100 pb-4">Order Summary</h2>
+              
+              <div className="space-y-4 text-sm font-medium text-slate-600">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Total Items</span>
+                  <span className="text-slate-900">{totalItems}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Total Quantity</span>
+                  <span className="text-slate-900">{totalQty}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Total Weight</span>
+                  <span className="text-slate-900">{estimatedWeight} kg</span>
+                </div>
+              </div>
+              
+              <div className="my-5 border-t border-slate-100"></div>
+              
+              <div className="space-y-4 text-sm font-medium text-slate-600">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Subtotal</span>
+                  <span className="text-slate-900">₹{subtotal.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Estimated GST (18%)</span>
+                  <span className="text-slate-900">₹{gst.toLocaleString()}</span>
+                </div>
+              </div>
+              
+              <div className="my-5 border-t border-slate-200 border-dashed"></div>
+              
+              <div className="flex justify-between items-center text-slate-900">
+                <span className="text-base font-bold">Grand Total</span>
+                <span className="text-2xl font-black text-blue-600 tracking-tight">₹{grandTotal.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+          
         </div>
+      </main>
 
-        <button className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3 px-6 font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto">
-          <Send size={18} className="text-green-500" /> Send WhatsApp Estimate
-        </button>
-        <button 
-          onClick={handleSaveOrder}
-          disabled={saving || !selectedCustomer || lines.length === 0}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 px-8 font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 sm:w-auto"
-        >
-          {saving ? 'Saving...' : 'Save Order'}
-        </button>
+      {/* Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur-md shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.08)]">
+        <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          
+          <div className="hidden lg:flex flex-col">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Order Total</p>
+            <p className="text-xl font-bold text-slate-900">₹{grandTotal.toLocaleString()}</p>
+          </div>
+
+          <div className="flex w-full lg:w-auto items-center justify-between lg:hidden">
+             <div className="text-sm font-medium text-slate-600">
+               <span className="font-bold text-slate-900">{totalItems} items</span>
+             </div>
+             <div className="text-lg font-bold text-blue-600">₹{grandTotal.toLocaleString()}</div>
+          </div>
+
+          <div className="flex w-full sm:w-auto items-center gap-3">
+            <button 
+              onClick={handleWhatsApp}
+              disabled={!selectedCustomer || lines.length === 0}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#25D366]/20 bg-[#25D366]/10 px-5 py-3 font-semibold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50 sm:w-auto"
+            >
+              <MessageCircle size={20} />
+              <span className="hidden sm:inline">WhatsApp</span>
+            </button>
+            <button 
+              onClick={handleSaveOrder}
+              disabled={saving || !selectedCustomer || lines.length === 0}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50 sm:w-auto"
+            >
+              {saving ? 'Saving...' : 'Confirm Order'}
+            </button>
+          </div>
+
+        </div>
       </div>
     </div>
   );
