@@ -83,13 +83,16 @@ function AppContent() {
     return false;
   });
 
-  const currentNav = navItems.find((n) => n.id === view) || navItems[0];
-  const activeView = currentNav?.id || 'dashboard';
+  const activeView = view === 'new_order' ? 'new_order' : (navItems.find((n) => n.id === view)?.id || navItems[0]?.id || 'dashboard');
 
   const navigate = (v: string) => {
     setView(v);
     setSidebarOpen(false);
   };
+
+  if (activeView === 'new_order') {
+    return <NewOrder onBack={() => navigate('orders')} orderToEdit={orderToEdit} />;
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-100 text-slate-800">
@@ -183,7 +186,6 @@ function AppContent() {
           {activeView === 'products' && <Products />}
           {activeView === 'pricelist' && <PriceList />}
           {activeView === 'orders' && <Orders onNewOrder={() => { setOrderToEdit(null); navigate('new_order'); }} onEditOrder={(o) => { setOrderToEdit(o); navigate('new_order'); }} />}
-          {activeView === 'new_order' && <NewOrder onBack={() => navigate('orders')} orderToEdit={orderToEdit} />}
           {activeView === 'dispatches' && <Dispatches />}
           {activeView === 'notifications' && <Notifications />}
         </main>
