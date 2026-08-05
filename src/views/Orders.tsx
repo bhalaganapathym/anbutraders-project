@@ -12,7 +12,7 @@ type OrderItemWithProduct = OrderItem & { product: Product | null };
 
 type Line = { product_id: string; quantity: number; unit: string };
 
-export default function Orders() {
+export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () => void; onEditOrder?: (o: OrderWithCustomer) => void } = {}) {
   const toast = useToast();
   const [orders, setOrders] = useState<OrderWithCustomer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -86,6 +86,10 @@ export default function Orders() {
   };
 
   const openNew = () => {
+    if (onNewOrder) {
+      onNewOrder();
+      return;
+    }
     setEditing(null);
     setCustomerMode('search');
     setPhoneSearch('');
@@ -101,6 +105,10 @@ export default function Orders() {
   };
 
   const openEdit = async (o: OrderWithCustomer) => {
+    if (onEditOrder) {
+      onEditOrder(o);
+      return;
+    }
     setEditing(o);
     setDeliveryAddress(o.delivery_address ?? '');
     setNotes(o.notes ?? '');

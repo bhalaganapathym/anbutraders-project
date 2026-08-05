@@ -102,6 +102,15 @@ def delete_product(id: UUID, background_tasks: BackgroundTasks, db: Session = De
     return {"status": "ok"}
 
 # --- ORDERS ---
+@router.get("/orders/next-id")
+def get_next_order_id(db: Session = Depends(get_db)):
+    from datetime import datetime
+    today = datetime.now()
+    today_str = today.strftime("%d%m%Y")
+    start_of_day = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    count_today = db.query(Order).filter(Order.created_at >= start_of_day).count()
+    return {"next_id": f"ORD{count_today + 1}-{today_str}"}
+
 @router.post("/orders", response_model=OrderResponse)
 def create_order(
     order_in: OrderCreate,
