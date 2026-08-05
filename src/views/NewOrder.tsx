@@ -28,6 +28,12 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isCustomerSearchFocused, setIsCustomerSearchFocused] = useState(false);
   
+  // New Customer State
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerAddress, setNewCustomerAddress] = useState('');
+  
   // Address
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [useCustomerAddress, setUseCustomerAddress] = useState(false);
@@ -146,6 +152,29 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   
   const removeLine = (pid: string) => {
     setLines(lines.filter(l => l.product_id !== pid));
+  };
+
+  const handleCreateCustomer = async () => {
+    if (!newCustomerName || !newCustomerPhone) {
+      toast('Name and phone are required', 'error');
+      return;
+    }
+    try {
+      const cust: any = await api.post('/customers', {
+        name: newCustomerName,
+        phone: newCustomerPhone,
+        address: newCustomerAddress
+      });
+      setCustomers([cust, ...customers]);
+      setSelectedCustomer(cust);
+      setIsCreatingCustomer(false);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setNewCustomerAddress('');
+      toast('Customer created successfully', 'success');
+    } catch (e: any) {
+      toast(e.message || 'Failed to create customer', 'error');
+    }
   };
 
   // WhatsApp Integration
@@ -285,9 +314,53 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                     </div>
                     <button onClick={() => setSelectedCustomer(null)} className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-200 shadow-sm hover:bg-blue-50 transition">Change</button>
                   </div>
+                ) : isCreatingCustomer ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wider">New Customer</h3>
+                      <button onClick={() => setIsCreatingCustomer(false)} className="text-sm font-medium text-slate-500 hover:text-slate-700">Cancel</button>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Name *</label>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-slate-300 p-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white"
+                          value={newCustomerName}
+                          onChange={e => setNewCustomerName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Phone *</label>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-slate-300 p-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white"
+                          value={newCustomerPhone}
+                          onChange={e => setNewCustomerPhone(e.target.value)}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Address</label>
+                        <input
+                          type="text"
+                          className="w-full rounded-md border border-slate-300 p-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white"
+                          value={newCustomerAddress}
+                          onChange={e => setNewCustomerAddress(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button onClick={handleCreateCustomer} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700">Save Customer</button>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="relative">
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Search Customer</label>
+                  <div className="relative space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-slate-700">Search Customer</label>
+                      <button onClick={() => setIsCreatingCustomer(true)} className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 transition">
+                        <PlusIcon size={14} /> Add New
+                      </button>
+                    </div>
                     <div className="relative">
                       <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
