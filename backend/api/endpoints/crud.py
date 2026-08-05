@@ -227,12 +227,21 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
     for key, value in order_data.items():
         if value is not None or key == "delivery_address" or key == "notes":
             setattr(order, key, value)
+            
+    # Restore stock for old items if the order was confirmed
+    if old_status == "confirmed":
+        old_items = db.query(OrderItem).filter(OrderItem.order_id == id).all()
+        for item in old_items:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if product:
+                from decimal import Decimal
+                product.stock_qty = product.stock_qty + Decimal(str(item.quantity))
         
     db.query(OrderItem).filter(OrderItem.order_id == id).delete()
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
-        # Deduct stock if it is transitioning to confirmed
-        if old_status != "confirmed" and order.status == "confirmed":
+        # Deduct stock if the order IS confirmed (whether previously confirmed or newly confirmed)
+        if order.status == "confirmed":
             product = db.query(Product).filter(Product.id == item.product_id).first()
             if product:
                 from decimal import Decimal

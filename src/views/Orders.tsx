@@ -203,6 +203,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
         customer_id: custId,
         delivery_address: addr,
         notes: notes.trim() || null,
+        status: 'pending',
         items: lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity, unit: l.unit }))
       };
       if (editing) {

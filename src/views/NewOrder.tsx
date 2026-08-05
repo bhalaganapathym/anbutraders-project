@@ -238,6 +238,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         customer_id: selectedCustomer.id,
         delivery_address: deliveryAddress,
         notes,
+        status: 'pending',
         items: lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, unit: l.unit }))
       };
       
