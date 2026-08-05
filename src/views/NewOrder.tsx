@@ -564,7 +564,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
               disabled={saving || !selectedCustomer || lines.length === 0}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50 sm:w-auto"
             >
-              {saving ? 'Saving...' : 'Confirm Order'}
+              {saving ? 'Saving...' : 'Save Order'}
             </button>
           </div>
 

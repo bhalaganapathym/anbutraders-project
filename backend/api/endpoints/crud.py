@@ -132,20 +132,21 @@ def create_order(
     
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
-        # Reduce product stock
-        product = db.query(Product).filter(Product.id == item.product_id).first()
-        if product:
-            from decimal import Decimal
-            product.stock_qty = product.stock_qty - Decimal(str(item.quantity))
-            if product.stock_qty < 0:
-                notification = Notification(
-                    type="stock_alert",
-                    title="Negative Stock Alert",
-                    message=f"Stock for product '{product.name}' has gone negative ({product.stock_qty}). Please update.",
-                    order_id=order.id
-                )
-                db.add(notification)
-                background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+        # Reduce product stock ONLY if the order is created as confirmed (though default is pending)
+        if order.status == "confirmed":
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if product:
+                from decimal import Decimal
+                product.stock_qty = product.stock_qty - Decimal(str(item.quantity))
+                if product.stock_qty < 0:
+                    notification = Notification(
+                        type="stock_alert",
+                        title="Negative Stock Alert",
+                        message=f"Stock for product '{product.name}' has gone negative ({product.stock_qty}). Please update.",
+                        order_id=order.id
+                    )
+                    db.add(notification)
+                    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
         
     db.commit()
     db.refresh(order)
@@ -222,13 +223,29 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
         raise HTTPException(status_code=404, detail="Order not found")
     
     old_status = order.status
-    order_data = order_in.model_dump(exclude={"items"})
+    order_data = order_in.model_dump(exclude={"items"}, exclude_unset=True)
     for key, value in order_data.items():
-        setattr(order, key, value)
+        if value is not None or key == "delivery_address" or key == "notes":
+            setattr(order, key, value)
         
     db.query(OrderItem).filter(OrderItem.order_id == id).delete()
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
+        # Deduct stock if it is transitioning to confirmed
+        if old_status != "confirmed" and order.status == "confirmed":
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if product:
+                from decimal import Decimal
+                product.stock_qty = product.stock_qty - Decimal(str(item.quantity))
+                if product.stock_qty < 0:
+                    notification = Notification(
+                        type="stock_alert",
+                        title="Negative Stock Alert",
+                        message=f"Stock for product '{product.name}' has gone negative ({product.stock_qty}). Please update.",
+                        order_id=order.id
+                    )
+                    db.add(notification)
+                    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
         
     if old_status != "confirmed" and order.status == "confirmed":
         customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
