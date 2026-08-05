@@ -4,13 +4,50 @@ import { api, type Customer, type Order, type OrderItem, type Product } from '@/
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import {
-  Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag,
+  Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock
 } from 'lucide-react';
 
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type OrderItemWithProduct = OrderItem & { product: Product | null };
 
 type Line = { product_id: string; quantity: number; unit: string };
+
+function WaitClock({ timestamp }: { timestamp: string | Date }) {
+  const [elapsed, setElapsed] = useState('');
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date().getTime();
+      const start = new Date(timestamp).getTime();
+      const diffMs = now - start;
+      if (diffMs < 0) {
+        setElapsed('0s');
+        return;
+      }
+      const diffSecs = Math.floor(diffMs / 1000);
+      const days = Math.floor(diffSecs / 86400);
+      const hours = Math.floor((diffSecs % 86400) / 3600);
+      const mins = Math.floor((diffSecs % 3600) / 60);
+      const secs = diffSecs % 60;
+      
+      let timeStr = '';
+      if (days > 0) timeStr += `${days}d `;
+      if (hours > 0 || days > 0) timeStr += `${hours}h `;
+      timeStr += `${mins}m ${secs}s`;
+      
+      setElapsed(timeStr.trim());
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [timestamp]);
+
+  return (
+    <div className="mt-1.5 flex items-center gap-1 whitespace-nowrap text-[11.5px] font-semibold text-amber-600 dark:text-amber-500 tabular-nums">
+      <Clock size={12} className="animate-pulse" /> {elapsed}
+    </div>
+  );
+}
 
 export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () => void; onEditOrder?: (o: OrderWithCustomer) => void } = {}) {
   const toast = useToast();
@@ -341,7 +378,10 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                   <td className="td max-w-[200px] truncate">{o.delivery_address ?? '—'}</td>
                   <td className="td">
                     {o.status === 'confirmed' ? (
-                      <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Confirmed</span>
+                      <div>
+                        <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Confirmed</span>
+                        <WaitClock timestamp={o.created_at} />
+                      </div>
                     ) : (
                       <span className="badge bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">Pending</span>
                     )}
