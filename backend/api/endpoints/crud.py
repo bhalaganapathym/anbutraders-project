@@ -125,7 +125,7 @@ def create_order(
     count_today = db.query(Order).filter(Order.created_at >= start_of_day).count()
     new_order_no = f"ORD{count_today + 1}-{today_str}"
     
-    order_data = order_in.model_dump(exclude={"items"})
+    order_data = order_in.model_dump(exclude={"items", "order_no"})
     order = Order(**order_data, order_no=new_order_no)
     if order.status == "confirmed":
         order.confirmed_at = datetime.now()
