@@ -176,7 +176,7 @@ export default function DispatchDashboard({
   }
 
   const weightDiff = Math.abs(estimatedTotal - actualTotal);
-  const isWeightWarning = detail.status !== 'completed' && estimatedTotal > 0 && weightDiff > 3;
+  const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && weightDiff > 3;
 
   // Vehicle Details State (Pre-filled from billing if ready)
   const [vehicleNo, setVehicleNo] = useState(detail.vehicle_number || '');
@@ -186,7 +186,6 @@ export default function DispatchDashboard({
 
   // Completion Logic
   const allVerified = detailItems.every(item => itemVerification[item.id]?.verified);
-  const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && weightDiff > 3;
   
   const canSendToBilling = allVerified && !isWeightWarning && detail.status === 'pending';
   const canLoadAndComplete = detail.status === 'ready_for_loading';
