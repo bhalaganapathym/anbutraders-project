@@ -29,7 +29,32 @@ type Stats = {
   completedDispatches: number;
 };
 
-const statusOrder: DispatchStatus[] = ['pending', 'confirmed', 'weighed', 'loaded', 'completed'];
+const statusOrder: DispatchStatus[] = ['pending', 'sent_to_billing', 'ready_for_loading', 'completed'];
+
+function LiveTimer({ start, end }: { start: string, end?: string | null }) {
+  const [elapsed, setElapsed] = useState('');
+  useEffect(() => {
+    const calc = () => {
+      const startTime = new Date(start).getTime();
+      const endTime = end ? new Date(end).getTime() : Date.now();
+      const diffMins = Math.floor((endTime - startTime) / 60000);
+      
+      if (diffMins < 60) {
+        setElapsed(`${diffMins}m`);
+      } else {
+        const hrs = Math.floor(diffMins / 60);
+        const mins = diffMins % 60;
+        setElapsed(`${hrs}h ${mins}m`);
+      }
+    };
+    calc();
+    if (!end) {
+      const interval = setInterval(calc, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [start, end]);
+  return <span className="text-xs font-mono font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">{elapsed}</span>;
+}
 
 export default function Dashboard({ onNavigate }: { onNavigate: (view: string) => void }) {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -171,8 +196,11 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                   key={d.id}
                   className="flex items-center justify-between rounded-xl bg-white/20 dark:bg-slate-800/30 border border-white/30 dark:border-slate-700/50 px-3 py-2"
                 >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{d.dispatch_no}</p>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{d.dispatch_no}</p>
+                      <LiveTimer start={d.created_at} end={d.completed_at} />
+                    </div>
                     <p className="text-xs text-slate-600 dark:text-slate-400">
                       {d.customers?.name ?? 'Unknown customer'}
                     </p>

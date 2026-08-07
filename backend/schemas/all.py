@@ -220,8 +220,11 @@ class DispatchResponse(BaseModel):
     vehicle_number: Optional[str] = None
     driver_name: Optional[str] = None
     driver_mobile: Optional[str] = None
+    sent_to_billing_at: Optional[datetime] = None
+    ready_for_loading_at: Optional[datetime] = None
     loading_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    vehicle_leave_photo_url: Optional[str] = None
     dispatch_team: Optional[str] = None
     created_at: datetime
     
@@ -230,6 +233,7 @@ class DispatchResponse(BaseModel):
     items: List[DispatchItemResponse] = []
     weights: List[WeightResponse] = []
     photos: List[PhotoResponse] = []
+    bill: Optional["BillResponse"] = None
     
     class Config:
         from_attributes = True
@@ -287,6 +291,46 @@ class NotificationCreate(BaseModel):
 class NotificationResponse(NotificationCreate):
     id: UUID
     created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Drivers
+class DriverCreate(BaseModel):
+    name: str
+    phone_number: str
+    vehicle_number: Optional[str] = None
+
+class DriverResponse(BaseModel):
+    id: UUID
+    name: str
+    phone_number: str
+    vehicle_number: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+# Bills
+class BillCreate(BaseModel):
+    dispatch_id: UUID
+    order_id: UUID
+    customer_id: UUID
+    driver_id: Optional[UUID] = None
+    payment_method: str
+    total_amount: float
+    pending_amount: float
+
+class BillResponse(BaseModel):
+    id: UUID
+    dispatch_id: UUID
+    order_id: UUID
+    customer_id: UUID
+    driver_id: Optional[UUID] = None
+    payment_method: str
+    total_amount: float
+    pending_amount: float
+    created_at: datetime
+    
+    driver: Optional[DriverResponse] = None
     
     class Config:
         from_attributes = True

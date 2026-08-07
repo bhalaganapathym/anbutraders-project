@@ -338,10 +338,18 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
     if not dispatch:
         raise HTTPException(status_code=404, detail="Dispatch not found")
         
+    old_status = dispatch.status
     d_data = dispatch_in.model_dump(exclude={"items", "weights", "photos"})
     for key, value in d_data.items():
         if value is not None: # Don't overwrite with none blindly if it wasn't provided, though pydantic will supply defaults
             setattr(dispatch, key, value)
+            
+    from datetime import datetime
+    if old_status != dispatch.status:
+        if dispatch.status == "sent_to_billing":
+            dispatch.sent_to_billing_at = datetime.now()
+        elif dispatch.status == "completed":
+            dispatch.completed_at = datetime.now()
         
     db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
     for item in dispatch_in.items:

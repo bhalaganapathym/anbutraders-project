@@ -93,11 +93,30 @@ export type Vehicle = {
   created_at: string;
 };
 
+export type Driver = {
+  id: string;
+  name: string;
+  phone_number: string;
+  vehicle_number: string | null;
+};
+
+export type Bill = {
+  id: string;
+  dispatch_id: string;
+  order_id: string;
+  customer_id: string;
+  driver_id: string | null;
+  payment_method: string;
+  total_amount: number;
+  pending_amount: number;
+  created_at: string;
+  driver?: Driver | null;
+};
+
 export type DispatchStatus =
   | 'pending'
-  | 'confirmed'
-  | 'weighed'
-  | 'loaded'
+  | 'sent_to_billing'
+  | 'ready_for_loading'
   | 'completed';
 
 export type Dispatch = {
@@ -108,18 +127,23 @@ export type Dispatch = {
   delivery_address: string | null;
   status: DispatchStatus;
   vehicle_id: string | null;
-  vehicle_number: string | null; // Actually this might be joined later or just null
+  vehicle_number: string | null;
   driver_name: string | null;
   driver_mobile: string | null;
-  loading_at: string | null;
-  completed_at?: string;
-  dispatch_team?: string;
+  sent_to_billing_at?: string | null;
+  ready_for_loading_at?: string | null;
+  loading_at?: string | null;
+  completed_at?: string | null;
+  vehicle_leave_photo_url?: string | null;
+  dispatch_team: string | null;
   created_at: string;
-  order?: Order;
-  customer?: Customer;
+  
+  order?: Order | null;
+  customer?: Customer | null;
   items?: DispatchItem[];
-  weights?: Weight[];
-  photos?: Photo[];
+  weights?: DispatchWeight[];
+  photos?: DispatchPhoto[];
+  bill?: Bill | null;
 };
 
 export type DispatchItem = {

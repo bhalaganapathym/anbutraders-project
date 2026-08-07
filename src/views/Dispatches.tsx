@@ -63,9 +63,6 @@ export default function Dispatches() {
   const openCreate = () => {
     loadConfirmedOrders();
     setSelectedOrder('');
-    setVehicleNumber('');
-    setDriverName('');
-    setDriverMobile('');
     setCreateOpen(true);
   };
 
@@ -97,10 +94,7 @@ export default function Dispatches() {
         order_id: selectedOrder,
         customer_id: order.customer_id,
         delivery_address: order.delivery_address,
-        vehicle_number: vehicleNumber.trim() || null,
-        driver_name: driverName.trim() || null,
-        driver_mobile: driverMobile.trim() || null,
-        status: 'confirmed',
+        status: 'pending',
         items: orderItems.map((it) => ({
           product_id: it.product_id,
           product_name: it.product?.name ?? 'Unknown',
@@ -228,53 +222,17 @@ export default function Dispatches() {
               No confirmed orders available. Confirm an order first.
             </div>
           ) : (
-            <>
-              <div>
-                <label className="label">Confirmed Order *</label>
-                <select value={selectedOrder} onChange={(e) => setSelectedOrder(e.target.value)} className="input">
-                  <option value="">Select an order...</option>
-                  {confirmedOrders.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.order_no || o.id.split('-')[0].toUpperCase()} — {o.customer?.name ?? 'Unknown'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label flex items-center gap-1">
-                  <Truck size={14} className="text-indigo-600 dark:text-indigo-400" /> Vehicle Details / Number
-                </label>
-                <input
-                  type="text"
-                  value={vehicleNumber}
-                  onChange={(e) => setVehicleNumber(e.target.value)}
-                  placeholder="e.g. TN 38 AB 1234"
-                  className="input mb-3"
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="label text-xs">Driver Name</label>
-                    <input
-                      type="text"
-                      value={driverName}
-                      onChange={(e) => setDriverName(e.target.value)}
-                      placeholder="e.g. Ramesh"
-                      className="input"
-                    />
-                  </div>
-                  <div>
-                    <label className="label text-xs">Driver Mobile</label>
-                    <input
-                      type="text"
-                      value={driverMobile}
-                      onChange={(e) => setDriverMobile(e.target.value)}
-                      placeholder="e.g. 9876543210"
-                      className="input"
-                    />
-                  </div>
-                </div>
-              </div>
-            </>
+            <div>
+              <label className="label">Confirmed Order *</label>
+              <select value={selectedOrder} onChange={(e) => setSelectedOrder(e.target.value)} className="input">
+                <option value="">Select an order...</option>
+                {confirmedOrders.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.order_no || o.id.split('-')[0].toUpperCase()} — {o.customer?.name ?? 'Unknown'}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setCreateOpen(false)} className="btn-secondary">Cancel</button>

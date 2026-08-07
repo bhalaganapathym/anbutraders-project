@@ -178,7 +178,7 @@ export default function DispatchDashboard({
   const weightDiff = Math.abs(estimatedTotal - actualTotal);
   const isWeightWarning = detail.status !== 'completed' && estimatedTotal > 0 && weightDiff > 3;
 
-  // Vehicle Details State
+  // Vehicle Details State (Pre-filled from billing if ready)
   const [vehicleNo, setVehicleNo] = useState(detail.vehicle_number || '');
   const [driverName, setDriverName] = useState(detail.driver_name || '');
   const [driverMobile, setDriverMobile] = useState(detail.driver_mobile || '');
@@ -186,28 +186,43 @@ export default function DispatchDashboard({
 
   // Completion Logic
   const allVerified = detailItems.every(item => itemVerification[item.id]?.verified);
-  const canComplete = allVerified && !isWeightWarning && detail.status !== 'completed';
+  const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && weightDiff > 3;
+  
+  const canSendToBilling = allVerified && !isWeightWarning && detail.status === 'pending';
+  const canLoadAndComplete = detail.status === 'ready_for_loading';
+  
   const [completing, setCompleting] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
-  const handleCompleteDispatch = async () => {
+  // New: Photo of vehicle leaving
+  const [vehicleLeavePhotoPreview, setVehicleLeavePhotoPreview] = useState<string|null>(null);
+  const [vehicleLeavePhotoFile, setVehicleLeavePhotoFile] = useState<File|null>(null);
+
+  const startVehicleCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setCameraModalOpen(true);
+      // Wait, we need to distinguish between item camera and vehicle camera
+      // For simplicity, we can override the camera logic or just use file input
+    } catch {
+      toast('Camera not available', 'error');
+    }
+  };
+
+  const handleSendToBilling = async () => {
     setCompleting(true);
     try {
-      // 1. Upload photos and compile weights
       const newWeights = [];
       const newPhotos = [];
       
       for (const item of detailItems) {
         const iv = itemVerification[item.id];
         if (iv) {
-          // Weight
           let wt = Number(iv.weight) || 0;
           if (iv.weightUnit === 'g') wt = wt / 1000;
-          if (wt > 0) {
-             newWeights.push({ actual_weight: wt, notes: `Verified for ${item.product_name}` });
-          }
+          if (wt > 0) newWeights.push({ actual_weight: wt, notes: `Verified for ${item.product_name}` });
           
-          // Photo
           if (iv.photoFile) {
             const dataUrl: string = await new Promise((res, rej) => {
               const reader = new FileReader();
@@ -220,36 +235,60 @@ export default function DispatchDashboard({
         }
       }
 
-      // 2. Update dispatch
       await api.put(`/dispatches/${detail.id}`, {
         ...detail,
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        vehicle_number: vehicleNo.trim() || null,
-        driver_name: driverName.trim() || null,
-        driver_mobile: driverMobile.trim() || null,
-        notes: remarks, // if we added notes to dispatch schema
+        status: 'sent_to_billing',
         weights: [...(detail.weights || []), ...newWeights],
         photos: [...(detail.photos || []), ...newPhotos]
       });
 
-      // 3. Notify billing
       const customerName = detail.customer?.name ?? 'Unknown';
-      try {
-        await api.post('/notifications', {
-          type: 'billing_alert',
-          title: `Dispatch ${detail.dispatch_no} completed`,
-          message: `Dispatch ${detail.dispatch_no} for ${customerName} is ready for billing.`,
-          dispatch_id: detail.id,
-          order_id: detail.order_id,
-          customer_name: customerName,
-        });
-      } catch {}
+      await api.post('/notifications', {
+        type: 'billing_alert',
+        title: `Dispatch ${detail.dispatch_no} ready for billing`,
+        message: `Dispatch ${detail.dispatch_no} for ${customerName} has been verified and is ready for billing.`,
+        dispatch_id: detail.id,
+        order_id: detail.order_id,
+        customer_name: customerName,
+      });
 
-      toast('Dispatch verified and completed', 'success');
+      toast('Verified and sent to billing', 'success');
       setConfirmModalOpen(false);
       onRefresh();
       onClose();
+    } catch {
+      toast('Failed to send to billing', 'error');
+    }
+    setCompleting(false);
+  };
+
+  const handleLoadAndComplete = async () => {
+    setCompleting(true);
+    try {
+      let photoUrl = null;
+      if (vehicleLeavePhotoFile) {
+         photoUrl = await new Promise((res, rej) => {
+            const reader = new FileReader();
+            reader.onload = () => res(reader.result as string);
+            reader.onerror = rej;
+            reader.readAsDataURL(vehicleLeavePhotoFile);
+         });
+      }
+
+      await api.put(`/dispatches/${detail.id}`, {
+        ...detail,
+        status: 'completed',
+        vehicle_leave_photo_url: photoUrl,
+        vehicle_number: vehicleNo.trim() || null,
+        driver_name: driverName.trim() || null,
+        driver_mobile: driverMobile.trim() || null,
+        notes: remarks,
+      });
+
+      toast('Dispatch loaded and completed', 'success');
+      setConfirmModalOpen(false);
+      onRefresh();
+      // We do NOT close the modal so they can see the WhatsApp buttons
     } catch {
       toast('Failed to complete dispatch', 'error');
     }
@@ -512,21 +551,88 @@ export default function DispatchDashboard({
       </div>
 
       {/* Completion Action Bar */}
-      {!isCompleted && (
-        <div className="sticky bottom-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-4 flex justify-end">
-          <button 
-            onClick={() => setConfirmModalOpen(true)}
-            disabled={!canComplete || completing}
-            className={`flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition ${
-              canComplete 
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl hover:-translate-y-1' 
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            <CheckCircle2 size={24} /> {completing ? 'Processing...' : 'Complete Dispatch'}
-          </button>
+      <div className="sticky bottom-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center">
+        <div>
+          {isCompleted && (
+            <div className="flex gap-4">
+              <a
+                href={`https://wa.me/${detail.customer?.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.customer?.name}, your order ${detail.order?.order_no || ''} has been dispatched via vehicle ${detail.vehicle_number || ''}. Driver: ${detail.driver_name || ''} (${detail.driver_mobile || ''}).`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary"
+              >
+                Message Customer
+              </a>
+              <a
+                href={`https://wa.me/${detail.driver_mobile?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.driver_name}, you have been assigned to order ${detail.order?.order_no || ''} for ${detail.customer?.name}. Delivery Address: ${detail.delivery_address || ''}.`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary"
+              >
+                Message Driver
+              </a>
+            </div>
+          )}
         </div>
-      )}
+        
+        <div className="flex justify-end gap-3">
+          {detail.status === 'pending' && (
+            <button 
+              onClick={() => setConfirmModalOpen(true)}
+              disabled={!canSendToBilling || completing}
+              className={`flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition ${
+                canSendToBilling 
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg' 
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <CheckCircle2 size={24} /> {completing ? 'Processing...' : 'Verify & Send to Billing'}
+            </button>
+          )}
+
+          {detail.status === 'ready_for_loading' && (
+            <div className="flex items-center gap-4">
+              {/* Optional Photo */}
+              <div className="flex items-center gap-2">
+                {vehicleLeavePhotoPreview ? (
+                  <div className="relative">
+                    <img src={vehicleLeavePhotoPreview} alt="Vehicle Preview" className="h-12 w-16 object-cover rounded border border-slate-300" />
+                    <button 
+                      onClick={() => { setVehicleLeavePhotoFile(null); setVehicleLeavePhotoPreview(null); }}
+                      className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex justify-center items-center text-xs"
+                    >×</button>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-500">
+                    <Camera size={20} />
+                    <span className="text-sm font-medium">Add Vehicle Photo (Optional)</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      capture="environment" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setVehicleLeavePhotoFile(file);
+                          setVehicleLeavePhotoPreview(URL.createObjectURL(file));
+                        }
+                      }} 
+                    />
+                  </label>
+                )}
+              </div>
+              <button 
+                onClick={() => handleLoadAndComplete()}
+                disabled={completing}
+                className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg bg-blue-600 hover:bg-blue-700 text-white shadow-lg transition"
+              >
+                <Truck size={24} /> {completing ? 'Processing...' : 'Load & Complete'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Camera Modal */}
       {cameraModalOpen && (
@@ -548,15 +654,15 @@ export default function DispatchDashboard({
       )}
 
       {/* Confirmation Modal */}
-      <Modal open={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirm Dispatch">
+      <Modal open={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Send to Billing">
         <div className="space-y-4">
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-lg">
-            Are you sure you want to complete this dispatch? All weights and images will be finalized and the billing team will be notified.
+          <div className="p-4 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 rounded-lg">
+            Are you sure you want to send this dispatch to billing? All weights and images will be finalized.
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setConfirmModalOpen(false)} className="btn-secondary" disabled={completing}>Cancel</button>
-            <button onClick={handleCompleteDispatch} className="btn-primary" disabled={completing}>
-              {completing ? 'Finalizing...' : 'Yes, Complete Dispatch'}
+            <button onClick={handleSendToBilling} className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 font-medium" disabled={completing}>
+              {completing ? 'Sending...' : 'Yes, Send to Billing'}
             </button>
           </div>
         </div>

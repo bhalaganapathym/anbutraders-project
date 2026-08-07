@@ -77,6 +77,13 @@ class Vehicle(Base):
     driver_mobile = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
+class Driver(Base):
+    __tablename__ = "drivers"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    name = Column(String, nullable=False)
+    phone_number = Column(String, nullable=False)
+    vehicle_number = Column(String)
+
 class Dispatch(Base):
     __tablename__ = "dispatches"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
@@ -89,8 +96,11 @@ class Dispatch(Base):
     vehicle_number = Column(String, nullable=True)
     driver_name = Column(String, nullable=True)
     driver_mobile = Column(String, nullable=True)
+    sent_to_billing_at = Column(DateTime(timezone=True), nullable=True)
+    ready_for_loading_at = Column(DateTime(timezone=True), nullable=True)
     loading_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
+    vehicle_leave_photo_url = Column(String, nullable=True)
     dispatch_team = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     
@@ -99,6 +109,7 @@ class Dispatch(Base):
     items = relationship("DispatchItem", back_populates="dispatch", cascade="all, delete-orphan")
     weights = relationship("Weight", back_populates="dispatch", cascade="all, delete-orphan")
     photos = relationship("Photo", back_populates="dispatch", cascade="all, delete-orphan")
+    bill = relationship("Bill", back_populates="dispatch", uselist=False, cascade="all, delete-orphan")
 
 class DispatchItem(Base):
     __tablename__ = "dispatch_items"
@@ -144,6 +155,23 @@ class Notification(Base):
     image_url = Column(String, nullable=True)
     read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+
+class Bill(Base):
+    __tablename__ = "bills"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
+    driver_id = Column(UUID(as_uuid=True), ForeignKey("drivers.id", ondelete="SET NULL"), nullable=True, index=True)
+    payment_method = Column(String, nullable=False)
+    total_amount = Column(Numeric, default=0, nullable=False)
+    pending_amount = Column(Numeric, default=0, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+
+    dispatch = relationship("Dispatch", back_populates="bill")
+    order = relationship("Order")
+    customer = relationship("Customer")
+    driver = relationship("Driver")
 
 # New Tables for Billing Module
 class Sale(Base):
