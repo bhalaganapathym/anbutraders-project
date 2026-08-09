@@ -73,6 +73,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newAddress, setNewAddress] = useState('');
+  const [lines, setLines] = useState<Line[]>([]);
 
   // Brand → size product picker
   const [selBrand, setSelBrand] = useState('');
