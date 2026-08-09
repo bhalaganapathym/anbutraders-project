@@ -14,6 +14,7 @@ export default function Billing() {
   const [selectedDispatch, setSelectedDispatch] = useState<Dispatch | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
+  const [creatingBill, setCreatingBill] = useState(false);
   
   const paymentMethods = [
     'full payment done',
@@ -44,12 +45,14 @@ export default function Billing() {
 
   useRealtime('dispatches', loadData);
 
-  const handleCreateBill = async () => {
+const handleCreateBill = async () => {
     if (!selectedDispatch) return;
     if (!selectedDriver) {
       toast('Please select a driver', 'error');
       return;
     }
+    if (creatingBill) return;
+    setCreatingBill(true);
     
     // Calculate total
     let totalAmount = 0;
@@ -63,7 +66,7 @@ export default function Billing() {
         dispatch_id: selectedDispatch.id,
         order_id: selectedDispatch.order_id,
         customer_id: selectedDispatch.customer_id,
-        driver_id: selectedDriver,
+        driver_id: selectedDriver || null,
         payment_method: paymentMethod,
         total_amount: totalAmount,
         pending_amount: paymentMethod.includes('partial') || paymentMethod.includes('credit') ? totalAmount : 0, // rough logic
@@ -71,8 +74,10 @@ export default function Billing() {
       toast('Bill created successfully. Sent back to dispatch!', 'success');
       setSelectedDispatch(null);
       loadData();
-    } catch (err) {
-      toast('Failed to create bill', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'Failed to create bill', 'error');
+    } finally {
+      setCreatingBill(false);
     }
   };
 
@@ -120,7 +125,7 @@ export default function Billing() {
         )}
       </div>
 
-      <Modal isOpen={!!selectedDispatch} onClose={() => setSelectedDispatch(null)} title="Generate Bill" size="lg">
+      <Modal open={!!selectedDispatch} onClose={() => setSelectedDispatch(null)} title="Generate Bill" size="lg">
         {selectedDispatch && (
           <div className="space-y-6">
             <div className="bg-gray-50 p-4 rounded-lg flex flex-wrap gap-4 justify-between">
@@ -219,9 +224,10 @@ export default function Billing() {
               </button>
               <button
                 onClick={handleCreateBill}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors"
+                disabled={creatingBill}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Confirm & Send to Dispatch
+                {creatingBill ? 'Creating...' : 'Confirm & Send to Dispatch'}
               </button>
             </div>
           </div>

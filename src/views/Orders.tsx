@@ -59,10 +59,10 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const [editing, setEditing] = useState<Order | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [notes, setNotes] = useState('');
-  const [lines, setLines] = useState<Line[]>([]);
   const [saving, setSaving] = useState(false);
   const [detailOrder, setDetailOrder] = useState<OrderWithCustomer | null>(null);
   const [detailItems, setDetailItems] = useState<OrderItemWithProduct[]>([]);
+  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed'>('pending');
 
   // Customer mode: 'search' = find existing by phone, 'new' = enter details inline
   const [customerMode, setCustomerMode] = useState<'search' | 'new'>('search');
@@ -103,6 +103,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   useRealtime('products', load);
 
   const filtered = orders.filter((o) =>
+    o.status === activeTab &&
     [o.customer?.name ?? '', o.customer?.phone ?? '', o.delivery_address ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
   );
 
@@ -318,10 +319,25 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Orders</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Create orders with new or existing customers</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Create orders with new or existing customers</p>
         </div>
         <button onClick={openNew} className="btn-primary">
           <Plus size={16} /> New Order
+        </button>
+      </div>
+
+      <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700">
+        <button 
+          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'pending' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+          onClick={() => setActiveTab('pending')}
+        >
+          Pending
+        </button>
+        <button 
+          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'confirmed' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+          onClick={() => setActiveTab('confirmed')}
+        >
+          Completed
         </button>
       </div>
 
@@ -352,11 +368,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
               <tr>
                 <th className="th">Order No</th>
                 <th className="th">Customer</th>
-                <th className="th">Phone</th>
-                <th className="th">Items</th>
-                <th className="th">Delivery Address</th>
                 <th className="th">Status</th>
-                <th className="th">Created</th>
                 <th className="th text-right">Actions</th>
               </tr>
             </thead>
@@ -373,20 +385,16 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                       {o.customer?.name ?? 'Unknown'}
                     </div>
                   </td>
-                  <td className="td text-slate-500 dark:text-slate-400 dark:text-slate-500">{o.customer?.phone ?? '—'}</td>
-                  <td className="td text-slate-500 dark:text-slate-400 dark:text-slate-500">—</td>
-                  <td className="td max-w-[200px] truncate">{o.delivery_address ?? '—'}</td>
                   <td className="td">
                     {o.status === 'confirmed' ? (
-                      <div>
-                        <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Confirmed</span>
-                        <WaitClock timestamp={o.confirmed_at || o.created_at} />
-                      </div>
+                      <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Completed</span>
                     ) : (
-                      <span className="badge bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">Pending</span>
+                      <div>
+                        <span className="badge bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">Pending</span>
+                        <WaitClock timestamp={o.created_at} />
+                      </div>
                     )}
                   </td>
-                  <td className="td">{new Date(o.created_at).toLocaleDateString()}</td>
                   <td className="td text-right">
                     <div className="flex justify-end gap-1">
                       {o.status === 'pending' && (
@@ -408,6 +416,13 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-slate-500 dark:text-slate-400">
+                    No orders found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

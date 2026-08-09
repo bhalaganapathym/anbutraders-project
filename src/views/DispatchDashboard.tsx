@@ -3,7 +3,7 @@ import { api, type Dispatch, type DispatchItem, type Product } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import {
-  ArrowLeft, CheckCircle2, AlertCircle, Camera, User, Calendar, MapPin, Search, Plus
+  ArrowLeft, CheckCircle2, AlertCircle, Camera, User, Calendar, MapPin, Search, Plus, Truck
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 
@@ -359,7 +359,8 @@ export default function DispatchDashboard({
               const iv = itemVerification[item.id] || { weight: '', weightUnit: 'kg', photoPreview: null, verified: false };
               
               const requiresWeight = prod?.category === 'Steel' || prod?.category === 'Cement' || prod?.category === 'TMT Bars';
-              const isItemVerified = iv.verified || isCompleted;
+              const isVerificationDone = detail.status !== 'pending';
+              const isItemVerified = iv.verified || isVerificationDone;
 
               return (
                 <div key={item.id} className={`grid grid-cols-1 lg:grid-cols-12 gap-4 bg-white dark:bg-slate-800 rounded-xl border p-4 shadow-sm transition ${isItemVerified ? 'border-emerald-500 dark:border-emerald-500/50 bg-emerald-50/10' : 'border-slate-200 dark:border-slate-700/50'}`}>
@@ -377,7 +378,7 @@ export default function DispatchDashboard({
                   <div className="lg:col-span-4 flex flex-col justify-center border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
                     <p className="text-sm font-medium text-slate-500 mb-2">Weight Verification</p>
                     {requiresWeight ? (
-                      !isCompleted ? (
+                      !isVerificationDone ? (
                         <div className="flex gap-2 items-center">
                           <input 
                             type="number" 
@@ -403,7 +404,9 @@ export default function DispatchDashboard({
                           )}
                         </div>
                       ) : (
-                        <p className="font-bold text-slate-700 dark:text-slate-300">Weight Verified (Completed)</p>
+                        <p className="font-bold text-slate-700 dark:text-slate-300">
+                          {detail.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight || 'Verified'} {detail.weights?.find(w => w.notes?.includes(item.product_name)) ? 'kg' : ''}
+                        </p>
                       )
                     ) : (
                       <p className="text-sm italic text-slate-400">Not required for this product</p>
@@ -416,7 +419,7 @@ export default function DispatchDashboard({
                     {iv.photoPreview ? (
                       <div className="relative">
                         <img src={iv.photoPreview} alt="Preview" className="h-16 w-24 object-cover rounded-lg border border-slate-200" />
-                        {!iv.verified && !isCompleted && (
+                        {!iv.verified && !isVerificationDone && (
                           <button 
                             onClick={() => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], photoFile: null, photoPreview: null}}))}
                             className="text-xs text-rose-500 hover:underline mt-1 block"
@@ -426,7 +429,7 @@ export default function DispatchDashboard({
                         )}
                       </div>
                     ) : (
-                      !isCompleted && (
+                      !isVerificationDone && (
                         <button 
                           onClick={() => startCamera(item.id)}
                           className="flex items-center justify-center gap-2 w-full py-2 px-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 transition"
@@ -439,7 +442,7 @@ export default function DispatchDashboard({
 
                   {/* Far Right: Verify Checkbox (2 cols) */}
                   <div className="lg:col-span-2 flex items-center justify-end border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
-                    {!isCompleted ? (
+                    {!isVerificationDone ? (
                       <label className="flex items-center gap-3 cursor-pointer group">
                         <span className="font-bold text-slate-600 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-white">Verified</span>
                         <input 
@@ -494,45 +497,51 @@ export default function DispatchDashboard({
             </div>
           </div>
 
-          {/* Vehicle Details */}
+          {/* Vehicle Details & Remarks */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Vehicle Details</h2>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">
+              {detail.status !== 'pending' ? 'Vehicle Details & Remarks' : 'Remarks / Notes'}
+            </h2>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label">Vehicle Number</label>
-                <input 
-                  type="text" 
-                  value={vehicleNo} 
-                  onChange={(e) => setVehicleNo(e.target.value)}
-                  disabled={isCompleted}
-                  className="input font-semibold" 
-                  placeholder="e.g. TN 38 AB 1234" 
-                />
-              </div>
-              <div>
-                <label className="label">Transport Company</label>
-                <input type="text" className="input" placeholder="e.g. SR Travels" disabled={isCompleted} />
-              </div>
-              <div>
-                <label className="label">Driver Name</label>
-                <input 
-                  type="text" 
-                  value={driverName} 
-                  onChange={(e) => setDriverName(e.target.value)}
-                  disabled={isCompleted}
-                  className="input" 
-                />
-              </div>
-              <div>
-                <label className="label">Driver Mobile</label>
-                <input 
-                  type="text" 
-                  value={driverMobile} 
-                  onChange={(e) => setDriverMobile(e.target.value)}
-                  disabled={isCompleted}
-                  className="input" 
-                />
-              </div>
+              {detail.status !== 'pending' && (
+                <>
+                  <div>
+                    <label className="label">Vehicle Number</label>
+                    <input 
+                      type="text" 
+                      value={vehicleNo} 
+                      onChange={(e) => setVehicleNo(e.target.value)}
+                      disabled={isCompleted}
+                      className="input font-semibold" 
+                      placeholder="e.g. TN 38 AB 1234" 
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Transport Company</label>
+                    <input type="text" className="input" placeholder="e.g. SR Travels" disabled={isCompleted} />
+                  </div>
+                  <div>
+                    <label className="label">Driver Name</label>
+                    <input 
+                      type="text" 
+                      value={driverName} 
+                      onChange={(e) => setDriverName(e.target.value)}
+                      disabled={isCompleted}
+                      className="input" 
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Driver Mobile</label>
+                    <input 
+                      type="text" 
+                      value={driverMobile} 
+                      onChange={(e) => setDriverMobile(e.target.value)}
+                      disabled={isCompleted}
+                      className="input" 
+                    />
+                  </div>
+                </>
+              )}
               <div className="col-span-2">
                 <label className="label">Remarks / Notes</label>
                 <textarea 
@@ -552,10 +561,10 @@ export default function DispatchDashboard({
       {/* Completion Action Bar */}
       <div className="sticky bottom-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center">
         <div>
-          {isCompleted && (
+          {detail.status !== 'pending' && (
             <div className="flex gap-4">
               <a
-                href={`https://wa.me/${detail.customer?.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.customer?.name}, your order ${detail.order?.order_no || ''} has been dispatched via vehicle ${detail.vehicle_number || ''}. Driver: ${detail.driver_name || ''} (${detail.driver_mobile || ''}).`)}`}
+                href={`https://wa.me/${detail.customer?.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.customer?.name}, your order ${detail.order?.order_no || ''} has been dispatched via vehicle ${detail.vehicle_number || ''}. Driver: ${detail.driver_name || ''} (${detail.driver_mobile || ''}). Pending amount to pay: Rs. ${(detail as any).bill?.pending_amount || 0}.`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-secondary"
@@ -563,7 +572,7 @@ export default function DispatchDashboard({
                 Message Customer
               </a>
               <a
-                href={`https://wa.me/${detail.driver_mobile?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.driver_name}, you have been assigned to order ${detail.order?.order_no || ''} for ${detail.customer?.name}. Delivery Address: ${detail.delivery_address || ''}.`)}`}
+                href={`https://wa.me/${detail.driver_mobile?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.driver_name}, you have been assigned to order ${detail.order?.order_no || ''} for ${detail.customer?.name}. Delivery Address: ${detail.delivery_address || ''}. Pending amount to collect from customer: Rs. ${(detail as any).bill?.pending_amount || 0}.`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-secondary"

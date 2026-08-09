@@ -166,7 +166,7 @@ export default function Drivers() {
         </div>
       </div>
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingDriver ? "Edit Driver" : "Add Driver"}>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingDriver ? "Edit Driver" : "Add Driver"}>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
