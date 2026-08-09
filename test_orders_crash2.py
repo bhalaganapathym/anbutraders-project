@@ -26,12 +26,14 @@ async def main():
         await page.wait_for_timeout(2000)
         print('Navigated successfully')
         
-        print('Clicking Completed tab')
-        await page.click('text="Completed"')
-        await page.wait_for_timeout(2000)
-        print('Clicked completed tab successfully')
+        await page.screenshot(path="orders_crash_before.png")
         
-        print('Clicking on an order')
+        print('Clicking New Order')
+        await page.click('button:has-text("New Order")')
+        await page.wait_for_timeout(2000)
+        print('Clicked New Order successfully')
+        
+        await page.screenshot(path="orders_crash2.png")
         await page.click('button.hover\\:underline >> text="ORD1-09082026"')
         await page.wait_for_timeout(2000)
         print('Order clicked')
