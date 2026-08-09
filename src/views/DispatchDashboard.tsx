@@ -166,7 +166,7 @@ export default function DispatchDashboard({
   const isCompleted = detail.status === 'completed';
 
   return (
-    <div className={`flex flex-col min-h-[85vh] bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border ${isWeightWarning ? 'border-rose-500 animate-screen-blink' : 'border-slate-200 dark:border-slate-800'}`}>
+    <div className={`flex flex-col min-h-[85vh] bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800`}>
       
       {/* Sticky Header */}
       <header className="sticky top-0 z-30 flex items-center justify-between bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-6 py-4">
@@ -219,156 +219,8 @@ export default function DispatchDashboard({
           </div>
         </div>
 
-        {/* Items Verification Section */}
-        {detail.status === 'pending' && (
-          <div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Items to Verify</h2>
-            <div className="space-y-4">
-            {detailItems.map(item => {
-              const prod = products.find(p => p.id === item.product_id);
-              const iv = itemVerification[item.id] || { weight: '', weightUnit: 'kg', photoPreview: null, verified: false };
-              
-              const requiresWeight = prod?.category === 'Steel' || prod?.category === 'Cement' || prod?.category === 'TMT Bars';
-              const isVerificationDone = detail.status !== 'pending';
-              const isItemVerified = iv.verified || isVerificationDone;
-
-              return (
-                <div key={item.id} className={`grid grid-cols-1 lg:grid-cols-12 gap-4 bg-white dark:bg-slate-800 rounded-xl border p-4 shadow-sm transition ${isItemVerified ? 'border-emerald-500 dark:border-emerald-500/50 bg-emerald-50/10' : 'border-slate-200 dark:border-slate-700/50'}`}>
-                  
-                  {/* Left: Info (3 cols) */}
-                  <div className="lg:col-span-3 flex flex-col justify-center">
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-white">{item.product_name}</h3>
-                    <div className="text-sm text-slate-500 mt-1 space-y-1">
-                      <p>Quantity: <span className="font-semibold text-slate-700 dark:text-slate-300">{item.quantity} {item.unit}</span></p>
-                      <p>Unit weight: <span className="font-semibold text-slate-700 dark:text-slate-300">{prod?.standard_weight ? `${prod.standard_weight} kg` : 'N/A'}</span></p>
-                    </div>
-                  </div>
-
-                  {/* Middle: Weight (4 cols) */}
-                  <div className="lg:col-span-4 flex flex-col justify-center border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
-                    <p className="text-sm font-medium text-slate-500 mb-2">Weight Verification</p>
-                    {requiresWeight ? (
-                      !isVerificationDone ? (
-                        <div className="flex gap-2 items-center">
-                          <input 
-                            type="number" 
-                            value={iv.weight} 
-                            onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weight: e.target.value}}))}
-                            disabled={iv.verified}
-                            className="input w-24 text-center font-bold" 
-                            placeholder="0.0" 
-                          />
-                          <select 
-                            value={iv.weightUnit} 
-                            onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weightUnit: e.target.value as 'kg'|'g'}}))}
-                            disabled={iv.verified}
-                            className="input w-20 px-2"
-                          >
-                            <option value="kg">kg</option>
-                            <option value="g">g</option>
-                          </select>
-                          {!iv.verified && iv.weight && (
-                            <div className="text-emerald-600 flex items-center gap-1 text-sm ml-2 font-medium">
-                              <CheckCircle2 size={14} /> Recorded
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="font-bold text-slate-700 dark:text-slate-300">
-                          {detail.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight || 'Verified'} {detail.weights?.find(w => w.notes?.includes(item.product_name)) ? 'kg' : ''}
-                        </p>
-                      )
-                    ) : (
-                      <p className="text-sm italic text-slate-400">Not required for this product</p>
-                    )}
-                  </div>
-
-                  {/* Right: Camera (3 cols) */}
-                  <div className="lg:col-span-3 flex flex-col justify-center border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
-                    <p className="text-sm font-medium text-slate-500 mb-2">Capture Image <span className="text-xs font-normal italic">(Optional)</span></p>
-                    {iv.photoPreview ? (
-                      <div className="relative">
-                        <img src={iv.photoPreview} alt="Preview" className="h-16 w-24 object-cover rounded-lg border border-slate-200" />
-                        {!iv.verified && !isVerificationDone && (
-                          <button 
-                            onClick={() => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], photoFile: null, photoPreview: null}}))}
-                            className="text-xs text-rose-500 hover:underline mt-1 block"
-                          >
-                            Retake
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      !isVerificationDone && (
-                        <button 
-                          onClick={() => startCamera(item.id)}
-                          className="flex items-center justify-center gap-2 w-full py-2 px-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 transition"
-                        >
-                          <Camera size={18} /> Take Photo
-                        </button>
-                      )
-                    )}
-                  </div>
-
-                  {/* Far Right: Verify Checkbox (2 cols) */}
-                  <div className="lg:col-span-2 flex items-center justify-end border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
-                    {!isVerificationDone ? (
-                      <label className="flex items-center gap-3 cursor-pointer group">
-                        <span className="font-bold text-slate-600 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-white">Verified</span>
-                        <input 
-                          type="checkbox" 
-                          className="w-6 h-6 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                          checked={iv.verified}
-                          disabled={requiresWeight && !iv.weight}
-                          onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], verified: e.target.checked}}))}
-                        />
-                      </label>
-                    ) : (
-                      <div className="flex items-center gap-2 text-emerald-600 font-bold">
-                        <CheckCircle2 size={20} /> Verified
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          </div>
-        )}
-
-        {/* Lower Section: Weights & Vehicle */}
-        <div className={`grid grid-cols-1 ${detail.status === 'pending' ? 'lg:grid-cols-2' : ''} gap-6`}>
-          {/* Weight Summary */}
-          {detail.status === 'pending' && (
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Weight Summary</h2>
-            <div className="flex flex-col gap-4">
-              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                <span className="font-medium text-slate-500">Estimated Weight</span>
-                <span className="text-xl font-bold text-slate-800 dark:text-white">{estimatedTotal.toFixed(2)} kg</span>
-              </div>
-              <div className="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-lg border border-indigo-100 dark:border-indigo-800/50 flex justify-between items-center">
-                <span className="font-medium text-indigo-700 dark:text-indigo-300">Actual Total Weight</span>
-                <span className="text-xl font-bold text-indigo-800 dark:text-indigo-200">{actualTotal.toFixed(2)} kg</span>
-              </div>
-              
-              {/* Validation UI */}
-              <div className={`p-4 rounded-lg border flex justify-between items-center ${isWeightWarning ? 'bg-rose-50 border-rose-200 animate-pulse' : weightDiff === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-                <span className={`font-medium ${isWeightWarning ? 'text-rose-700' : weightDiff === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  Difference
-                </span>
-                <span className={`text-lg font-bold ${isWeightWarning ? 'text-rose-800' : weightDiff === 0 ? 'text-emerald-800' : 'text-amber-800'}`}>
-                  {weightDiff === 0 ? 'Matched' : `${weightDiff.toFixed(2)} kg`}
-                </span>
-              </div>
-              {isWeightWarning && (
-                <p className="text-sm text-rose-600 font-bold flex items-center gap-1 mt-[-8px]">
-                  <AlertCircle size={14} /> Difference exceeds 3kg. Dispatch cannot be processed until matched correctly.
-                </p>
-              )}
-            </div>
-            </div>
-          )}
+        {/* Lower Section: Vehicle Details */}
+        <div className="grid grid-cols-1 gap-6">
 
           {/* Vehicle Details & Remarks */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-6 shadow-sm">

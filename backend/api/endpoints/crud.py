@@ -317,7 +317,9 @@ def get_dispatches(db: Session = Depends(get_db), skip: int = 0, limit: int = 10
         joinedload(Dispatch.customer),
         joinedload(Dispatch.items),
         joinedload(Dispatch.weights),
-        joinedload(Dispatch.photos)
+        joinedload(Dispatch.photos),
+        joinedload(Dispatch.order),
+        joinedload(Dispatch.bill)
     ).order_by(Dispatch.created_at.desc()).offset(skip).limit(limit).all()
 
 @router.get("/dispatches/{id}", response_model=DispatchResponse)
@@ -326,7 +328,9 @@ def get_dispatch(id: UUID, db: Session = Depends(get_db)):
         joinedload(Dispatch.customer),
         joinedload(Dispatch.items),
         joinedload(Dispatch.weights),
-        joinedload(Dispatch.photos)
+        joinedload(Dispatch.photos),
+        joinedload(Dispatch.order),
+        joinedload(Dispatch.bill)
     ).filter(Dispatch.id == id).first()
     if not dispatch:
         raise HTTPException(status_code=404, detail="Dispatch not found")
