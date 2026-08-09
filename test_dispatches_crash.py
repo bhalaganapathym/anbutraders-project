@@ -10,7 +10,7 @@ async def main():
         
         await page.goto('http://localhost:5173', wait_until='networkidle')
         await page.fill('input[type="text"]', 'admin')
-        await page.fill('input[type="password"]', 'password123')
+        await page.fill('input[type="password"]', 'admin123')
         await page.click('text="Sign In"')
         await page.wait_for_timeout(2000)
         
@@ -18,11 +18,7 @@ async def main():
         await page.goto('http://localhost:5173/dispatches', wait_until='networkidle')
         await page.wait_for_timeout(2000)
         
-        print("Clicking first dispatch")
-        await page.click('button:has-text("Review & Bill")') # Try to click one that needs billing, or View
-        
-        await page.wait_for_timeout(2000)
-        
+        print("Skipping click, getting HTML")
         print("Getting HTML")
         html = await page.content()
         with open('dispatches_html.txt', 'w', encoding='utf-8') as f:

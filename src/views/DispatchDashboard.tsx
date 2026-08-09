@@ -500,10 +500,10 @@ export default function DispatchDashboard({
           {/* Vehicle Details & Remarks */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-6 shadow-sm">
             <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">
-              {detail.status !== 'pending' ? 'Vehicle Details & Remarks' : 'Remarks / Notes'}
+              {detail.status === 'ready_for_loading' || detail.status === 'completed' ? 'Vehicle Details & Remarks' : 'Remarks / Notes'}
             </h2>
             <div className="grid grid-cols-2 gap-4">
-              {detail.status !== 'pending' && (
+              {(detail.status === 'ready_for_loading' || detail.status === 'completed') && (
                 <>
                   <div>
                     <label className="label">Vehicle Number</label>
@@ -561,7 +561,7 @@ export default function DispatchDashboard({
       {/* Completion Action Bar */}
       <div className="sticky bottom-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center">
         <div>
-          {detail.status !== 'pending' && (
+          {isCompleted && (
             <div className="flex gap-4">
               <a
                 href={`https://wa.me/${detail.customer?.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.customer?.name}, your order ${detail.order?.order_no || ''} has been dispatched via vehicle ${detail.vehicle_number || ''}. Driver: ${detail.driver_name || ''} (${detail.driver_mobile || ''}). Pending amount to pay: Rs. ${(detail as any).bill?.pending_amount || 0}.`)}`}
@@ -613,7 +613,7 @@ export default function DispatchDashboard({
                 ) : (
                   <label className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-500">
                     <Camera size={20} />
-                    <span className="text-sm font-medium">Add Vehicle Photo (Optional)</span>
+                    <span className="text-sm font-medium">Add Goods Photo *</span>
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -632,8 +632,10 @@ export default function DispatchDashboard({
               </div>
               <button 
                 onClick={() => handleLoadAndComplete()}
-                disabled={completing}
-                className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg bg-blue-600 hover:bg-blue-700 text-white shadow-lg transition"
+                disabled={completing || !vehicleLeavePhotoFile}
+                className={`flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition ${
+                  vehicleLeavePhotoFile ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
               >
                 <Truck size={24} /> {completing ? 'Processing...' : 'Load & Complete'}
               </button>
