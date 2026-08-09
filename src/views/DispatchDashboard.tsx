@@ -70,13 +70,124 @@ export default function DispatchDashboard({
 }) {
   const toast = useToast();
   
+  // Products lookup to get standard_weight
+  const [products, setProducts] = useState<Product[]>([]);
+  useEffect(() => {
+    api.get('/products').then(data => setProducts(data)).catch(() => {});
+  }, []);
+
+  const detailItems = (detail.items || []) as DispatchItem[];
+  
+  // State for item verification
+  const [itemVerification, setItemVerification] = useState<Record<string, ItemVerificationState>>({});
+  
+  // Initialize state
+  useEffect(() => {
+    if (detail.status === 'completed') return; // Read-only if completed
+    const initial: Record<string, ItemVerificationState> = {};
+    detailItems.forEach(item => {
+      initial[item.id] = { weight: '', weightUnit: 'kg', photoFile: null, photoPreview: null, verified: false };
+    });
+    setItemVerification(initial);
+  }, [detail.id, detailItems]); // Ensure this is stable
+
+  // Camera State
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [activeCameraItemId, setActiveCameraItemId] = useState<string | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream, cameraModalOpen]);
+
+  const startCamera = async (itemId: string) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }
+      });
+      setCameraStream(stream);
+      setActiveCameraItemId(itemId);
+      setCameraModalOpen(true);
+    } catch {
+      toast('Could not access camera. Please check permissions.', 'error');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+    setCameraModalOpen(false);
+    setActiveCameraItemId(null);
+  };
+
+  const capturePhoto = (videoEl: HTMLVideoElement | null) => {
+    if (!videoEl || !activeCameraItemId) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoEl.videoWidth || 640;
+    canvas.height = videoEl.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(async (blob) => {
+      if (blob) {
+        const file = new File([blob], `item_${activeCameraItemId}_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const compressed = await compressImage(file);
+        
+        // Update state
+        const previewUrl = URL.createObjectURL(compressed);
+        setItemVerification(prev => ({
+          ...prev,
+          [activeCameraItemId]: { ...prev[activeCameraItemId], photoFile: compressed, photoPreview: previewUrl }
+        }));
+        
+        toast('Photo captured', 'success');
+        stopCamera();
+      }
+    }, 'image/jpeg', 0.85);
+  };
+  
+  // Calculate weights
+  let estimatedTotal = 0;
+  let actualTotal = 0;
+  
+  detailItems.forEach(item => {
+    const prod = products.find(p => p.id === item.product_id);
+    const stdWt = prod?.standard_weight || 0;
+    estimatedTotal += stdWt * item.quantity;
+    
+    // For read-only completed state, use saved weights, else use inputs
+    if (detail.status !== 'completed') {
+      const iv = itemVerification[item.id];
+      if (iv && iv.weight) {
+        let wt = Number(iv.weight);
+        if (iv.weightUnit === 'g') wt = wt / 1000;
+        actualTotal += wt;
+      }
+    }
+  });
+
+  if (detail.status === 'completed') {
+    actualTotal = (detail.weights || []).reduce((sum, w) => sum + w.actual_weight, 0);
+  }
+
+  const weightDiff = Math.abs(estimatedTotal - actualTotal);
+  const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && weightDiff > 3;
+
   // Vehicle Details State (Pre-filled from billing if ready)
   const [vehicleNo, setVehicleNo] = useState(detail.vehicle_number || '');
   const [driverName, setDriverName] = useState(detail.driver_name || '');
   const [driverMobile, setDriverMobile] = useState(detail.driver_mobile || '');
   const [remarks, setRemarks] = useState('');
 
-  const canSendToBilling = !!vehicleNo && !!driverName && !!driverMobile && detail.status === 'pending';
+  // Completion Logic
+  const allVerified = detailItems.every(item => itemVerification[item.id]?.verified);
+  
+  const canSendToBilling = allVerified && !isWeightWarning && detail.status === 'pending';
   const canLoadAndComplete = detail.status === 'ready_for_loading';
   
   const [completing, setCompleting] = useState(false);
@@ -101,13 +212,33 @@ export default function DispatchDashboard({
   const handleSendToBilling = async () => {
     setCompleting(true);
     try {
+      const newWeights = [];
+      const newPhotos = [];
+      
+      for (const item of detailItems) {
+        const iv = itemVerification[item.id];
+        if (iv) {
+          let wt = Number(iv.weight) || 0;
+          if (iv.weightUnit === 'g') wt = wt / 1000;
+          if (wt > 0) newWeights.push({ actual_weight: wt, notes: `Verified for ${item.product_name}` });
+          
+          if (iv.photoFile) {
+            const dataUrl: string = await new Promise((res, rej) => {
+              const reader = new FileReader();
+              reader.onload = () => res(reader.result as string);
+              reader.onerror = rej;
+              reader.readAsDataURL(iv.photoFile as File);
+            });
+            newPhotos.push({ url: dataUrl, caption: `Verified: ${item.product_name}` });
+          }
+        }
+      }
+
       await api.put(`/dispatches/${detail.id}`, {
         ...detail,
-        status: 'ready_for_loading',
-        vehicle_number: vehicleNo,
-        driver_name: driverName,
-        driver_mobile: driverMobile,
-        remarks: remarks || null
+        status: 'sent_to_billing',
+        weights: [...(detail.weights || []), ...newWeights],
+        photos: [...(detail.photos || []), ...newPhotos]
       });
 
       const customerName = detail.customer?.name ?? 'Unknown';
@@ -166,7 +297,7 @@ export default function DispatchDashboard({
   const isCompleted = detail.status === 'completed';
 
   return (
-    <div className={`flex flex-col min-h-[85vh] bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800`}>
+    <div className={`flex flex-col min-h-[85vh] bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border ${isWeightWarning ? 'border-rose-500 animate-screen-blink' : 'border-slate-200 dark:border-slate-800'}`}>
       
       {/* Sticky Header */}
       <header className="sticky top-0 z-30 flex items-center justify-between bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-6 py-4">
@@ -219,8 +350,152 @@ export default function DispatchDashboard({
           </div>
         </div>
 
-        {/* Lower Section: Vehicle Details */}
-        <div className="grid grid-cols-1 gap-6">
+        {/* Items Verification Section */}
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Items to Verify</h2>
+          <div className="space-y-4">
+            {detailItems.map(item => {
+              const prod = products.find(p => p.id === item.product_id);
+              const iv = itemVerification[item.id] || { weight: '', weightUnit: 'kg', photoPreview: null, verified: false };
+              
+              const requiresWeight = prod?.category === 'Steel' || prod?.category === 'Cement' || prod?.category === 'TMT Bars';
+              const isVerificationDone = detail.status !== 'pending';
+              const isItemVerified = iv.verified || isVerificationDone;
+
+              return (
+                <div key={item.id} className={`grid grid-cols-1 lg:grid-cols-12 gap-4 bg-white dark:bg-slate-800 rounded-xl border p-4 shadow-sm transition ${isItemVerified ? 'border-emerald-500 dark:border-emerald-500/50 bg-emerald-50/10' : 'border-slate-200 dark:border-slate-700/50'}`}>
+                  
+                  {/* Left: Info (3 cols) */}
+                  <div className="lg:col-span-3 flex flex-col justify-center">
+                    <h3 className="font-bold text-lg text-slate-800 dark:text-white">{item.product_name}</h3>
+                    <div className="text-sm text-slate-500 mt-1 space-y-1">
+                      <p>Quantity: <span className="font-semibold text-slate-700 dark:text-slate-300">{item.quantity} {item.unit}</span></p>
+                      <p>Unit weight: <span className="font-semibold text-slate-700 dark:text-slate-300">{prod?.standard_weight ? `${prod.standard_weight} kg` : 'N/A'}</span></p>
+                    </div>
+                  </div>
+
+                  {/* Middle: Weight (4 cols) */}
+                  <div className="lg:col-span-4 flex flex-col justify-center border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
+                    <p className="text-sm font-medium text-slate-500 mb-2">Weight Verification</p>
+                    {requiresWeight ? (
+                      !isVerificationDone ? (
+                        <div className="flex gap-2 items-center">
+                          <input 
+                            type="number" 
+                            value={iv.weight} 
+                            onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weight: e.target.value}}))}
+                            disabled={iv.verified}
+                            className="input w-24 text-center font-bold" 
+                            placeholder="0.0" 
+                          />
+                          <select 
+                            value={iv.weightUnit} 
+                            onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weightUnit: e.target.value as 'kg'|'g'}}))}
+                            disabled={iv.verified}
+                            className="input w-20 px-2"
+                          >
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                          </select>
+                          {!iv.verified && iv.weight && (
+                            <div className="text-emerald-600 flex items-center gap-1 text-sm ml-2 font-medium">
+                              <CheckCircle2 size={14} /> Recorded
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="font-bold text-slate-700 dark:text-slate-300">
+                          {detail.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight || 'Verified'} {detail.weights?.find(w => w.notes?.includes(item.product_name)) ? 'kg' : ''}
+                        </p>
+                      )
+                    ) : (
+                      <p className="text-sm italic text-slate-400">Not required for this product</p>
+                    )}
+                  </div>
+
+                  {/* Right: Camera (3 cols) */}
+                  <div className="lg:col-span-3 flex flex-col justify-center border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
+                    <p className="text-sm font-medium text-slate-500 mb-2">Capture Image <span className="text-xs font-normal italic">(Optional)</span></p>
+                    {iv.photoPreview ? (
+                      <div className="relative">
+                        <img src={iv.photoPreview} alt="Preview" className="h-16 w-24 object-cover rounded-lg border border-slate-200" />
+                        {!iv.verified && !isVerificationDone && (
+                          <button 
+                            onClick={() => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], photoFile: null, photoPreview: null}}))}
+                            className="text-xs text-rose-500 hover:underline mt-1 block"
+                          >
+                            Retake
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      !isVerificationDone && (
+                        <button 
+                          onClick={() => startCamera(item.id)}
+                          className="flex items-center justify-center gap-2 w-full py-2 px-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 transition"
+                        >
+                          <Camera size={18} /> Take Photo
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  {/* Far Right: Verify Checkbox (2 cols) */}
+                  <div className="lg:col-span-2 flex items-center justify-end border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
+                    {!isVerificationDone ? (
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <span className="font-bold text-slate-600 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-white">Verified</span>
+                        <input 
+                          type="checkbox" 
+                          className="w-6 h-6 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          checked={iv.verified}
+                          disabled={requiresWeight && !iv.weight}
+                          onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], verified: e.target.checked}}))}
+                        />
+                      </label>
+                    ) : (
+                      <div className="flex items-center gap-2 text-emerald-600 font-bold">
+                        <CheckCircle2 size={20} /> Verified
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Lower Section: Weights & Vehicle */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Weight Summary */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Weight Summary</h2>
+            <div className="flex flex-col gap-4">
+              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <span className="font-medium text-slate-500">Estimated Weight</span>
+                <span className="text-xl font-bold text-slate-800 dark:text-white">{estimatedTotal.toFixed(2)} kg</span>
+              </div>
+              <div className="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-lg border border-indigo-100 dark:border-indigo-800/50 flex justify-between items-center">
+                <span className="font-medium text-indigo-700 dark:text-indigo-300">Actual Total Weight</span>
+                <span className="text-xl font-bold text-indigo-800 dark:text-indigo-200">{actualTotal.toFixed(2)} kg</span>
+              </div>
+              
+              {/* Validation UI */}
+              <div className={`p-4 rounded-lg border flex justify-between items-center ${isWeightWarning ? 'bg-rose-50 border-rose-200 animate-pulse' : weightDiff === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                <span className={`font-medium ${isWeightWarning ? 'text-rose-700' : weightDiff === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  Difference
+                </span>
+                <span className={`text-lg font-bold ${isWeightWarning ? 'text-rose-800' : weightDiff === 0 ? 'text-emerald-800' : 'text-amber-800'}`}>
+                  {weightDiff === 0 ? 'Matched' : `${weightDiff.toFixed(2)} kg`}
+                </span>
+              </div>
+              {isWeightWarning && (
+                <p className="text-sm text-rose-600 font-bold flex items-center gap-1 mt-[-8px]">
+                  <AlertCircle size={14} /> Difference exceeds 3kg. Dispatch cannot be processed until matched correctly.
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* Vehicle Details & Remarks */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-6 shadow-sm">
@@ -228,6 +503,8 @@ export default function DispatchDashboard({
               {detail.status !== 'pending' ? 'Vehicle Details & Remarks' : 'Remarks / Notes'}
             </h2>
             <div className="grid grid-cols-2 gap-4">
+              {detail.status !== 'pending' && (
+                <>
                   <div>
                     <label className="label">Vehicle Number</label>
                     <input 
@@ -263,6 +540,8 @@ export default function DispatchDashboard({
                       className="input" 
                     />
                   </div>
+                </>
+              )}
               <div className="col-span-2">
                 <label className="label">Remarks / Notes</label>
                 <textarea 
@@ -315,7 +594,7 @@ export default function DispatchDashboard({
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }`}
             >
-              <CheckCircle2 size={24} /> {completing ? 'Processing...' : 'Assign Driver & Mark Ready'}
+              <CheckCircle2 size={24} /> {completing ? 'Processing...' : 'Verify & Send to Billing'}
             </button>
           )}
 
@@ -363,18 +642,35 @@ export default function DispatchDashboard({
         </div>
       </div>
 
-
+      {/* Camera Modal */}
+      {cameraModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4">
+          <div className="relative w-full max-w-lg bg-black rounded-xl overflow-hidden shadow-2xl border border-slate-800">
+            <video ref={videoRef} autoPlay playsInline className="w-full aspect-video object-cover bg-slate-900" />
+            <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex justify-center items-center gap-6">
+              <button onClick={stopCamera} className="text-white hover:text-rose-400 transition font-medium">Cancel</button>
+              <button 
+                onClick={() => capturePhoto(videoRef.current)}
+                className="w-16 h-16 rounded-full bg-white/20 border-4 border-white flex items-center justify-center hover:bg-white/40 transition active:scale-95"
+              >
+                <Camera size={24} className="text-white" />
+              </button>
+              <div className="w-12"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
-      <Modal open={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirm Driver Assignment">
+      <Modal open={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Send to Billing">
         <div className="space-y-4">
           <div className="p-4 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 rounded-lg">
-            <p className="text-slate-600 dark:text-slate-300">Are you sure you want to assign driver <strong>{driverName}</strong> (Vehicle: {vehicleNo}) for this dispatch?</p>
+            Are you sure you want to send this dispatch to billing? All weights and images will be finalized.
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setConfirmModalOpen(false)} className="btn-secondary" disabled={completing}>Cancel</button>
             <button onClick={handleSendToBilling} className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 font-medium" disabled={completing}>
-              {completing ? 'Assigning...' : 'Assign Driver & Mark Ready'}
+              {completing ? 'Sending...' : 'Yes, Send to Billing'}
             </button>
           </div>
         </div>
