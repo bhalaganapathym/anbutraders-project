@@ -28,5 +28,18 @@ def migrate():
         except Exception as e:
             print("Skipping driver_mobile: ", e)
 
+        try:
+            conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key VARCHAR PRIMARY KEY,
+                value VARCHAR NOT NULL,
+                description VARCHAR,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            """))
+            print("Added system_settings table")
+        except Exception as e:
+            print("Skipping system_settings: ", e)
+
 if __name__ == "__main__":
     migrate()

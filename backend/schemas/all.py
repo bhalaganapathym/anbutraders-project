@@ -334,3 +334,16 @@ class BillResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class SystemSettingUpdate(BaseModel):
+    value: str
+    description: Optional[str] = None
+
+class SystemSettingResponse(BaseModel):
+    key: str
+    value: str
+    description: Optional[str] = None
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True

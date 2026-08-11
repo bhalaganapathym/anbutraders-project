@@ -226,3 +226,10 @@ class StockMovement(Base):
     quantity = Column(Numeric, nullable=False)
     reference_id = Column(UUID(as_uuid=True), nullable=True, index=True) # Sale ID or Purchase ID
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"))

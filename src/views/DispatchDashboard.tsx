@@ -72,8 +72,13 @@ export default function DispatchDashboard({
   
   // Products lookup to get standard_weight
   const [products, setProducts] = useState<Product[]>([]);
+  const [weightThreshold, setWeightThreshold] = useState<number>(3);
+  
   useEffect(() => {
     api.get('/products').then(data => setProducts(data)).catch(() => {});
+    api.get('/settings/weight_difference_threshold')
+       .then(data => { if (data && data.value) setWeightThreshold(Number(data.value)); })
+       .catch(() => {});
   }, []);
 
   const detailItems = (detail.items || []) as DispatchItem[];
@@ -201,7 +206,7 @@ export default function DispatchDashboard({
   }
 
   const weightDiff = Math.abs(estimatedTotal - actualTotal);
-  const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && weightDiff > 3;
+  const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && weightDiff > weightThreshold;
 
   // Vehicle Details State (Pre-filled from billing if ready)
   const [vehicleNo, setVehicleNo] = useState(detail.vehicle_number || '');
@@ -210,6 +215,7 @@ export default function DispatchDashboard({
   const [remarks, setRemarks] = useState('');
 
   // Completion Logic
+  const [isCompletedLocal, setIsCompletedLocal] = useState(false);
   const allVerified = detailItems.every(item => itemVerification[item.id]?.verified);
   
   const canSendToBilling = allVerified && !isWeightWarning && detail.status === 'pending';
@@ -293,8 +299,19 @@ export default function DispatchDashboard({
         notes: remarks,
       });
 
+      await api.post('/notifications', {
+        type: 'dispatch_completed',
+        title: `Dispatch ${detail.dispatch_no} completed`,
+        message: `Dispatch ${detail.dispatch_no} for ${detail.customer?.name} has been loaded onto vehicle ${vehicleNo.trim()} and completed.`,
+        dispatch_id: detail.id,
+        order_id: detail.order_id,
+        customer_name: detail.customer?.name,
+        image_url: photoUrl
+      });
+
       toast('Dispatch loaded and completed', 'success');
       setConfirmModalOpen(false);
+      setIsCompletedLocal(true);
       onRefresh();
       // We do NOT close the modal so they can see the WhatsApp buttons
     } catch {
@@ -303,7 +320,7 @@ export default function DispatchDashboard({
     setCompleting(false);
   };
 
-  const isCompleted = detail.status === 'completed';
+  const isCompleted = detail.status === 'completed' || isCompletedLocal;
 
   return (
     <div className={`flex flex-col min-h-[85vh] bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border ${isWeightWarning ? 'border-rose-500 animate-screen-blink' : 'border-slate-200 dark:border-slate-800'}`}>
@@ -607,7 +624,7 @@ export default function DispatchDashboard({
             </button>
           )}
 
-          {detail.status === 'ready_for_loading' && (
+          {!isCompleted && detail.status === 'ready_for_loading' && (
             <div className="flex items-center gap-4">
               {/* Optional Photo */}
               <div className="flex items-center gap-2">

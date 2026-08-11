@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ToastProvider } from '@/components/Toast';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import {
-  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut, Sun, Moon, Receipt, UserSquare
+  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut, Sun, Moon, Receipt, UserSquare, Settings as SettingsIcon
 } from 'lucide-react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api } from '@/lib/api';
@@ -18,6 +18,7 @@ import GlobalNotificationAlert from '@/components/GlobalNotificationAlert';
 import NewOrder from '@/views/NewOrder';
 import Drivers from '@/views/Drivers';
 import Billing from '@/views/Billing';
+import Settings from '@/views/Settings';
 
 type NavItem = { id: string; label: string; icon: typeof LayoutDashboard };
 
@@ -31,6 +32,7 @@ const allNavItems: NavItem[] = [
   { id: 'billing', label: 'Billing', icon: Receipt },
   { id: 'drivers', label: 'Drivers', icon: UserSquare },
   { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 function AppContent() {
@@ -79,7 +81,7 @@ function AppContent() {
   const navItems = allNavItems.filter(item => {
     if (user.role === 'admin') return true;
     if (user.role === 'billing') {
-      return ['dashboard', 'customers', 'products', 'orders', 'billing', 'notifications'].includes(item.id);
+      return ['dashboard', 'customers', 'products', 'orders', 'billing', 'notifications', 'settings'].includes(item.id);
     }
     if (user.role === 'dispatch') {
       return ['dashboard', 'products', 'dispatches', 'notifications'].includes(item.id);
@@ -194,6 +196,7 @@ function AppContent() {
           {activeView === 'billing' && <Billing />}
           {activeView === 'drivers' && <Drivers />}
           {activeView === 'notifications' && <Notifications />}
+          {activeView === 'settings' && <Settings />}
         </main>
       </div>
     </div>
