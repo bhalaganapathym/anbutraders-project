@@ -94,8 +94,13 @@ export default function DispatchDashboard({
   // Camera State
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [activeCameraItemId, setActiveCameraItemId] = useState<string | null>(null);
+  const [cameraType, setCameraType] = useState<'item' | 'vehicle' | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Photo of vehicle/goods leaving
+  const [vehicleLeavePhotoPreview, setVehicleLeavePhotoPreview] = useState<string|null>(null);
+  const [vehicleLeavePhotoFile, setVehicleLeavePhotoFile] = useState<File|null>(null);
 
   useEffect(() => {
     if (videoRef.current && cameraStream) {
@@ -110,6 +115,20 @@ export default function DispatchDashboard({
       });
       setCameraStream(stream);
       setActiveCameraItemId(itemId);
+      setCameraType('item');
+      setCameraModalOpen(true);
+    } catch {
+      toast('Could not access camera. Please check permissions.', 'error');
+    }
+  };
+  
+  const startVehicleCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: { ideal: 'environment' } } 
+      });
+      setCameraStream(stream);
+      setCameraType('vehicle');
       setCameraModalOpen(true);
     } catch {
       toast('Could not access camera. Please check permissions.', 'error');
@@ -123,10 +142,11 @@ export default function DispatchDashboard({
     }
     setCameraModalOpen(false);
     setActiveCameraItemId(null);
+    setCameraType(null);
   };
 
   const capturePhoto = (videoEl: HTMLVideoElement | null) => {
-    if (!videoEl || !activeCameraItemId) return;
+    if (!videoEl) return;
     const canvas = document.createElement('canvas');
     canvas.width = videoEl.videoWidth || 640;
     canvas.height = videoEl.videoHeight || 480;
@@ -135,15 +155,20 @@ export default function DispatchDashboard({
     ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
     canvas.toBlob(async (blob) => {
       if (blob) {
-        const file = new File([blob], `item_${activeCameraItemId}_${Date.now()}.jpg`, { type: 'image/jpeg' });
-        const compressed = await compressImage(file);
-        
-        // Update state
-        const previewUrl = URL.createObjectURL(compressed);
-        setItemVerification(prev => ({
-          ...prev,
-          [activeCameraItemId]: { ...prev[activeCameraItemId], photoFile: compressed, photoPreview: previewUrl }
-        }));
+        if (cameraType === 'item' && activeCameraItemId) {
+          const file = new File([blob], `item_${activeCameraItemId}_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const compressed = await compressImage(file);
+          const previewUrl = URL.createObjectURL(compressed);
+          setItemVerification(prev => ({
+            ...prev,
+            [activeCameraItemId]: { ...prev[activeCameraItemId], photoFile: compressed, photoPreview: previewUrl }
+          }));
+        } else if (cameraType === 'vehicle') {
+          const file = new File([blob], `goods_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const compressed = await compressImage(file);
+          setVehicleLeavePhotoFile(compressed);
+          setVehicleLeavePhotoPreview(URL.createObjectURL(compressed));
+        }
         
         toast('Photo captured', 'success');
         stopCamera();
@@ -192,22 +217,6 @@ export default function DispatchDashboard({
   
   const [completing, setCompleting] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-
-  // New: Photo of vehicle leaving
-  const [vehicleLeavePhotoPreview, setVehicleLeavePhotoPreview] = useState<string|null>(null);
-  const [vehicleLeavePhotoFile, setVehicleLeavePhotoFile] = useState<File|null>(null);
-
-  const startVehicleCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      if (videoRef.current) videoRef.current.srcObject = stream;
-      setCameraModalOpen(true);
-      // Wait, we need to distinguish between item camera and vehicle camera
-      // For simplicity, we can override the camera logic or just use file input
-    } catch {
-      toast('Camera not available', 'error');
-    }
-  };
 
   const handleSendToBilling = async () => {
     setCompleting(true);
@@ -611,23 +620,13 @@ export default function DispatchDashboard({
                     >×</button>
                   </div>
                 ) : (
-                  <label className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-500">
+                  <button 
+                    onClick={() => startVehicleCamera()}
+                    className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-500"
+                  >
                     <Camera size={20} />
                     <span className="text-sm font-medium">Add Goods Photo *</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      capture="environment" 
-                      className="hidden" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          setVehicleLeavePhotoFile(file);
-                          setVehicleLeavePhotoPreview(URL.createObjectURL(file));
-                        }
-                      }} 
-                    />
-                  </label>
+                  </button>
                 )}
               </div>
               <button 
