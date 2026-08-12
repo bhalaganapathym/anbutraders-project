@@ -41,22 +41,32 @@ export default function GlobalNotificationAlert() {
           setLatestNotif(newest);
           setFlash(true);
           
-          // Play a simple beep sound if possible
+          // Play a sharp 3-pulse repeating beep sound for 6 seconds
           try {
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const oscillator = audioCtx.createOscillator();
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
-            oscillator.connect(audioCtx.destination);
-            oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.1);
+            const now = audioCtx.currentTime;
+            for (let i = 0; i < 6; i++) {
+              const cycleStart = now + i * 1.0;
+              [0, 0.25, 0.5].forEach((offset) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(1200, cycleStart + offset);
+                gain.gain.setValueAtTime(0.3, cycleStart + offset);
+                gain.gain.exponentialRampToValueAtTime(0.01, cycleStart + offset + 0.18);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(cycleStart + offset);
+                osc.stop(cycleStart + offset + 0.18);
+              });
+            }
           } catch (e) {
             // ignore audio error
           }
 
           setTimeout(() => {
             setFlash(false);
-          }, 4000);
+          }, 6000);
         }
       } else {
         lastSeenIdRef.current = 'none'; // so we can detect when a new one arrives

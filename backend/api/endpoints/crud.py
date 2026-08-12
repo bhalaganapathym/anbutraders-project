@@ -16,26 +16,51 @@ def create_customer(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
+    if customer_in.phone and customer_in.phone.strip():
+        phone = customer_in.phone.strip()
+        existing = db.query(Customer).filter(Customer.phone == phone).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="A customer with this phone number already exists")
     customer = Customer(**customer_in.model_dump())
     db.add(customer)
     db.commit()
     db.refresh(customer)
+    customer.pending_amount = 0.0
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
     return customer
 
 @router.get("/customers", response_model=List[CustomerResponse])
 def get_customers(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
-    return db.query(Customer).order_by(Customer.created_at.desc()).offset(skip).limit(limit).all()
+    from models.all import Bill
+    from sqlalchemy import func
+    customers = db.query(Customer).order_by(Customer.created_at.desc()).offset(skip).limit(limit).all()
+    
+    pending_sums = db.query(Bill.customer_id, func.sum(Bill.pending_amount)).group_by(Bill.customer_id).all()
+    pending_map = {cid: float(sum_val or 0) for cid, sum_val in pending_sums if cid}
+    
+    for c in customers:
+        c.pending_amount = pending_map.get(c.id, 0.0)
+        
+    return customers
 
 @router.put("/customers/{id}", response_model=CustomerResponse)
 def update_customer(id: UUID, customer_in: CustomerCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.id == id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+    if customer_in.phone and customer_in.phone.strip():
+        phone = customer_in.phone.strip()
+        existing = db.query(Customer).filter(Customer.phone == phone, Customer.id != id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="A customer with this phone number already exists")
     for key, value in customer_in.model_dump().items():
         setattr(customer, key, value)
     db.commit()
     db.refresh(customer)
+    from models.all import Bill
+    from sqlalchemy import func
+    pending_sum = db.query(func.sum(Bill.pending_amount)).filter(Bill.customer_id == id).scalar()
+    customer.pending_amount = float(pending_sum or 0)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
     return customer
 
@@ -349,11 +374,21 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
             setattr(dispatch, key, value)
             
     from datetime import datetime
+    from models.all import Bill, Driver
     if old_status != dispatch.status:
         if dispatch.status == "sent_to_billing":
             dispatch.sent_to_billing_at = datetime.now()
         elif dispatch.status == "completed":
             dispatch.completed_at = datetime.now()
+            bill = db.query(Bill).filter(Bill.dispatch_id == id).first()
+            if bill and bill.driver_id:
+                driver = db.query(Driver).filter(Driver.id == bill.driver_id).first()
+                if driver:
+                    driver.status = "free"
+            elif dispatch.driver_mobile:
+                driver = db.query(Driver).filter(Driver.phone_number == dispatch.driver_mobile).first()
+                if driver:
+                    driver.status = "free"
         
     db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
     for item in dispatch_in.items:

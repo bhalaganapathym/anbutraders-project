@@ -41,5 +41,24 @@ def migrate():
         except Exception as e:
             print("Skipping system_settings: ", e)
 
+        try:
+            conn.execute(text("DELETE FROM customers a USING customers b WHERE a.id > b.id AND a.phone = b.phone AND a.phone IS NOT NULL AND a.phone != '';"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS customers_phone_unique ON customers(phone) WHERE phone IS NOT NULL AND phone != '';"))
+            print("Deduplicated customer phones & added UNIQUE index")
+        except Exception as e:
+            print("Skipping customer phone index: ", e)
+
+        try:
+            conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_tolerance NUMERIC;"))
+            print("Added weight_tolerance to products")
+        except Exception as e:
+            print("Skipping weight_tolerance: ", e)
+
+        try:
+            conn.execute(text("ALTER TABLE drivers ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'free';"))
+            print("Added status to drivers")
+        except Exception as e:
+            print("Skipping driver status: ", e)
+
 if __name__ == "__main__":
     migrate()

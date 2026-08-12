@@ -1,13 +1,33 @@
-import { useState, useEffect } from 'react';
-import { api, type Dispatch, type Driver } from '@/lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { api, type Dispatch, type Driver, type Customer } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { FileText, Search, CreditCard, User as UserIcon } from 'lucide-react';
+import { FileText, Download, CreditCard, User as UserIcon } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { useRealtime } from '@/lib/useRealtime';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+function numberToWords(num: number): string {
+  if (num === 0) return 'INR Zero Only';
+  const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  
+  const inWords = (n: number): string => {
+    if (n < 20) return a[n];
+    if (n < 100) return b[Math.floor(n / 10)] + (n % 10 ? ' ' + a[n % 10] : '');
+    if (n < 1000) return a[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + inWords(n % 100) : '');
+    if (n < 100000) return inWords(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 ? ' ' + inWords(n % 1000) : '');
+    if (n < 10000000) return inWords(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + inWords(n % 100000) : '');
+    return inWords(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + inWords(n % 10000000) : '');
+  };
+  const intPart = Math.floor(num);
+  return `INR ${inWords(intPart)} Only`;
+}
 
 export default function Billing() {
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
@@ -15,6 +35,8 @@ export default function Billing() {
   const [selectedDriver, setSelectedDriver] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
   const [creatingBill, setCreatingBill] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
   
   const paymentMethods = [
     'full payment done',
@@ -26,13 +48,15 @@ export default function Billing() {
 
   const loadData = async () => {
     try {
-      const [dispData, driverData] = await Promise.all([
+      const [dispData, driverData, custData] = await Promise.all([
         api.get('/dispatches'),
-        api.get('/drivers')
+        api.get('/drivers'),
+        api.get('/customers')
       ]);
       setDispatches(dispData.filter((d: Dispatch) => d.status === 'sent_to_billing'));
       setDrivers(driverData);
-    } catch (err) {
+      setCustomers(custData);
+    } catch {
       toast('Failed to load billing data', 'error');
     } finally {
       setLoading(false);
@@ -45,7 +69,9 @@ export default function Billing() {
 
   useRealtime('dispatches', loadData);
 
-const handleCreateBill = async () => {
+  const selectedCustomer = customers.find(c => c.id === selectedDispatch?.customer_id);
+
+  const handleCreateBill = async () => {
     if (!selectedDispatch) return;
     if (!selectedDriver) {
       toast('Please select a driver', 'error');
@@ -54,10 +80,8 @@ const handleCreateBill = async () => {
     if (creatingBill) return;
     setCreatingBill(true);
     
-    // Calculate total
     let totalAmount = 0;
     selectedDispatch.items?.forEach(item => {
-      // If we have price and quantity, use it. If not, default 0
       totalAmount += (item.price || 0) * (item.quantity || 1);
     });
 
@@ -69,7 +93,7 @@ const handleCreateBill = async () => {
         driver_id: selectedDriver || null,
         payment_method: paymentMethod,
         total_amount: totalAmount,
-        pending_amount: paymentMethod.includes('partial') || paymentMethod.includes('credit') ? totalAmount : 0, // rough logic
+        pending_amount: paymentMethod.includes('partial') || paymentMethod.includes('credit') ? totalAmount : 0,
       });
       toast('Bill created successfully. Sent back to dispatch!', 'success');
       setSelectedDispatch(null);
@@ -81,37 +105,61 @@ const handleCreateBill = async () => {
     }
   };
 
+  const handleDownloadPDF = async () => {
+    if (!printRef.current) return;
+    setDownloadingPdf(true);
+    try {
+      const canvas = await html2canvas(printRef.current, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`Estimate_${selectedDispatch?.dispatch_no || 'Bill'}.pdf`);
+      toast('PDF downloaded', 'success');
+    } catch {
+      toast('Failed to generate PDF', 'error');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   if (loading) return <div className="p-6">Loading billing...</div>;
+
+  let totalAmount = 0;
+  selectedDispatch?.items?.forEach(item => {
+    totalAmount += (item.price || 0) * (item.quantity || 1);
+  });
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Billing Team</h1>
-        <p className="text-gray-500">Review dispatches and assign drivers for loading.</p>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Billing Team</h1>
+        <p className="text-slate-500 dark:text-slate-400">Review dispatches and assign drivers for loading.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {dispatches.map(dispatch => (
-          <div key={dispatch.id} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <div key={dispatch.id} className="card p-5 transition hover:shadow-md">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded capitalize">
+                <span className="badge bg-blue-100 text-blue-800 font-bold uppercase">
                   New Dispatch
                 </span>
-                <h3 className="font-bold text-lg mt-2">{dispatch.dispatch_no}</h3>
+                <h3 className="font-bold text-lg mt-2 text-slate-800 dark:text-slate-100">{dispatch.dispatch_no}</h3>
               </div>
-              <FileText className="text-gray-400" />
+              <FileText className="text-slate-400" />
             </div>
             
-            <div className="space-y-2 text-sm text-gray-600 mb-4">
-              <p><span className="font-medium text-gray-900">Customer:</span> {dispatch.customer?.name}</p>
-              <p><span className="font-medium text-gray-900">Phone:</span> {dispatch.customer?.phone}</p>
-              <p><span className="font-medium text-gray-900">Order Ref:</span> {dispatch.order?.order_no}</p>
+            <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300 mb-4">
+              <p><span className="font-medium text-slate-900 dark:text-slate-100">Customer:</span> {dispatch.customer?.name}</p>
+              <p><span className="font-medium text-slate-900 dark:text-slate-100">Phone:</span> {dispatch.customer?.phone}</p>
+              <p><span className="font-medium text-slate-900 dark:text-slate-100">Order Ref:</span> {dispatch.order?.order_no}</p>
             </div>
             
             <button
               onClick={() => setSelectedDispatch(dispatch)}
-              className="w-full py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+              className="btn-primary w-full"
             >
               Review & Bill
             </button>
@@ -119,64 +167,59 @@ const handleCreateBill = async () => {
         ))}
 
         {dispatches.length === 0 && (
-          <div className="col-span-full py-12 text-center text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+          <div className="col-span-full py-12 text-center text-slate-500 card">
             No dispatches waiting for billing.
           </div>
         )}
       </div>
 
-      <Modal open={!!selectedDispatch} onClose={() => setSelectedDispatch(null)} title="Generate Bill" size="lg">
+      <Modal open={!!selectedDispatch} onClose={() => setSelectedDispatch(null)} title="Generate Bill / Estimate" size="lg">
         {selectedDispatch && (
           <div className="space-y-6">
-            <div className="bg-gray-50 p-4 rounded-lg flex flex-wrap gap-4 justify-between">
+            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg flex flex-wrap gap-4 justify-between border border-slate-200 dark:border-slate-700">
               <div>
-                <p className="text-xs text-gray-500 uppercase font-bold">Customer Name</p>
-                <p className="font-medium">{selectedDispatch.customer?.name}</p>
+                <p className="text-xs text-slate-500 uppercase font-bold">Customer Name</p>
+                <p className="font-medium text-slate-800 dark:text-slate-100">{selectedDispatch.customer?.name}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 uppercase font-bold">Phone Number</p>
-                <p className="font-medium">{selectedDispatch.customer?.phone}</p>
+                <p className="text-xs text-slate-500 uppercase font-bold">Phone Number</p>
+                <p className="font-medium text-slate-800 dark:text-slate-100">{selectedDispatch.customer?.phone}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 uppercase font-bold">Order ID</p>
-                <p className="font-medium">{selectedDispatch.order?.order_no}</p>
+                <p className="text-xs text-slate-500 uppercase font-bold">Customer Pending Dues</p>
+                <p className="font-bold text-amber-600">₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase font-bold">Dispatch Ref</p>
+                <p className="font-medium text-slate-800 dark:text-slate-100">{selectedDispatch.dispatch_no}</p>
               </div>
             </div>
 
             <div>
-              <h3 className="font-bold text-gray-900 mb-3">Order Items</h3>
-              <div className="overflow-x-auto border rounded-lg">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-3">Order Items</h3>
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50 text-gray-700">
+                  <thead className="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Item Name</th>
                       <th className="px-4 py-3 font-semibold text-right">No. of Items</th>
-                      <th className="px-4 py-3 font-semibold text-right">Total Weight</th>
+                      <th className="px-4 py-3 font-semibold text-right">Recorded Weight</th>
                       <th className="px-4 py-3 font-semibold text-right">Total Price</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
-                    {selectedDispatch.items?.map((item, idx) => {
-                      // Try to match the weight if any, assuming 1 weight per dispatch or match by product somehow.
-                      // Since dispatch weights are recorded per dispatch generally, we'll just show the quantity.
-                      return (
-                        <tr key={item.id || idx}>
-                          <td className="px-4 py-3">{item.product_name}</td>
-                          <td className="px-4 py-3 text-right">{item.quantity} {item.unit}</td>
-                          <td className="px-4 py-3 text-right text-gray-500">-</td>
-                          <td className="px-4 py-3 text-right font-medium">₹{(item.price || 0) * item.quantity}</td>
-                        </tr>
-                      );
-                    })}
-                    {selectedDispatch.weights && selectedDispatch.weights.length > 0 && (
-                      <tr className="bg-blue-50/50">
-                        <td colSpan={2} className="px-4 py-3 font-medium text-blue-800">Recorded Weights:</td>
-                        <td className="px-4 py-3 text-right font-bold text-blue-800">
-                          {selectedDispatch.weights.reduce((sum, w) => sum + Number(w.actual_weight), 0)} kg
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {selectedDispatch.items?.map((item, idx) => (
+                      <tr key={item.id || idx}>
+                        <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{item.product_name}</td>
+                        <td className="px-4 py-3 text-right">{item.quantity} {item.unit}</td>
+                        <td className="px-4 py-3 text-right text-slate-500">
+                          {selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight 
+                            ? `${selectedDispatch.weights.find(w => w.notes?.includes(item.product_name))?.actual_weight} kg` 
+                            : '—'}
                         </td>
-                        <td className="px-4 py-3"></td>
+                        <td className="px-4 py-3 text-right font-medium">₹{((item.price || 0) * item.quantity).toLocaleString('en-IN')}</td>
                       </tr>
-                    )}
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -184,29 +227,31 @@ const handleCreateBill = async () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                  <UserIcon size={16} /> Assign Driver
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                  <UserIcon size={16} /> Assign Driver *
                 </label>
                 <select
                   value={selectedDriver}
                   onChange={(e) => setSelectedDriver(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="input"
                 >
                   <option value="">Select a driver...</option>
                   {drivers.map(d => (
-                    <option key={d.id} value={d.id}>{d.name} ({d.vehicle_number || 'No Vehicle'})</option>
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.status === 'engaged' ? '🟡 Engaged' : '🟢 Free'})
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                  <CreditCard size={16} /> Payment Method
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                  <CreditCard size={16} /> Payment Method *
                 </label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="input"
                 >
                   {paymentMethods.map(pm => (
                     <option key={pm} value={pm}>{pm.toUpperCase()}</option>
@@ -215,20 +260,113 @@ const handleCreateBill = async () => {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t">
+            <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
               <button
-                onClick={() => setSelectedDispatch(null)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 font-medium"
+                onClick={handleDownloadPDF}
+                disabled={downloadingPdf}
+                className="btn-secondary flex items-center gap-1.5"
               >
-                Cancel
+                <Download size={16} /> {downloadingPdf ? 'Generating PDF...' : 'Download PDF (Anbu Groups Format)'}
               </button>
-              <button
-                onClick={handleCreateBill}
-                disabled={creatingBill}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {creatingBill ? 'Creating...' : 'Confirm & Send to Dispatch'}
-              </button>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSelectedDispatch(null)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateBill}
+                  disabled={creatingBill}
+                  className="btn-primary bg-blue-600 hover:bg-blue-700"
+                >
+                  {creatingBill ? 'Creating...' : 'Confirm & Send to Dispatch'}
+                </button>
+              </div>
+            </div>
+
+            {/* Hidden Printable Bill Element matching Anbu Groups photo */}
+            <div className="fixed top-[-9999px] left-[-9999px]">
+              <div ref={printRef} className="w-[794px] bg-white text-black p-8 text-xs font-sans border border-black space-y-4">
+                <div className="flex justify-between items-start border-b border-black pb-2">
+                  <div>
+                    <h1 className="text-xl font-extrabold tracking-wide">ANBU GROUPS</h1>
+                    <p className="text-[11px]">No.4/5 Pondy Mailam Road T.C Kootroad</p>
+                    <p className="text-[11px]">Vanur T.K 605 111 | Ph: 0413-2964204, 9626325204</p>
+                    <p className="text-[11px]">State Name : Tamil Nadu, Code : 33</p>
+                  </div>
+                  <div className="text-right">
+                    <h2 className="text-lg font-bold border border-black px-2 py-0.5 inline-block">ESTIMATE</h2>
+                    <p className="text-[10px] italic mt-1">(TRIPLICATE FOR SUPPLIER)</p>
+                    <p className="text-[11px] mt-2"><strong>Invoice No:</strong> {selectedDispatch.dispatch_no}</p>
+                    <p className="text-[11px]"><strong>Date:</strong> {new Date().toLocaleDateString('en-IN')}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 border-b border-black pb-3 text-[11px]">
+                  <div>
+                    <p className="font-bold border-b border-gray-300 pb-1 mb-1">Consignee (Ship to)</p>
+                    <p className="font-bold text-sm">{selectedDispatch.customer?.name}</p>
+                    <p>{selectedDispatch.delivery_address || selectedDispatch.customer?.address}</p>
+                    <p>Ph: {selectedDispatch.customer?.phone}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold border-b border-gray-300 pb-1 mb-1">Buyer (Bill to)</p>
+                    <p className="font-bold text-sm">{selectedDispatch.customer?.name}</p>
+                    <p>{selectedDispatch.customer?.address || selectedDispatch.delivery_address}</p>
+                    <p>Ph: {selectedDispatch.customer?.phone}</p>
+                  </div>
+                </div>
+
+                <table className="w-full border-collapse border border-black text-[11px]">
+                  <thead>
+                    <tr className="bg-gray-100 border-b border-black">
+                      <th className="border border-black p-1 text-center">SI</th>
+                      <th className="border border-black p-1 text-left">Description of Goods</th>
+                      <th className="border border-black p-1 text-center">Nos / Quantity</th>
+                      <th className="border border-black p-1 text-right">Rate</th>
+                      <th className="border border-black p-1 text-center">per</th>
+                      <th className="border border-black p-1 text-right">Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedDispatch.items?.map((it, idx) => (
+                      <tr key={it.id || idx}>
+                        <td className="border border-black p-1 text-center">{idx + 1}</td>
+                        <td className="border border-black p-1 font-bold">{it.product_name}</td>
+                        <td className="border border-black p-1 text-center">{it.quantity}</td>
+                        <td className="border border-black p-1 text-right">{(it.price || 0).toFixed(2)}</td>
+                        <td className="border border-black p-1 text-center">{it.unit}</td>
+                        <td className="border border-black p-1 text-right font-bold">{((it.price || 0) * it.quantity).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    <tr className="font-bold border-t border-black bg-gray-50">
+                      <td colSpan={5} className="border border-black p-1 text-right">Total</td>
+                      <td className="border border-black p-1 text-right">₹{totalAmount.toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div className="space-y-1 pt-1 text-[11px]">
+                  <p><strong>Amount Chargeable (in words):</strong> {numberToWords(totalAmount)}</p>
+                  <p className="text-amber-800 font-bold"><strong>Customer Pending Dues:</strong> ₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
+                  <p><strong>Payment Mode:</strong> {paymentMethod.toUpperCase()}</p>
+                </div>
+
+                <div className="border-t border-black pt-4 flex justify-between items-end text-[10px]">
+                  <div>
+                    <p>Declaration:</p>
+                    <p className="italic">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</p>
+                    <p className="mt-2 font-bold">This is a Computer Generated Invoice</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-xs">for ANBU GROUPS</p>
+                    <div className="h-10"></div>
+                    <p className="font-bold">Authorised Signatory</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

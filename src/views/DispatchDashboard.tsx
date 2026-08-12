@@ -380,23 +380,45 @@ export default function DispatchDashboard({
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Items to Verify</h2>
           <div className="space-y-4">
-            {detailItems.map(item => {
+            {detailItems.map((item) => {
+              const iv = itemVerification[item.id] || { weight: '', weightUnit: 'kg', photoFile: null, photoPreview: null, verified: false };
               const prod = products.find(p => p.id === item.product_id);
-              const iv = itemVerification[item.id] || { weight: '', weightUnit: 'kg', photoPreview: null, verified: false };
-              
-              const requiresWeight = prod?.category === 'Steel' || prod?.category === 'Cement' || prod?.category === 'TMT Bars';
+              const requiresWeight = prod?.standard_weight ? prod.standard_weight > 0 : false;
               const isVerificationDone = detail.status !== 'pending';
-              const isItemVerified = iv.verified || isVerificationDone;
+
+              // Steel item weight mismatch check
+              const catLower = (prod?.category || '').toLowerCase();
+              const isSteel = catLower.includes('steel') || catLower.includes('tmt');
+              let isSteelMismatch = false;
+              if (isSteel && requiresWeight && !isVerificationDone && iv.weight) {
+                let actualWt = Number(iv.weight);
+                if (iv.weightUnit === 'g') actualWt = actualWt / 1000;
+                const expectedWt = (prod?.standard_weight || 0) * item.quantity;
+                const tolerance = prod?.weight_tolerance != null ? Number(prod.weight_tolerance) : weightThreshold;
+                const itemDiff = Math.abs(expectedWt - actualWt);
+                if (itemDiff > tolerance) {
+                  isSteelMismatch = true;
+                }
+              }
 
               return (
-                <div key={item.id} className={`grid grid-cols-1 lg:grid-cols-12 gap-4 bg-white dark:bg-slate-800 rounded-xl border p-4 shadow-sm transition ${isItemVerified ? 'border-emerald-500 dark:border-emerald-500/50 bg-emerald-50/10' : 'border-slate-200 dark:border-slate-700/50'}`}>
+                <div 
+                  key={item.id} 
+                  className={`grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border transition ${
+                    isSteelMismatch 
+                      ? 'border-2 border-rose-500 animate-pulse bg-rose-50/40 dark:bg-rose-950/20' 
+                      : iv.verified 
+                        ? 'bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/50' 
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700/50'
+                  }`}
+                >
                   
                   {/* Left: Info (3 cols) */}
                   <div className="lg:col-span-3 flex flex-col justify-center">
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-white">{item.product_name}</h3>
-                    <div className="text-sm text-slate-500 mt-1 space-y-1">
-                      <p>Quantity: <span className="font-semibold text-slate-700 dark:text-slate-300">{item.quantity} {item.unit}</span></p>
-                      <p>Unit weight: <span className="font-semibold text-slate-700 dark:text-slate-300">{prod?.standard_weight ? `${prod.standard_weight} kg` : 'N/A'}</span></p>
+                    <p className="font-bold text-slate-800 dark:text-white text-base">{item.product_name}</p>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+                      <span>Qty: <strong className="text-slate-700 dark:text-slate-300">{item.quantity} {item.unit}</strong></span>
+                      {prod?.brand && <span className="badge bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs">{prod.brand}</span>}
                     </div>
                   </div>
 
@@ -411,7 +433,7 @@ export default function DispatchDashboard({
                             value={iv.weight} 
                             onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weight: e.target.value}}))}
                             disabled={iv.verified}
-                            className="input w-24 text-center font-bold" 
+                            className={`input w-24 text-center font-bold ${isSteelMismatch ? 'border-rose-500 text-rose-600 bg-rose-50' : ''}`}
                             placeholder="0.0" 
                           />
                           <select 
@@ -423,7 +445,7 @@ export default function DispatchDashboard({
                             <option value="kg">kg</option>
                             <option value="g">g</option>
                           </select>
-                          {!iv.verified && iv.weight && (
+                          {!iv.verified && iv.weight && !isSteelMismatch && (
                             <div className="text-emerald-600 flex items-center gap-1 text-sm ml-2 font-medium">
                               <CheckCircle2 size={14} /> Recorded
                             </div>
@@ -475,7 +497,7 @@ export default function DispatchDashboard({
                           type="checkbox" 
                           className="w-6 h-6 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           checked={iv.verified}
-                          disabled={requiresWeight && !iv.weight}
+                          disabled={requiresWeight && (!iv.weight || isSteelMismatch)}
                           onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], verified: e.target.checked}}))}
                         />
                       </label>
@@ -517,7 +539,7 @@ export default function DispatchDashboard({
               </div>
               {isWeightWarning && (
                 <p className="text-sm text-rose-600 font-bold flex items-center gap-1 mt-[-8px]">
-                  <AlertCircle size={14} /> Difference exceeds 3kg. Dispatch cannot be processed until matched correctly.
+                  <AlertCircle size={14} /> Difference exceeds allowed threshold ({weightThreshold}kg). Dispatch cannot be processed.
                 </p>
               )}
             </div>

@@ -42,6 +42,7 @@ class Product(Base):
     brand = Column(String)
     size = Column(String)
     standard_weight = Column(Numeric, default=0, nullable=True)
+    weight_tolerance = Column(Numeric, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
 class Order(Base):
@@ -83,6 +84,7 @@ class Driver(Base):
     name = Column(String, nullable=False)
     phone_number = Column(String, nullable=False)
     vehicle_number = Column(String)
+    status = Column(String, default="free")
 
 class Dispatch(Base):
     __tablename__ = "dispatches"

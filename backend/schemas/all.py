@@ -43,6 +43,7 @@ class CustomerCreate(CustomerBase):
 
 class CustomerResponse(CustomerBase):
     id: UUID
+    pending_amount: Optional[float] = 0.0
     created_at: datetime
     
     class Config:
@@ -75,6 +76,7 @@ class ProductBase(BaseModel):
     brand: Optional[str] = None
     size: Optional[str] = None
     standard_weight: Optional[float] = 0
+    weight_tolerance: Optional[float] = None
 
 class ProductCreate(ProductBase):
     pass
@@ -300,12 +302,14 @@ class DriverCreate(BaseModel):
     name: str
     phone_number: str
     vehicle_number: Optional[str] = None
+    status: Optional[str] = 'free'
 
 class DriverResponse(BaseModel):
     id: UUID
     name: str
     phone_number: str
     vehicle_number: Optional[str] = None
+    status: Optional[str] = 'free'
     class Config:
         from_attributes = True
 

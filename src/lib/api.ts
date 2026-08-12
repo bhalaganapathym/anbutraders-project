@@ -48,6 +48,7 @@ export type Customer = {
   name: string;
   phone: string | null;
   address: string | null;
+  pending_amount?: number;
   created_at: string;
 };
 
@@ -61,6 +62,7 @@ export type Product = {
   brand: string | null;
   size: string | null;
   standard_weight?: number;
+  weight_tolerance?: number | null;
   created_at: string;
 };
 
@@ -98,6 +100,7 @@ export type Driver = {
   name: string;
   phone_number: string;
   vehicle_number: string | null;
+  status?: 'free' | 'engaged' | string;
 };
 
 export type Bill = {

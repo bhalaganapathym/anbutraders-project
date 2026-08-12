@@ -56,19 +56,25 @@ export default function Customers() {
       toast('Name, phone, and address are all required', 'error');
       return;
     }
+    const cleanPhone = form.phone.trim();
+    const existingPhone = customers.find(c => c.phone === cleanPhone && c.id !== editing?.id);
+    if (existingPhone) {
+      toast(`Phone number is already used by ${existingPhone.name}`, 'error');
+      return;
+    }
     setSaving(true);
     try {
       if (editing) {
-        await api.put(`/customers/${editing.id}`, { name: form.name.trim(), phone: form.phone.trim(), address: form.address.trim() });
+        await api.put(`/customers/${editing.id}`, { name: form.name.trim(), phone: cleanPhone, address: form.address.trim() });
         toast('Customer updated', 'success');
       } else {
-        await api.post('/customers', { name: form.name.trim(), phone: form.phone.trim(), address: form.address.trim() });
+        await api.post('/customers', { name: form.name.trim(), phone: cleanPhone, address: form.address.trim() });
         toast('Customer added', 'success');
       }
       setOpen(false);
       load();
-    } catch (e) {
-      toast('Failed to save customer', 'error');
+    } catch (e: any) {
+      toast(e.message || 'Failed to save customer', 'error');
     } finally {
       setSaving(false);
     }
@@ -90,7 +96,7 @@ export default function Customers() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Customers</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Manage your shop customers</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Manage your shop customers</p>
         </div>
         <button onClick={openNew} className="btn-primary">
           <Plus size={16} /> Add Customer
@@ -98,7 +104,7 @@ export default function Customers() {
       </div>
 
       <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -108,55 +114,68 @@ export default function Customers() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>
+        <p className="text-sm text-slate-400">Loading...</p>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Users size={36} className="text-slate-300" />
-          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No customers found.</p>
+          <p className="text-slate-500 dark:text-slate-400">No customers found.</p>
           <button onClick={openNew} className="btn-primary">
             <Plus size={16} /> Add your first customer
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((c) => (
-            <div key={c.id} className="card p-5 transition hover:shadow-md">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">
-                    {c.name.charAt(0).toUpperCase()}
+          {filtered.map((c) => {
+            const pending = Number(c.pending_amount || 0);
+            return (
+              <div key={c.id} className="card p-5 transition hover:shadow-md">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">
+                      {c.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {new Date(c.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500">
-                      {new Date(c.created_at).toLocaleDateString()}
+                  <div className="flex gap-1">
+                    <button onClick={() => openEdit(c)} className="btn-ghost p-1.5" aria-label="Edit">
+                      <Pencil size={15} />
+                    </button>
+                    <button onClick={() => remove(c)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+                  {c.phone && (
+                    <p className="flex items-center gap-2">
+                      <Phone size={14} className="text-slate-400" /> {c.phone}
                     </p>
-                  </div>
+                  )}
+                  {c.address && (
+                    <p className="flex items-center gap-2">
+                      <MapPin size={14} className="text-slate-400" /> {c.address}
+                    </p>
+                  )}
+                  {!c.phone && !c.address && <p className="text-slate-400">No contact details</p>}
                 </div>
-                <div className="flex gap-1">
-                  <button onClick={() => openEdit(c)} className="btn-ghost p-1.5" aria-label="Edit">
-                    <Pencil size={15} />
-                  </button>
-                  <button onClick={() => remove(c)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
-                    <Trash2 size={15} />
-                  </button>
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-500">Pending Amount:</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    pending > 0 
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  }`}>
+                    ₹{pending.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
               </div>
-              <div className="mt-4 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
-                {c.phone && (
-                  <p className="flex items-center gap-2">
-                    <Phone size={14} className="text-slate-400 dark:text-slate-500" /> {c.phone}
-                  </p>
-                )}
-                {c.address && (
-                  <p className="flex items-center gap-2">
-                    <MapPin size={14} className="text-slate-400 dark:text-slate-500" /> {c.address}
-                  </p>
-                )}
-                {!c.phone && !c.address && <p className="text-slate-400 dark:text-slate-500">No contact details</p>}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

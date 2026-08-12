@@ -36,6 +36,8 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
         dispatch.vehicle_number = driver.vehicle_number
         dispatch.driver_name = driver.name
         dispatch.driver_mobile = driver.phone_number
+        driver.status = "engaged"
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "drivers"})
         
     db.commit()
     db.refresh(bill)

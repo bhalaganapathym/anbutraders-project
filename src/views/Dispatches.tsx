@@ -2,34 +2,68 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRealtime } from '@/lib/useRealtime';
 import {
   api,
-  type Customer,
   type Dispatch,
   type Order,
 } from '@/lib/api';
-import Modal from '@/components/Modal';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import { useToast } from '@/components/Toast';
 import {
-  Plus, Search, Truck, Trash2, Package, AlertCircle
+  Plus, Search, Truck, Trash2, Package, AlertCircle, Clock
 } from 'lucide-react';
+import Modal from '@/components/Modal';
 import DispatchDashboard from './DispatchDashboard';
 
-type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null };
+type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string } };
 type ConfirmedOrder = Order & { customer: { name: string } | null };
+
+function WaitClock({ timestamp }: { timestamp: string | Date }) {
+  const [elapsed, setElapsed] = useState('');
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date().getTime();
+      const start = new Date(timestamp).getTime();
+      const diffMs = now - start;
+      if (diffMs < 0) {
+        setElapsed('0s');
+        return;
+      }
+      const diffSecs = Math.floor(diffMs / 1000);
+      const days = Math.floor(diffSecs / 86400);
+      const hours = Math.floor((diffSecs % 86400) / 3600);
+      const mins = Math.floor((diffSecs % 3600) / 60);
+      const secs = diffSecs % 60;
+      
+      let timeStr = '';
+      if (days > 0) timeStr += `${days}d `;
+      if (hours > 0 || days > 0) timeStr += `${hours}h `;
+      timeStr += `${mins}m ${secs}s`;
+      
+      setElapsed(timeStr.trim());
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [timestamp]);
+
+  return (
+    <div className="flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
+      <Clock size={12} className="animate-pulse" /> {elapsed}
+    </div>
+  );
+}
 
 export default function Dispatches() {
   const toast = useToast();
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
   
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmedOrders, setConfirmedOrders] = useState<ConfirmedOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState('');
   const [creating, setCreating] = useState(false);
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [driverName, setDriverName] = useState('');
-  const [driverMobile, setDriverMobile] = useState('');
 
   const [detail, setDetail] = useState<DispatchRow | null>(null);
 
@@ -52,9 +86,13 @@ export default function Dispatches() {
 
   const loadConfirmedOrders = useCallback(async () => {
     try {
-      const data: ConfirmedOrder[] = await api.get('/orders');
-      const confirmed = data.filter(o => o.status === 'confirmed');
-      setConfirmedOrders(confirmed);
+      const [allOrders, allDispatches]: [ConfirmedOrder[], DispatchRow[]] = await Promise.all([
+        api.get('/orders'),
+        api.get('/dispatches')
+      ]);
+      const existingDispatchOrderIds = new Set(allDispatches.map(d => d.order_id));
+      const freshConfirmed = allOrders.filter(o => o.status === 'confirmed' && !existingDispatchOrderIds.has(o.id));
+      setConfirmedOrders(freshConfirmed);
     } catch {
       toast('Failed to load confirmed orders', 'error');
     }
@@ -66,9 +104,12 @@ export default function Dispatches() {
     setCreateOpen(true);
   };
 
-  const filtered = dispatches.filter((d) =>
-    [d.dispatch_no, d.customer?.name ?? '', d.delivery_address ?? '', d.vehicle_number ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = dispatches.filter((d) => {
+    const isCompleted = d.status === 'completed';
+    const matchesTab = activeTab === 'completed' ? isCompleted : !isCompleted;
+    const matchesQuery = [d.dispatch_no, d.customer?.name ?? '', d.delivery_address ?? '', d.vehicle_number ?? ''].join(' ').toLowerCase().includes(query.toLowerCase());
+    return matchesTab && matchesQuery;
+  });
 
   const createDispatch = async () => {
     if (!selectedOrder) {
@@ -141,8 +182,23 @@ export default function Dispatches() {
         </button>
       </div>
 
+      <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700">
+        <button 
+          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'active' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+          onClick={() => setActiveTab('active')}
+        >
+          Active Dispatches ({dispatches.filter(d => d.status !== 'completed').length})
+        </button>
+        <button 
+          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'completed' ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+          onClick={() => setActiveTab('completed')}
+        >
+          Completed Tab ({dispatches.filter(d => d.status === 'completed').length})
+        </button>
+      </div>
+
       <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -152,31 +208,33 @@ export default function Dispatches() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400 dark:text-slate-500">Loading...</p>
+        <p className="text-sm text-slate-400">Loading...</p>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Truck size={36} className="text-slate-300" />
-          <p className="text-slate-500 dark:text-slate-400">No dispatches yet.</p>
-          <button onClick={openCreate} className="btn-primary">
-            <Plus size={16} /> Create your first dispatch
-          </button>
+          <p className="text-slate-500 dark:text-slate-400">No {activeTab} dispatches found.</p>
+          {activeTab === 'active' && (
+            <button onClick={openCreate} className="btn-primary">
+              <Plus size={16} /> Create dispatch
+            </button>
+          )}
         </div>
       ) : (
         <div className="table-wrap">
           <table className="w-full">
-            <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
+            <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
               <tr>
                 <th className="th">Dispatch No</th>
                 <th className="th">Customer</th>
                 <th className="th">Vehicle</th>
                 <th className="th">Status</th>
-                <th className="th">Created</th>
+                <th className="th">Time Elapsed</th>
                 <th className="th text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filtered.map((d) => (
-                <tr key={d.id} className="hover:bg-white/20 dark:bg-slate-800/30">
+                <tr key={d.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                   <td className="td">
                     <button onClick={() => setDetail(d)} className="font-semibold text-indigo-700 dark:text-indigo-300 hover:underline">
                       {d.dispatch_no}
@@ -186,14 +244,16 @@ export default function Dispatches() {
                   <td className="td">
                     {d.vehicle_number ? (
                       <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
-                        <Truck size={14} className="text-indigo-600 dark:text-indigo-400" /> {d.vehicle_number}
+                        <Truck size={14} className="text-indigo-600" /> {d.vehicle_number}
                       </span>
                     ) : (
-                      <span className="text-slate-400 dark:text-slate-500 italic">Not set</span>
+                      <span className="text-slate-400 italic">Not set</span>
                     )}
                   </td>
                   <td className="td"><DispatchStatusBadge status={d.status} /></td>
-                  <td className="td">{new Date(d.created_at).toLocaleDateString()}</td>
+                  <td className="td">
+                    <WaitClock timestamp={d.order?.confirmed_at || d.created_at} />
+                  </td>
                   <td className="td text-right">
                     <div className="flex justify-end gap-1">
                       <button onClick={() => setDetail(d)} className="btn-ghost p-1.5" title="Verify / Complete">
@@ -214,18 +274,18 @@ export default function Dispatches() {
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create Dispatch" size="md">
         <div className="space-y-4">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Select a confirmed customer order to generate a dispatch list.
+            Select a fresh pending confirmed estimate to generate a dispatch list.
           </p>
           {confirmedOrders.length === 0 ? (
-            <div className="rounded-lg bg-indigo-50/50 dark:bg-indigo-900/30 p-4 text-sm text-indigo-700 dark:text-indigo-300">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/30 p-4 text-sm text-amber-700 dark:text-amber-300">
               <AlertCircle size={16} className="mr-1 inline" />
-              No confirmed orders available. Confirm an order first.
+              No fresh confirmed estimates available. Confirm an estimate first or check if a dispatch already exists.
             </div>
           ) : (
             <div>
-              <label className="label">Confirmed Order *</label>
+              <label className="label">Fresh Confirmed Estimate * ({confirmedOrders.length} available)</label>
               <select value={selectedOrder} onChange={(e) => setSelectedOrder(e.target.value)} className="input">
-                <option value="">Select an order...</option>
+                <option value="">Select a fresh estimate...</option>
                 {confirmedOrders.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.order_no || o.id.split('-')[0].toUpperCase()} — {o.customer?.name ?? 'Unknown'}

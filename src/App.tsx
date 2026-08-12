@@ -27,7 +27,7 @@ const allNavItems: NavItem[] = [
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'products', label: 'Products', icon: Package },
   { id: 'pricelist', label: 'Price List', icon: Tags },
-  { id: 'orders', label: 'Orders', icon: ShoppingCart },
+  { id: 'orders', label: 'Estimate', icon: ShoppingCart },
   { id: 'dispatches', label: 'Dispatches', icon: Truck },
   { id: 'billing', label: 'Billing', icon: Receipt },
   { id: 'drivers', label: 'Drivers', icon: UserSquare },

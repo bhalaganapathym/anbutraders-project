@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api, type Driver } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { Search, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, Phone, RefreshCw } from 'lucide-react';
 import Modal from '@/components/Modal';
 
 export default function Drivers() {
@@ -15,12 +15,13 @@ export default function Drivers() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [vehicle, setVehicle] = useState('');
+  const [status, setStatus] = useState<string>('free');
 
   const loadDrivers = async () => {
     try {
       const data = await api.get('/drivers');
       setDrivers(data);
-    } catch (err) {
+    } catch {
       toast('Failed to load drivers', 'error');
     } finally {
       setLoading(false);
@@ -34,7 +35,7 @@ export default function Drivers() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = { name, phone_number: phone, vehicle_number: vehicle || null };
+      const payload = { name, phone_number: phone, vehicle_number: vehicle || null, status };
       if (editingDriver) {
         await api.put(`/drivers/${editingDriver.id}`, payload);
         toast('Driver updated successfully', 'success');
@@ -44,9 +45,43 @@ export default function Drivers() {
       }
       setModalOpen(false);
       loadDrivers();
-    } catch (err) {
+    } catch {
       toast('Failed to save driver', 'error');
     }
+  };
+
+  const toggleStatus = async (driver: Driver) => {
+    const newStatus = driver.status === 'engaged' ? 'free' : 'engaged';
+    try {
+      await api.put(`/drivers/${driver.id}`, {
+        name: driver.name,
+        phone_number: driver.phone_number,
+        vehicle_number: driver.vehicle_number,
+        status: newStatus
+      });
+      toast(`Driver marked as ${newStatus}`, 'success');
+      loadDrivers();
+    } catch {
+      toast('Failed to update driver status', 'error');
+    }
+  };
+
+  const notifyDriverWhatsApp = (driver: Driver) => {
+    const cleanPhone = driver.phone_number.replace(/[^0-9]/g, '');
+    const text = 
+`🚛 *ANBU GROUPS — Trip Assignment Notice*
+─────────────────────────────
+Hello ${driver.name},
+
+You have been assigned a delivery trip.
+Vehicle No: ${driver.vehicle_number || 'N/A'}
+
+Please report to the warehouse for vehicle loading.
+─────────────────────────────
+ANBU GROUPS`;
+
+    const url = `https://wa.me/${cleanPhone ? (cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone) : ''}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
   };
 
   const handleDelete = async (id: string) => {
@@ -55,7 +90,7 @@ export default function Drivers() {
       await api.delete(`/drivers/${id}`);
       toast('Driver deleted', 'success');
       loadDrivers();
-    } catch (err) {
+    } catch {
       toast('Failed to delete driver', 'error');
     }
   };
@@ -66,11 +101,13 @@ export default function Drivers() {
       setName(driver.name);
       setPhone(driver.phone_number);
       setVehicle(driver.vehicle_number || '');
+      setStatus(driver.status || 'free');
     } else {
       setEditingDriver(null);
       setName('');
       setPhone('');
       setVehicle('');
+      setStatus('free');
     }
     setModalOpen(true);
   };
@@ -84,79 +121,107 @@ export default function Drivers() {
   if (loading) return <div className="p-6">Loading drivers...</div>;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Driver Management</h1>
-        <button
-          onClick={() => openModal()}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={20} />
-          Add Driver
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Driver Management</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Track driver availability (Free / Engaged) and send trip alerts</p>
+        </div>
+        <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
+          <Plus size={18} /> Add Driver
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800">
           <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
               type="text"
               placeholder="Search drivers or vehicles..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input pl-10"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="bg-gray-50 text-gray-700">
+          <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+            <thead className="bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">
               <tr>
                 <th className="px-6 py-4 font-semibold">Name</th>
                 <th className="px-6 py-4 font-semibold">Phone Number</th>
                 <th className="px-6 py-4 font-semibold">Vehicle Number</th>
+                <th className="px-6 py-4 font-semibold">Status</th>
                 <th className="px-6 py-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((driver) => (
-                <tr key={driver.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-gray-900">{driver.name}</td>
-                  <td className="px-6 py-4">{driver.phone_number}</td>
-                  <td className="px-6 py-4">
-                    {driver.vehicle_number ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                        {driver.vehicle_number}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">None</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => openModal(driver)}
-                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                        title="Edit"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(driver.id)}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filtered.map((driver) => {
+                const isEngaged = driver.status === 'engaged';
+                return (
+                  <tr key={driver.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">{driver.name}</td>
+                    <td className="px-6 py-4">{driver.phone_number}</td>
+                    <td className="px-6 py-4">
+                      {driver.vehicle_number ? (
+                        <span className="badge bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold">
+                          {driver.vehicle_number}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">None</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          isEngaged 
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
+                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        }`}>
+                          {isEngaged ? '🟡 Engaged' : '🟢 Free'}
+                        </span>
+                        <button
+                          onClick={() => toggleStatus(driver)}
+                          className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5"
+                          title="Toggle Free / Engaged"
+                        >
+                          <RefreshCw size={12} /> Toggle
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2 items-center">
+                        <button
+                          onClick={() => notifyDriverWhatsApp(driver)}
+                          className="btn-ghost p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 flex items-center gap-1 text-xs font-semibold"
+                          title="Notify Driver on WhatsApp"
+                        >
+                          <Phone size={14} /> Notify
+                        </button>
+                        <button
+                          onClick={() => openModal(driver)}
+                          className="btn-ghost p-1.5"
+                          title="Edit"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(driver.id)}
+                          className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                     No drivers found
                   </td>
                 </tr>
@@ -169,46 +234,57 @@ export default function Drivers() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingDriver ? "Edit Driver" : "Add Driver"}>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
+            <label className="label">Driver Name *</label>
             <input
               type="text"
               required
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+            <label className="label">Phone Number *</label>
             <input
               type="tel"
               required
               value={phone}
               onChange={e => setPhone(e.target.value)}
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Number (Optional)</label>
+            <label className="label">Vehicle Number (Optional)</label>
             <input
               type="text"
               value={vehicle}
               onChange={e => setVehicle(e.target.value)}
               placeholder="e.g. TN-01-AB-1234"
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="input"
             />
           </div>
-          <div className="pt-4 flex gap-3">
+          <div>
+            <label className="label">Status</label>
+            <select
+              value={status}
+              onChange={e => setStatus(e.target.value)}
+              className="input"
+            >
+              <option value="free">🟢 Free</option>
+              <option value="engaged">🟡 Engaged</option>
+            </select>
+          </div>
+          <div className="pt-2 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              className="btn-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="btn-primary"
             >
               {editingDriver ? 'Save Changes' : 'Add Driver'}
             </button>

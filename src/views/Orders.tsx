@@ -49,6 +49,67 @@ function WaitClock({ timestamp }: { timestamp: string | Date }) {
   );
 }
 
+function numberToWords(num: number): string {
+  if (num === 0) return 'INR Zero Only';
+  const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  
+  const inWords = (n: number): string => {
+    if (n < 20) return a[n];
+    if (n < 100) return b[Math.floor(n / 10)] + (n % 10 ? ' ' + a[n % 10] : '');
+    if (n < 1000) return a[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + inWords(n % 100) : '');
+    if (n < 100000) return inWords(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 ? ' ' + inWords(n % 1000) : '');
+    if (n < 10000000) return inWords(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + inWords(n % 100000) : '');
+    return inWords(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + inWords(n % 10000000) : '');
+  };
+  const intPart = Math.floor(num);
+  return `INR ${inWords(intPart)} Only`;
+}
+
+const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
+  const phone = o.customer?.phone ? o.customer.phone.replace(/[^0-9]/g, '') : '';
+  const dateStr = new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  
+  let totalAmount = 0;
+  const itemLines = (o.items || []).map((it) => {
+    const prName = it.product?.name ?? 'Item';
+    const price = it.product?.price ?? 0;
+    const subtotal = price * (it.quantity || 1);
+    totalAmount += subtotal;
+    return `• *${prName}*\n  Nos/Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? ''}\n  Rate: ₹${price}\n  Amount: ₹${subtotal.toLocaleString('en-IN')}`;
+  }).join('\n\n');
+
+  const words = numberToWords(totalAmount);
+
+  const text = 
+`🧾 *ANBU GROUPS — ESTIMATE*
+No.4/5 Pondy Mailam Road, T.C.Kootroad, Vanur T.K 605 111
+Ph: 0413-2964204, 9626325204
+─────────────────────────────
+*Estimate No:* ${o.order_no || o.id.substring(0, 8).toUpperCase()}
+*Date:* ${dateStr}
+
+*Buyer (Bill to):* ${o.customer?.name ?? 'Customer'}
+*Address:* ${o.delivery_address ?? '—'}
+*Phone:* ${o.customer?.phone ?? '—'}
+─────────────────────────────
+*ITEMS:*
+
+${itemLines}
+
+─────────────────────────────
+*Total Amount:* ₹${totalAmount.toLocaleString('en-IN')}
+*Amount in words:* ${words}
+─────────────────────────────
+_We declare that this invoice/estimate shows the actual price of the goods described and that all particulars are true and correct._
+
+*for ANBU GROUPS*
+_Authorised Signatory_`;
+
+  const url = `https://wa.me/${phone ? (phone.length === 10 ? '91' + phone : phone) : ''}?text=${encodeURIComponent(text)}`;
+  window.open(url, '_blank');
+};
+
 export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () => void; onEditOrder?: (o: OrderWithCustomer) => void } = {}) {
   const toast = useToast();
   const [orders, setOrders] = useState<OrderWithCustomer[]>([]);
@@ -64,7 +125,6 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const [detailItems, setDetailItems] = useState<OrderItemWithProduct[]>([]);
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed'>('pending');
 
-  // Customer mode: 'search' = find existing by phone, 'new' = enter details inline
   const [customerMode, setCustomerMode] = useState<'search' | 'new'>('search');
   const [phoneSearch, setPhoneSearch] = useState('');
   const [searchResults, setSearchResults] = useState<Customer[]>([]);
@@ -75,7 +135,6 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const [newAddress, setNewAddress] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
 
-  // Brand → size product picker
   const [selBrand, setSelBrand] = useState('');
   const [selSize, setSelSize] = useState('');
 
@@ -89,7 +148,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
       setOrders(o as OrderWithCustomer[]);
       setProducts(p as Product[]);
     } catch (e) {
-      toast('Failed to load orders', 'error');
+      toast('Failed to load estimates', 'error');
     }
     setLoading(false);
   }, [toast]);
@@ -151,10 +210,8 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
     setEditing(o);
     setDeliveryAddress(o.delivery_address ?? '');
     setNotes(o.notes ?? '');
-    // Items are included in the OrderResponse
     const data = o.items || [];
     setLines(data.map((x: any) => ({ product_id: x.product_id, quantity: x.quantity, unit: x.unit ?? products.find(p => p.id === x.product_id)?.unit ?? 'piece' })));
-    // Load the existing customer for editing
     if (o.customer) {
       setSelectedCustomer(o.customer as Customer);
       setCustomerMode('search');
@@ -193,12 +250,10 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
       }
       return selectedCustomer.id;
     }
-    // new customer mode
     if (!newName.trim() || !newPhone.trim() || !newAddress.trim()) {
       toast('Name, phone, and address are all required for new customer', 'error');
       return null;
     }
-    // Check if phone already exists
     try {
       const custs: Customer[] = await api.get('/customers');
       const existing = custs.find(c => c.phone === newPhone.trim());
@@ -220,7 +275,6 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
       return;
     }
 
-    // Check if any line exceeds stock
     for (const line of lines) {
       const product = products.find(p => p.id === line.product_id);
       if (product) {
@@ -247,15 +301,15 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
       };
       if (editing) {
         await api.put(`/orders/${editing.id}`, payload);
-        toast('Order updated', 'success');
+        toast('Estimate updated', 'success');
       } else {
         await api.post('/orders', payload);
-        toast('Order created', 'success');
+        toast('Estimate created', 'success');
       }
       setOpen(false);
       load();
     } catch (err: any) {
-      const msg = err?.message || 'Failed to save order';
+      const msg = err?.message || 'Failed to save estimate';
       toast(msg.includes('Internal Server Error') ? 'Server error — please try again' : msg, 'error');
     } finally {
       setSaving(false);
@@ -271,21 +325,21 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
         status: 'confirmed',
         items: o.items?.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit: i.unit })) || []
       });
-      toast('Order confirmed', 'success');
+      toast('Estimate confirmed', 'success');
       load();
     } catch (e) {
-      toast('Failed to confirm order', 'error');
+      toast('Failed to confirm estimate', 'error');
     }
   };
 
   const remove = async (o: OrderWithCustomer) => {
-    if (!confirm('Delete this order and its items?')) return;
+    if (!confirm('Delete this estimate and its items?')) return;
     try {
       await api.delete(`/orders/${o.id}`);
-      toast('Order deleted', 'success');
+      toast('Estimate deleted', 'success');
       load();
     } catch (e) {
-      toast('Failed to delete order', 'error');
+      toast('Failed to delete estimate', 'error');
     }
   };
 
@@ -297,7 +351,6 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const productName = (pid: string) => products.find((p) => p.id === pid)?.name ?? 'Unknown';
 
 
-  // Brands with multiple size variants (steels, etc.)
   const brandedProducts = products.filter((p) => p.brand && p.brand.trim() !== '');
   const unbrandedProducts = products.filter((p) => !p.brand || p.brand.trim() === '');
   const allBrands = Array.from(new Set(brandedProducts.map((p) => p.brand!).filter(Boolean))).sort();
@@ -305,12 +358,9 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
     brandedProducts.filter((p) => p.brand === brand).sort((a, b) =>
       (a.size ?? '').localeCompare(b.size ?? '', undefined, { numeric: true })
     );
-  // Brands that have size variants (steel etc.)
   const brandsWithSizes = allBrands.filter((b) => sizesForBrand(b).some((p) => p.size && p.size.trim() !== '' && p.size.toLowerCase() !== 'n/a'));
-  // Brands that have NO size variants — can be added directly by brand selection
   const brandsWithoutSizes = allBrands.filter((b) => !brandsWithSizes.includes(b));
   const selectedProduct = sizesForBrand(selBrand).find((p) => p.size === selSize);
-  // For no-size brands, the product is just the first (and only) one for that brand
   const noSizeBrandProduct = (brand: string) => sizesForBrand(brand)[0] ?? null;
 
 
@@ -319,11 +369,11 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Orders</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Create orders with new or existing customers</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Estimates</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Create estimates with new or existing customers</p>
         </div>
         <button onClick={openNew} className="btn-primary">
-          <Plus size={16} /> New Order
+          <Plus size={16} /> New Estimate
         </button>
       </div>
 
@@ -357,9 +407,9 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <ShoppingCart size={36} className="text-slate-300" />
-          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No orders yet.</p>
+          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No estimates found.</p>
           <button onClick={openNew} className="btn-primary">
-            <Plus size={16} /> Create your first order
+            <Plus size={16} /> Create your first estimate
           </button>
         </div>
       ) : (
@@ -367,7 +417,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
           <table className="w-full">
             <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
               <tr>
-                <th className="th">Order No</th>
+                <th className="th">Estimate No</th>
                 <th className="th">Customer</th>
                 <th className="th">Status</th>
                 <th className="th text-right">Actions</th>
@@ -397,12 +447,19 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                     )}
                   </td>
                   <td className="td text-right">
-                    <div className="flex justify-end gap-1">
+                    <div className="flex justify-end gap-1 items-center">
+                      <button
+                        onClick={() => sendEstimateWhatsApp(o)}
+                        className="btn-ghost p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/50 dark:bg-emerald-900/30 flex items-center gap-1 text-xs font-semibold"
+                        title="Send Estimate via WhatsApp"
+                      >
+                        <Phone size={14} /> Send
+                      </button>
                       {o.status === 'pending' && (
                         <button
                           onClick={() => confirmOrder(o)}
                           className="btn-ghost p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/50 dark:bg-emerald-900/30"
-                          title="Confirm order"
+                          title="Confirm estimate"
                         >
                           <CheckCircle2 size={15} />
                         </button>
@@ -417,21 +474,13 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-500 dark:text-slate-400">
-                    No orders found.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Order' : 'New Order'} size="lg">
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Estimate' : 'New Estimate'} size="lg">
         <div className="space-y-4">
-          {/* Customer section */}
           {!editing && (
             <div className="rounded-lg border border-white/20 dark:border-slate-700/50">
               <div className="flex border-b border-white/20 dark:border-slate-700/50">
@@ -729,13 +778,13 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
             <button onClick={save} disabled={saving} className="btn-primary">
-              {saving ? 'Saving...' : 'Save Order'}
+              {saving ? 'Saving...' : 'Save Estimate'}
             </button>
           </div>
         </div>
       </Modal>
 
-      <Modal open={!!detailOrder} onClose={() => setDetailOrder(null)} title="Order Details" size="md">
+      <Modal open={!!detailOrder} onClose={() => setDetailOrder(null)} title="Estimate Details" size="md">
         {detailOrder && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -750,7 +799,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
               <div>
                 <p className="label">Status</p>
                 {detailOrder.status === 'confirmed' ? (
-                  <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Confirmed</span>
+                  <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Completed</span>
                 ) : (
                   <span className="badge bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">Pending</span>
                 )}
@@ -763,21 +812,26 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
             <div>
               <p className="label">Products</p>
               <div className="space-y-2">
-                {detailItems.length === 0 && <p className="text-sm text-slate-400 dark:text-slate-500">No items.</p>}
+                {detailItems.length === 0 && <p className="text-sm text-slate-400">No items.</p>}
                 {detailItems.map((it) => (
-                  <div key={it.id} className="flex items-center justify-between rounded-lg border border-white/20 dark:border-slate-700/50 px-3 py-2">
+                  <div key={it.id} className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{it.product?.name ?? 'Unknown'}</span>
-                    <span className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">Qty: {it.quantity} {it.unit ?? it.product?.unit}</span>
+                    <span className="text-sm text-slate-500">Qty: {it.quantity} {it.unit ?? it.product?.unit}</span>
                   </div>
                 ))}
               </div>
             </div>
-            {detailOrder.status === 'confirmed' && (
-              <div className="rounded-lg bg-emerald-50/50 dark:bg-emerald-900/30 p-3 text-sm text-emerald-700 dark:text-emerald-300">
-                <Truck size={14} className="mr-1 inline" />
-                This order is confirmed and ready for dispatch creation.
-              </div>
-            )}
+            <div className="pt-2 flex justify-between items-center">
+              <button
+                onClick={() => sendEstimateWhatsApp(detailOrder)}
+                className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
+              >
+                <Phone size={16} /> Send Estimate via WhatsApp
+              </button>
+              <button onClick={() => setDetailOrder(null)} className="btn-secondary">
+                Close
+              </button>
+            </div>
           </div>
         )}
       </Modal>
