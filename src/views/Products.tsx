@@ -3,9 +3,9 @@ import { useRealtime } from '@/lib/useRealtime';
 import { api, type Product } from '@/lib/api';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
-import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box, Upload } from 'lucide-react';
-
+import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box, Upload, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import ProductTable from '@/components/ProductTable';
 
 type Form = { name: string; category: string; unit: string; price: string; stock_qty: string; brand: string; size: string; standard_weight: string; weight_tolerance: string };
 const empty: Form = { name: '', category: 'Steel', unit: 'piece', price: '0', stock_qty: '0', brand: '', size: '', standard_weight: '0', weight_tolerance: '' };
@@ -28,6 +28,41 @@ export default function Products() {
   const [form, setForm] = useState<Form>(empty);
   const [saving, setSaving] = useState(false);
   const [unitFilter, setUnitFilter] = useState<'all' | 'kg' | 'piece'>('all');
+
+  const [brandAdjustOpen, setBrandAdjustOpen] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState('iSteel');
+  const [priceDelta, setPriceDelta] = useState('0');
+  const [adjustingBrand, setAdjustingBrand] = useState(false);
+
+  const availableBrands = Array.from(
+    new Set([
+      ...knownBrands,
+      ...products.map(p => p.brand).filter(Boolean) as string[]
+    ])
+  );
+
+  const handleBrandPriceAdjust = async () => {
+    const deltaNum = parseFloat(priceDelta);
+    if (isNaN(deltaNum) || deltaNum === 0) {
+      toast('Please enter a non-zero price difference (e.g. +3 or -3)', 'error');
+      return;
+    }
+    setAdjustingBrand(true);
+    try {
+      const res = await api.post('/products/adjust-brand-prices', {
+        brand: selectedBrand,
+        price_delta: deltaNum,
+      });
+      toast(res.message || `Updated prices for ${selectedBrand}`, 'success');
+      setBrandAdjustOpen(false);
+      setPriceDelta('0');
+      load();
+    } catch (err: any) {
+      toast(err?.message || 'Failed to update brand prices', 'error');
+    } finally {
+      setAdjustingBrand(false);
+    }
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -196,7 +231,7 @@ export default function Products() {
       await api.delete(`/products/${p.id}`);
       toast('Product deleted', 'success');
       load();
-    } catch (e) {
+    } catch {
       toast('Failed to delete product', 'error');
     }
   };
@@ -216,23 +251,30 @@ export default function Products() {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Products</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">Manage your product catalog</p>
         </div>
-        {isAdmin && (
-          <div className="flex gap-2">
-            <input 
-              type="file" 
-              accept=".csv" 
-              ref={fileInputRef} 
-              onChange={handleFileUpload} 
-              className="hidden" 
-            />
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-secondary">
-              <Upload size={16} /> {uploading ? 'Importing...' : 'Import CSV'}
+        <div className="flex gap-2">
+          {canEditTolerance && (
+            <button onClick={() => setBrandAdjustOpen(true)} className="btn-secondary flex items-center gap-1.5 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50">
+              <TrendingUp size={16} /> Adjust Brand Rates
             </button>
-            <button onClick={openNew} className="btn-primary">
-              <Plus size={16} /> Add Product
-            </button>
-          </div>
-        )}
+          )}
+          {isAdmin && (
+            <>
+              <input 
+                type="file" 
+                accept=".csv" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload} 
+                className="hidden" 
+              />
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-secondary">
+                <Upload size={16} /> {uploading ? 'Importing...' : 'Import CSV'}
+              </button>
+              <button onClick={openNew} className="btn-primary">
+                <Plus size={16} /> Add Product
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="relative max-w-sm">
@@ -310,8 +352,6 @@ export default function Products() {
                 <div>
                   <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
                     <Package size={16} className="text-indigo-600 dark:text-indigo-400" /> Other Products
-                    <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{otherProducts.length}</span>
-                  </h2>
                   <ProductTable products={otherProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} canEditTolerance={canEditTolerance} onUpdateTolerance={updateTolerance} />
                 </div>
               )}
@@ -322,6 +362,7 @@ export default function Products() {
         </div>
       )}
 
+      {/* Add / Edit Product Modal */}
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Product' : 'Add Product'}>
         <div className="space-y-4">
           <div>
@@ -437,6 +478,97 @@ export default function Products() {
             <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
             <button onClick={save} disabled={saving} className="btn-primary">
               {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Brand Steel Rate Adjuster Modal */}
+      <Modal open={brandAdjustOpen} onClose={() => setBrandAdjustOpen(false)} title="Brand Steel Rate Adjuster" size="lg">
+        <div className="space-y-5">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Adjust the rate for all steel products of a brand simultaneously by entering a price difference (e.g. <strong className="text-emerald-600">+3</strong> or <strong className="text-amber-600">-3</strong> ₹).
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Select Brand *</label>
+              <select
+                value={selectedBrand}
+                onChange={(e) => setSelectedBrand(e.target.value)}
+                className="input font-semibold"
+              >
+                {availableBrands.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Price Difference (₹) *</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.5"
+                  value={priceDelta}
+                  onChange={(e) => setPriceDelta(e.target.value)}
+                  placeholder="e.g. +3 or -3"
+                  className="input font-bold text-lg"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                  {parseFloat(priceDelta) > 0 ? 'Increase (+)' : parseFloat(priceDelta) < 0 ? 'Decrease (-)' : 'No change'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-sm text-slate-700 dark:text-slate-200 mb-2 flex items-center justify-between">
+              <span>Affected Products Preview ({brandProducts.length})</span>
+              <span className="text-xs font-normal text-slate-400">Brand: <strong>{selectedBrand}</strong></span>
+            </h3>
+            {brandProducts.length === 0 ? (
+              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg text-center text-sm text-slate-400">
+                No products currently listed under brand "{selectedBrand}".
+              </div>
+            ) : (
+              <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                {brandProducts.map((p) => {
+                  const deltaNum = parseFloat(priceDelta) || 0;
+                  const newPrice = Math.max(0, (p.price || 0) + deltaNum);
+                  return (
+                    <div key={p.id} className="p-3 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                      <div>
+                        <p className="font-bold text-slate-800 dark:text-slate-100">{p.name}</p>
+                        <p className="text-xs text-slate-500">Size: {p.size || 'N/A'} | Unit: {p.unit}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-slate-400 line-through mr-2">₹{(p.price || 0).toFixed(2)}</span>
+                        <span className={`font-extrabold text-base ${deltaNum > 0 ? 'text-emerald-600 dark:text-emerald-400' : deltaNum < 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                          ₹{newPrice.toFixed(2)}
+                        </span>
+                        {deltaNum !== 0 && (
+                          <span className={`text-xs ml-1 font-semibold ${deltaNum > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            ({deltaNum > 0 ? `+${deltaNum}` : deltaNum})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+            <button onClick={() => setBrandAdjustOpen(false)} className="btn-secondary">Cancel</button>
+            <button
+              onClick={handleBrandPriceAdjust}
+              disabled={adjustingBrand || brandProducts.length === 0 || parseFloat(priceDelta) === 0 || isNaN(parseFloat(priceDelta))}
+              className="btn-primary flex items-center gap-1.5"
+            >
+              <TrendingUp size={16} />
+              {adjustingBrand ? 'Updating...' : `Apply ${parseFloat(priceDelta) > 0 ? `+₹${priceDelta}` : `₹${priceDelta}`} to ${brandProducts.length} Items`}
             </button>
           </div>
         </div>

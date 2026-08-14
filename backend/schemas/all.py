@@ -87,6 +87,10 @@ class ProductResponse(ProductBase):
     
     class Config:
         from_attributes = True
+
+class BrandPriceAdjustRequest(BaseModel):
+    brand: str
+    price_delta: float
         
 # Sales
 class SaleItemCreate(BaseModel):

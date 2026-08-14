@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from uuid import UUID
 from api.deps import get_db, get_current_active_user
 from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification
-from schemas.all import CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, NotificationCreate, NotificationResponse
+from schemas.all import CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest, OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, NotificationCreate, NotificationResponse
 from core.websocket import manager
 
 router = APIRouter()
@@ -100,6 +101,28 @@ def bulk_create_products(
         db.refresh(product)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "products"})
     return products
+
+@router.post("/products/adjust-brand-prices")
+def adjust_brand_prices(
+    req: BrandPriceAdjustRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    brand_products = db.query(Product).filter(func.lower(Product.brand) == req.brand.lower()).all()
+    if not brand_products:
+        raise HTTPException(status_code=404, detail=f"No products found for brand '{req.brand}'")
+    
+    from decimal import Decimal
+    delta = Decimal(str(req.price_delta))
+    updated_count = 0
+    for p in brand_products:
+        curr_price = p.price or Decimal("0")
+        p.price = max(Decimal("0"), curr_price + delta)
+        updated_count += 1
+        
+    db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "products"})
+    return {"message": f"Successfully updated {updated_count} products for brand {req.brand}", "updated_count": updated_count}
 
 @router.get("/products", response_model=List[ProductResponse])
 def get_products(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
@@ -389,9 +412,6 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
                 driver = db.query(Driver).filter(Driver.phone_number == dispatch.driver_mobile).first()
                 if driver:
                     driver.status = "free"
-        
-    db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
-    for item in dispatch_in.items:
         db.add(DispatchItem(dispatch_id=dispatch.id, **item.model_dump()))
 
     db.query(Weight).filter(Weight.dispatch_id == id).delete()
