@@ -426,15 +426,21 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
                 driver = db.query(Driver).filter(Driver.phone_number == dispatch.driver_mobile).first()
                 if driver:
                     driver.status = "free"
-        db.add(DispatchItem(dispatch_id=dispatch.id, **item.model_dump()))
 
-    db.query(Weight).filter(Weight.dispatch_id == id).delete()
-    for w in dispatch_in.weights:
-        db.add(Weight(dispatch_id=dispatch.id, **w.model_dump()))
+    if dispatch_in.items:
+        db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
+        for item in dispatch_in.items:
+            db.add(DispatchItem(dispatch_id=dispatch.id, **item.model_dump()))
 
-    db.query(Photo).filter(Photo.dispatch_id == id).delete()
-    for p in dispatch_in.photos:
-        db.add(Photo(dispatch_id=dispatch.id, **p.model_dump()))
+    if dispatch_in.weights is not None:
+        db.query(Weight).filter(Weight.dispatch_id == id).delete()
+        for w in dispatch_in.weights:
+            db.add(Weight(dispatch_id=dispatch.id, **w.model_dump()))
+
+    if dispatch_in.photos is not None:
+        db.query(Photo).filter(Photo.dispatch_id == id).delete()
+        for p in dispatch_in.photos:
+            db.add(Photo(dispatch_id=dispatch.id, **p.model_dump()))
         
     db.commit()
     db.refresh(dispatch)

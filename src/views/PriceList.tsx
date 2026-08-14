@@ -147,66 +147,102 @@ export default function PriceList() {
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <IndianRupee size={36} className="text-slate-300" />
-          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No products found.</p>
+          <p className="text-slate-500 dark:text-slate-400">No products found.</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table className="w-full">
-            <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
-              <tr>
-                <th className="th">Product</th>
-                <th className="th">Brand</th>
-                <th className="th">Size</th>
-                <th className="th">Category</th>
-                <th className="th">Unit</th>
-                <th className="th">Price</th>
-                <th className="th">Stock</th>
-                <th className="th text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-white/20 dark:bg-slate-800/30">
-                  <td className="td">
-                    <div className="flex items-center gap-2">
-                      <Layers size={16} className="text-slate-400 dark:text-slate-500" />
-                      <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
+        <>
+          {/* MOBILE CARD VIEW (< 768px) */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {filtered.map((p) => (
+              <div key={p.id} className="card p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">{p.name}</p>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {p.brand && (
+                        <span className="badge bg-indigo-50 text-indigo-700 text-xs">{p.brand}</span>
+                      )}
+                      <span className={`badge text-xs ${categoryColor[p.category] ?? categoryColor.Other}`}>
+                        {p.category}
+                      </span>
+                      {p.size && (
+                        <span className="text-xs text-slate-500 font-medium">Size: {p.size}</span>
+                      )}
                     </div>
-                  </td>
-                  <td className="td">
-                    {p.brand ? <span className="badge bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{p.brand}</span> : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td className="td">
-                    {p.size ? <span className="font-medium text-slate-600 dark:text-slate-300">{p.size}</span> : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td className="td">
-                    <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
-                      {p.category}
+                  </div>
+
+                  <div className="text-right">
+                    <span className="flex items-center text-base font-extrabold text-amber-600">
+                      ₹{(p.price ?? 0).toFixed(2)}
                     </span>
-                  </td>
-                  <td className="td">{p.unit}</td>
-                  <td className="td">
-                    <span className="flex items-center text-base font-bold text-indigo-700 dark:text-indigo-300">
-                      <IndianRupee size={14} className="text-amber-500" />
-                      {(p.price ?? 0).toFixed(2)}
-                      <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">per {p.unit}</span>
-                    </span>
-                  </td>
-                  <td className="td">
-                    <span className={`font-semibold ${p.stock_qty <= 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>
-                      {p.stock_qty}
-                    </span>
-                  </td>
-                  <td className="td text-right">
-                    <button onClick={() => openEdit(p)} className="btn-secondary">
-                      <Pencil size={14} /> Edit Price
-                    </button>
-                  </td>
+                    <span className="text-[11px] text-slate-400">per {p.unit}</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex justify-end">
+                  <button
+                    onClick={() => openEdit(p)}
+                    className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-1.5 font-semibold"
+                  >
+                    <Pencil size={14} /> Edit Price
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* DESKTOP TABLE VIEW (>= 768px) */}
+          <div className="hidden md:block table-wrap">
+            <table className="w-full">
+              <thead className="border-b border-slate-200 bg-slate-50/75">
+                <tr>
+                  <th className="th">Product</th>
+                  <th className="th">Brand</th>
+                  <th className="th">Size</th>
+                  <th className="th">Category</th>
+                  <th className="th">Unit</th>
+                  <th className="th">Price</th>
+                  <th className="th text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                    <td className="td">
+                      <div className="flex items-center gap-2">
+                        <Layers size={16} className="text-slate-400" />
+                        <span className="font-medium text-slate-800">{p.name}</span>
+                      </div>
+                    </td>
+                    <td className="td">
+                      {p.brand ? <span className="badge bg-indigo-50 text-indigo-700">{p.brand}</span> : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="td">
+                      {p.size ? <span className="font-medium text-slate-600">{p.size}</span> : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="td">
+                      <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
+                        {p.category}
+                      </span>
+                    </td>
+                    <td className="td">{p.unit}</td>
+                    <td className="td">
+                      <span className="flex items-center text-base font-bold text-slate-800">
+                        ₹{(p.price ?? 0).toFixed(2)}
+                        <span className="ml-1 text-xs font-normal text-slate-400">per {p.unit}</span>
+                      </span>
+                    </td>
+                    <td className="td text-right">
+                      <button onClick={() => openEdit(p)} className="btn-secondary py-1.5 px-3 text-xs">
+                        <Pencil size={14} /> Edit Price
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Update Price" size="sm">

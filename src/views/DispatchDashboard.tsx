@@ -270,8 +270,8 @@ export default function DispatchDashboard({
       setConfirmModalOpen(false);
       onRefresh();
       onClose();
-    } catch {
-      toast('Failed to send to billing', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'Failed to send to billing', 'error');
     }
     setCompleting(false);
   };
