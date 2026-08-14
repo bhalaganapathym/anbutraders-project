@@ -5,7 +5,7 @@ from typing import List
 from uuid import UUID
 from api.deps import get_db, get_current_active_user
 from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification
-from schemas.all import CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest, OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, NotificationCreate, NotificationResponse
+from schemas.all import CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest, OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, NotificationCreate, NotificationResponse, BulkDeleteRequest
 from core.websocket import manager
 
 router = APIRouter()
@@ -334,10 +334,24 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
 def delete_order(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == id).first()
     if order:
+        db.query(OrderItem).filter(OrderItem.order_id == id).delete()
         db.delete(order)
         db.commit()
         background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
     return {"status": "ok"}
+
+@router.post("/orders/bulk-delete")
+def bulk_delete_orders(payload: BulkDeleteRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    if not payload.ids:
+        return {"status": "ok", "deleted": 0}
+    
+    # Delete child order items first
+    db.query(OrderItem).filter(OrderItem.order_id.in_(payload.ids)).delete(synchronize_session=False)
+    # Delete orders
+    deleted = db.query(Order).filter(Order.id.in_(payload.ids)).delete(synchronize_session=False)
+    db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
+    return {"status": "ok", "deleted": deleted}
 
 # --- DISPATCHES ---
 @router.post("/dispatches", response_model=DispatchResponse)
@@ -431,10 +445,26 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
 def delete_dispatch(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
     if dispatch:
+        db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
+        db.query(Weight).filter(Weight.dispatch_id == id).delete()
+        db.query(Photo).filter(Photo.dispatch_id == id).delete()
         db.delete(dispatch)
         db.commit()
         background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     return {"status": "ok"}
+
+@router.post("/dispatches/bulk-delete")
+def bulk_delete_dispatches(payload: BulkDeleteRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    if not payload.ids:
+        return {"status": "ok", "deleted": 0}
+        
+    db.query(DispatchItem).filter(DispatchItem.dispatch_id.in_(payload.ids)).delete(synchronize_session=False)
+    db.query(Weight).filter(Weight.dispatch_id.in_(payload.ids)).delete(synchronize_session=False)
+    db.query(Photo).filter(Photo.dispatch_id.in_(payload.ids)).delete(synchronize_session=False)
+    deleted = db.query(Dispatch).filter(Dispatch.id.in_(payload.ids)).delete(synchronize_session=False)
+    db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    return {"status": "ok", "deleted": deleted}
 
 # --- NOTIFICATIONS ---
 @router.post("/notifications", response_model=NotificationResponse)
@@ -494,3 +524,21 @@ def delete_notification_image(id: UUID, background_tasks: BackgroundTasks, db: S
         background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
     
     return {"status": "ok"}
+
+@router.post("/notifications/bulk-delete")
+def bulk_delete_notifications(payload: BulkDeleteRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    if not payload.ids:
+        return {"status": "ok", "deleted": 0}
+        
+    deleted = db.query(Notification).filter(Notification.id.in_(payload.ids)).delete(synchronize_session=False)
+    db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return {"status": "ok", "deleted": deleted}
+
+@router.delete("/notifications/clear-all")
+def clear_all_notifications(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    deleted = db.query(Notification).delete(synchronize_session=False)
+    db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return {"status": "ok", "deleted": deleted}
+

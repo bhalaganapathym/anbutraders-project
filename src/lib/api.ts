@@ -1,3 +1,5 @@
+import { compressImage } from './imageCompressor';
+
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 async function fetchApi(endpoint: string, options: RequestInit = {}) {
@@ -28,8 +30,10 @@ export const api = {
   put: (endpoint: string, data: any) => fetchApi(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (endpoint: string) => fetchApi(endpoint, { method: 'DELETE' }),
   upload: async (endpoint: string, file: File) => {
+    // Compress image automatically before sending over network to save Supabase storage & Render memory
+    const optimizedFile = await compressImage(file);
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', optimizedFile);
     const token = localStorage.getItem('token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;

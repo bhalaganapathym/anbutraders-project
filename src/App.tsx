@@ -168,25 +168,43 @@ function AppContent() {
         />
       )}
 
-      {/* Main */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex shrink-0 h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur lg:px-8">
+      {/* Main Content Area */}
+      <div className="flex flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
+        <header className="sticky top-0 z-20 flex shrink-0 h-14 sm:h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-3 sm:px-4 backdrop-blur lg:px-8">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="btn-ghost p-2 lg:hidden"
+            className="btn-ghost p-2 lg:hidden text-slate-700"
             aria-label="Open menu"
           >
-            <Menu size={20} />
+            <Menu size={22} />
           </button>
-          <h1 className="text-lg font-bold capitalize text-slate-800">
-            {navItems.find((n) => n.id === activeView)?.label ?? 'Dashboard'}
-          </h1>
-          <div className="ml-auto hidden items-center gap-2 text-sm text-slate-500 sm:flex">
-            <span className="badge bg-emerald-100 text-emerald-700 capitalize">{user.role}</span>
+          
+          <div className="flex items-center gap-2">
+            <h1 className="text-base sm:text-lg font-bold capitalize text-slate-800">
+              {navItems.find((n) => n.id === activeView)?.label ?? 'Dashboard'}
+            </h1>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            {/* Quick Mobile Notification Bell */}
+            <button
+              onClick={() => navigate('notifications')}
+              className="relative p-2 rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
+              aria-label="Notifications"
+            >
+              <Bell size={20} />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500"></span>
+                </span>
+              )}
+            </button>
+            <span className="badge bg-emerald-100 text-emerald-700 capitalize text-xs sm:text-sm">{user.role}</span>
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 lg:p-8">
+        <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-8">
           {activeView === 'dashboard' && <Dashboard onNavigate={navigate} />}
           {activeView === 'customers' && <Customers />}
           {activeView === 'products' && <Products />}
@@ -199,6 +217,80 @@ function AppContent() {
           {activeView === 'settings' && <Settings />}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar (Fixed for single-thumb access on phones) */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 flex h-16 items-center justify-around border-t border-slate-200 bg-white/95 backdrop-blur px-2 shadow-lg lg:hidden">
+        <button
+          onClick={() => navigate('dashboard')}
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+            activeView === 'dashboard' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <LayoutDashboard size={20} className={activeView === 'dashboard' ? 'scale-110' : ''} />
+          <span className="text-[10px] mt-0.5 tracking-tight">Home</span>
+        </button>
+
+        {(user.role === 'admin' || user.role === 'billing') && (
+          <button
+            onClick={() => navigate('orders')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+              activeView === 'orders' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ShoppingCart size={20} className={activeView === 'orders' ? 'scale-110' : ''} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Estimate</span>
+          </button>
+        )}
+
+        {(user.role === 'admin' || user.role === 'dispatch') && (
+          <button
+            onClick={() => navigate('dispatches')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+              activeView === 'dispatches' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Truck size={20} className={activeView === 'dispatches' ? 'scale-110' : ''} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Dispatch</span>
+          </button>
+        )}
+
+        {(user.role === 'admin' || user.role === 'billing') && (
+          <button
+            onClick={() => navigate('billing')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+              activeView === 'billing' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Receipt size={20} className={activeView === 'billing' ? 'scale-110' : ''} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Billing</span>
+          </button>
+        )}
+
+        <button
+          onClick={() => navigate('notifications')}
+          className={`relative flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+            activeView === 'notifications' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <div className="relative">
+            <Bell size={20} className={activeView === 'notifications' ? 'scale-110' : ''} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] mt-0.5 tracking-tight">Alerts</span>
+        </button>
+
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="flex flex-col items-center justify-center flex-1 py-1.5 text-slate-500 hover:text-slate-800 transition"
+        >
+          <Menu size={20} />
+          <span className="text-[10px] mt-0.5 tracking-tight">More</span>
+        </button>
+      </nav>
     </div>
   );
 }

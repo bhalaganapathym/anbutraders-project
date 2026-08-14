@@ -355,3 +355,7 @@ class SystemSettingResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[UUID]
+

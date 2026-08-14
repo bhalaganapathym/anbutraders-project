@@ -134,9 +134,40 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const [newPhone, setNewPhone] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
-
   const [selBrand, setSelBrand] = useState('');
   const [selSize, setSelSize] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (items: OrderWithCustomer[]) => {
+    if (selectedIds.size === items.length && items.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((i) => i.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected estimate(s)?`)) return;
+    try {
+      await api.post('/orders/bulk-delete', { ids: Array.from(selectedIds) });
+      toast(`Deleted ${selectedIds.size} estimate(s)`, 'success');
+      setSelectedIds(new Set());
+      load();
+    } catch (e: any) {
+      toast(e?.message || 'Failed to delete estimates', 'error');
+    }
+  };
+
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -392,14 +423,35 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
         </button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by customer or phone..."
-          className="input pl-9"
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search customer or phone..."
+            className="input pl-9"
+          />
+        </div>
+
+        {filtered.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleSelectAll(filtered)}
+              className="btn-secondary text-xs py-1.5 px-3"
+            >
+              {selectedIds.size === filtered.length ? 'Deselect All' : `Select All (${filtered.length})`}
+            </button>
+            {selectedIds.size > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                className="btn-danger text-xs py-1.5 px-3 flex items-center gap-1"
+              >
+                <Trash2 size={14} /> Delete Selected ({selectedIds.size})
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -407,76 +459,239 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <ShoppingCart size={36} className="text-slate-300" />
-          <p className="text-slate-500 dark:text-slate-400 dark:text-slate-500">No estimates found.</p>
+          <p className="text-slate-500 dark:text-slate-400">No estimates found.</p>
           <button onClick={openNew} className="btn-primary">
             <Plus size={16} /> Create your first estimate
           </button>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table className="w-full">
-            <thead className="border-b border-white/20 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/30">
-              <tr>
-                <th className="th">Estimate No</th>
-                <th className="th">Customer</th>
-                <th className="th">Status</th>
-                <th className="th text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map((o) => (
-                <tr key={o.id} className="hover:bg-white/20 dark:bg-slate-800/30">
-                  <td className="td font-mono font-medium text-slate-800 dark:text-slate-200">
-                    <button onClick={() => openDetail(o)} className="hover:underline">
-                      {o.order_no || o.id.split('-')[0].toUpperCase()}
-                    </button>
-                  </td>
-                  <td className="td">
-                    <div className="font-medium text-indigo-700 dark:text-indigo-300">
-                      {o.customer?.name ?? 'Unknown'}
-                    </div>
-                  </td>
-                  <td className="td">
-                    {o.status === 'confirmed' ? (
-                      <span className="badge bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">Completed</span>
-                    ) : (
+        <>
+          {/* MOBILE CARD VIEW (< 768px) */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {filtered.map((o) => {
+              const isSelected = selectedIds.has(o.id);
+              const itemCount = o.items?.length || 0;
+              const totalEstimateAmount = (o.items || []).reduce((acc, it) => acc + (it.product?.price || 0) * (it.quantity || 1), 0);
+
+              return (
+                <div
+                  key={o.id}
+                  className={`card p-4 transition-all duration-150 relative ${
+                    isSelected ? 'ring-2 ring-amber-500 bg-amber-50/20' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(o.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                      />
                       <div>
-                        <span className="badge bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200">Pending</span>
-                        <WaitClock timestamp={o.created_at} />
-                      </div>
-                    )}
-                  </td>
-                  <td className="td text-right">
-                    <div className="flex justify-end gap-1 items-center">
-                      <button
-                        onClick={() => sendEstimateWhatsApp(o)}
-                        className="btn-ghost p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/50 dark:bg-emerald-900/30 flex items-center gap-1 text-xs font-semibold"
-                        title="Send Estimate via WhatsApp"
-                      >
-                        <Phone size={14} /> Send
-                      </button>
-                      {o.status === 'pending' && (
                         <button
-                          onClick={() => confirmOrder(o)}
-                          className="btn-ghost p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/50 dark:bg-emerald-900/30"
-                          title="Confirm estimate"
+                          onClick={() => openDetail(o)}
+                          className="font-mono font-bold text-slate-800 text-sm hover:text-amber-600 underline-offset-2 hover:underline"
                         >
-                          <CheckCircle2 size={15} />
+                          {o.order_no || o.id.split('-')[0].toUpperCase()}
                         </button>
-                      )}
-                      <button onClick={() => openEdit(o)} className="btn-ghost p-1.5" title="Edit">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => remove(o)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" title="Delete">
-                        <Trash2 size={15} />
-                      </button>
+                        <p className="text-xs text-slate-400">
+                          {new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                        </p>
+                      </div>
                     </div>
-                  </td>
+
+                    <div className="text-right">
+                      {o.status === 'confirmed' ? (
+                        <span className="badge bg-emerald-100 text-emerald-700 text-[11px]">Completed</span>
+                      ) : (
+                        <div className="flex flex-col items-end">
+                          <span className="badge bg-amber-100 text-amber-700 text-[11px]">Pending</span>
+                          <WaitClock timestamp={o.created_at} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="py-2.5 space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-800">{o.customer?.name ?? 'Unknown Customer'}</span>
+                      {o.customer?.phone && (
+                        <a
+                          href={`tel:${o.customer.phone}`}
+                          className="text-xs text-indigo-600 font-medium hover:underline flex items-center gap-1"
+                        >
+                          <Phone size={12} /> {o.customer.phone}
+                        </a>
+                      )}
+                    </div>
+
+                    {o.delivery_address && (
+                      <p className="text-xs text-slate-500 line-clamp-1 flex items-center gap-1">
+                        <MapPin size={12} className="shrink-0 text-slate-400" /> {o.delivery_address}
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs pt-1 text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5">
+                      <span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
+                      {totalEstimateAmount > 0 && (
+                        <span className="font-bold text-slate-800">Est. ₹{totalEstimateAmount.toLocaleString('en-IN')}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Touch Action Bar */}
+                  <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
+                    <button
+                      onClick={() => sendEstimateWhatsApp(o)}
+                      className="btn-secondary flex-1 py-1.5 px-2 text-xs text-emerald-700 font-semibold flex items-center justify-center gap-1"
+                    >
+                      <Phone size={13} /> WhatsApp
+                    </button>
+
+                    {o.status === 'pending' && (
+                      <button
+                        onClick={() => confirmOrder(o)}
+                        className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1"
+                        title="Confirm estimate"
+                      >
+                        <CheckCircle2 size={13} /> Confirm
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => openEdit(o)}
+                      className="btn-secondary py-1.5 px-2 text-xs"
+                      title="Edit"
+                    >
+                      <Pencil size={13} />
+                    </button>
+
+                    <button
+                      onClick={() => remove(o)}
+                      className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"
+                      title="Delete"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* DESKTOP TABLE VIEW (>= 768px) */}
+          <div className="hidden md:block table-wrap">
+            <table className="w-full">
+              <thead className="border-b border-slate-200 bg-slate-50/75">
+                <tr>
+                  <th className="th w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === filtered.length && filtered.length > 0}
+                      onChange={() => toggleSelectAll(filtered)}
+                      className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="th">Estimate No</th>
+                  <th className="th">Customer</th>
+                  <th className="th">Status</th>
+                  <th className="th text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((o) => {
+                  const isSelected = selectedIds.has(o.id);
+                  return (
+                    <tr
+                      key={o.id}
+                      className={`hover:bg-slate-50/60 transition ${isSelected ? 'bg-amber-50/30' : ''}`}
+                    >
+                      <td className="td">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(o.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        />
+                      </td>
+                      <td className="td font-mono font-medium text-slate-800">
+                        <button onClick={() => openDetail(o)} className="hover:underline text-left">
+                          {o.order_no || o.id.split('-')[0].toUpperCase()}
+                        </button>
+                      </td>
+                      <td className="td">
+                        <div className="font-medium text-slate-800">
+                          {o.customer?.name ?? 'Unknown'}
+                        </div>
+                        {o.customer?.phone && (
+                          <div className="text-xs text-slate-400">{o.customer.phone}</div>
+                        )}
+                      </td>
+                      <td className="td">
+                        {o.status === 'confirmed' ? (
+                          <span className="badge bg-emerald-100 text-emerald-700">Completed</span>
+                        ) : (
+                          <div>
+                            <span className="badge bg-amber-100 text-amber-700">Pending</span>
+                            <WaitClock timestamp={o.created_at} />
+                          </div>
+                        )}
+                      </td>
+                      <td className="td text-right">
+                        <div className="flex justify-end gap-1 items-center">
+                          <button
+                            onClick={() => sendEstimateWhatsApp(o)}
+                            className="btn-ghost p-1.5 text-emerald-600 hover:bg-emerald-50 flex items-center gap-1 text-xs font-semibold"
+                            title="Send Estimate via WhatsApp"
+                          >
+                            <Phone size={14} /> Send
+                          </button>
+                          {o.status === 'pending' && (
+                            <button
+                              onClick={() => confirmOrder(o)}
+                              className="btn-ghost p-1.5 text-emerald-600 hover:bg-emerald-50"
+                              title="Confirm estimate"
+                            >
+                              <CheckCircle2 size={15} />
+                            </button>
+                          )}
+                          <button onClick={() => openEdit(o)} className="btn-ghost p-1.5" title="Edit">
+                            <Pencil size={15} />
+                          </button>
+                          <button onClick={() => remove(o)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" title="Delete">
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Floating Bulk Action Bar */}
+          {selectedIds.size > 0 && (
+            <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in border border-slate-700">
+              <span className="text-xs font-semibold">
+                {selectedIds.size} {selectedIds.size === 1 ? 'estimate' : 'estimates'} selected
+              </span>
+              <button
+                onClick={handleBulkDelete}
+                className="btn-danger py-1 px-3 text-xs flex items-center gap-1 rounded-lg"
+              >
+                <Trash2 size={13} /> Delete Selected
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-slate-400 hover:text-white underline ml-1"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Estimate' : 'New Estimate'} size="lg">
