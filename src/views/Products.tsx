@@ -40,6 +40,10 @@ export default function Products() {
     ])
   );
 
+  const brandProducts = products.filter(
+    (p) => (p.brand || '').toLowerCase() === selectedBrand.toLowerCase()
+  );
+
   const handleBrandPriceAdjust = async () => {
     const deltaNum = parseFloat(priceDelta);
     if (isNaN(deltaNum) || deltaNum === 0) {
