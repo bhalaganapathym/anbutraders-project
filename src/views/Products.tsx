@@ -5,7 +5,6 @@ import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box, Upload, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import ProductTable from '@/components/ProductTable';
 
 type Form = { name: string; category: string; unit: string; price: string; stock_qty: string; brand: string; size: string; standard_weight: string; weight_tolerance: string };
 const empty: Form = { name: '', category: 'Steel', unit: 'piece', price: '0', stock_qty: '0', brand: '', size: '', standard_weight: '0', weight_tolerance: '' };
@@ -352,6 +351,8 @@ export default function Products() {
                 <div>
                   <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
                     <Package size={16} className="text-indigo-600 dark:text-indigo-400" /> Other Products
+                    <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{otherProducts.length}</span>
+                  </h2>
                   <ProductTable products={otherProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} canEditTolerance={canEditTolerance} onUpdateTolerance={updateTolerance} />
                 </div>
               )}
