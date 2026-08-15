@@ -27,18 +27,7 @@ def create_sale(
         
         # 2. Process Items
         for item_in in sale_in.items:
-            # Check stock
-            product = db.query(Product).filter(Product.id == item_in.product_id).with_for_update().first()
-            if not product:
-                raise HTTPException(status_code=404, detail=f"Product {item_in.product_id} not found")
-            
-            if product.stock_qty < item_in.quantity:
-                raise HTTPException(status_code=400, detail=f"Not enough stock for {product.name}")
-            
-            # Deduct stock
-            product.stock_qty -= item_in.quantity
-            
-            # Create SaleItem
+            # Process item subtotal
             subtotal = item_in.quantity * item_in.unit_price
             total_amount += subtotal
             

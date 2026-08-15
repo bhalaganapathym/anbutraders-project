@@ -468,16 +468,6 @@ export default function Products() {
                 step="0.01"
               />
             </div>
-            <div>
-              <label className="label">Stock Quantity</label>
-              <input
-                type="number"
-                value={form.stock_qty}
-                onChange={(e) => setForm({ ...form, stock_qty: e.target.value })}
-                className="input"
-                min="0"
-              />
-            </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>

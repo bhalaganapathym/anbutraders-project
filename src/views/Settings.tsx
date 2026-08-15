@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { Settings as SettingsIcon, Save, RefreshCw, MessageSquare, HardHat, Check, RotateCcw, Copy } from 'lucide-react';
-import { DEFAULT_WHATSAPP_TEMPLATE, formatWhatsAppMessage, type WhatsAppTemplateData } from '@/lib/whatsapp';
+import { Settings as SettingsIcon, Save, RefreshCw, MessageSquare, HardHat, Check, RotateCcw, Image as ImageIcon } from 'lucide-react';
+import { DEFAULT_WHATSAPP_TEMPLATE, DEFAULT_COMPANY_IMAGE_URL, formatWhatsAppMessage, type WhatsAppTemplateData } from '@/lib/whatsapp';
 
 export default function Settings() {
   const [threshold, setThreshold] = useState<string>('3');
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>(DEFAULT_WHATSAPP_TEMPLATE);
   const [companyName, setCompanyName] = useState<string>('ANBU TRADERS');
   const [companyPhone, setCompanyPhone] = useState<string>('0413-2964204, 9626325204');
+  const [companyImageUrl, setCompanyImageUrl] = useState<string>(DEFAULT_COMPANY_IMAGE_URL);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -25,6 +26,7 @@ export default function Settings() {
     { tag: '{balance_to_collect}', desc: 'Balance to Collect' },
     { tag: '{items_summary}', desc: 'Items Summary' },
     { tag: '{delivery_address}', desc: 'Site Location' },
+    { tag: '{image_url}', desc: 'Company Image / Logo URL' },
   ];
 
   const sampleData: WhatsAppTemplateData = {
@@ -38,6 +40,7 @@ export default function Settings() {
     paid_amount: 400.0,
     balance_to_collect: 575.0,
     delivery_address: 'No.4/5 Pondy Mailam Road, Vanur',
+    image_url: companyImageUrl,
     company_name: companyName,
     company_phone: companyPhone,
   };
@@ -52,6 +55,7 @@ export default function Settings() {
           if (s.key === 'whatsapp_dispatch_template' && s.value) setWhatsappTemplate(s.value);
           if (s.key === 'company_name' && s.value) setCompanyName(s.value);
           if (s.key === 'company_phone' && s.value) setCompanyPhone(s.value);
+          if (s.key === 'company_image_url' && s.value) setCompanyImageUrl(s.value);
         }
       }
     } catch {
@@ -101,6 +105,10 @@ export default function Settings() {
           value: companyPhone,
           description: 'Trading company support phone numbers'
         }),
+        api.put('/settings/company_image_url', {
+          value: companyImageUrl,
+          description: 'Official company logo / banner image URL for WhatsApp previews'
+        }),
       ]);
       toast('All settings & WhatsApp template saved successfully', 'success');
     } catch {
@@ -123,7 +131,7 @@ export default function Settings() {
             System & Notification Settings
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Configure dispatch thresholds and customer WhatsApp templates with company branding.
+            Configure company branding, WhatsApp templates with logo, and dispatch thresholds.
           </p>
         </div>
         <button onClick={fetchSettings} className="p-2 text-slate-500 hover:text-amber-600 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -139,13 +147,16 @@ export default function Settings() {
               <MessageSquare size={20} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">WhatsApp Customer Alert Template</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Personalize the 1-tap WhatsApp message sent to customers upon dispatch.</p>
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">WhatsApp Customer Alert & Logo Template</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Personalize message content with Anbu Traders logo/image link sent to customers upon dispatch.</p>
             </div>
           </div>
 
           <button
-            onClick={() => setWhatsappTemplate(DEFAULT_WHATSAPP_TEMPLATE)}
+            onClick={() => {
+              setWhatsappTemplate(DEFAULT_WHATSAPP_TEMPLATE);
+              setCompanyImageUrl(DEFAULT_COMPANY_IMAGE_URL);
+            }}
             className="text-xs font-semibold text-slate-500 hover:text-rose-600 flex items-center gap-1 bg-white dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700"
             title="Reset to default template"
           >
@@ -178,12 +189,26 @@ export default function Settings() {
             </div>
 
             <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                <ImageIcon size={14} className="text-amber-600" /> Company Logo / Image URL
+              </label>
+              <input
+                type="url"
+                value={companyImageUrl}
+                onChange={(e) => setCompanyImageUrl(e.target.value)}
+                placeholder="https://... (direct image link)"
+                className="input text-xs font-mono"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">This image URL unfurls in WhatsApp showing the Anbu Traders logo to the customer.</p>
+            </div>
+
+            <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                 Message Content
               </label>
               <textarea
                 ref={textareaRef}
-                rows={12}
+                rows={10}
                 value={whatsappTemplate}
                 onChange={(e) => setWhatsappTemplate(e.target.value)}
                 className="input font-mono text-xs leading-relaxed"
@@ -210,18 +235,22 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Right: Live WhatsApp Chat Bubble Preview with Anbu Traders Logo */}
+          {/* Right: Live WhatsApp Chat Bubble Preview with Anbu Traders Image */}
           <div className="flex flex-col">
             <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center justify-between">
               <span>Customer WhatsApp Live Preview</span>
-              <span className="text-[11px] font-normal text-slate-400">Simulated Sample</span>
+              <span className="text-[11px] font-normal text-slate-400">Simulated Rich Media Preview</span>
             </p>
 
             <div className="flex-1 bg-[#EFEAE2] dark:bg-[#121b22] rounded-xl p-4 border border-[#e0d6c9] dark:border-slate-800 flex flex-col justify-start relative shadow-inner overflow-hidden min-h-[360px]">
               {/* WhatsApp Chat Header */}
               <div className="bg-[#008069] text-white p-2.5 rounded-lg flex items-center gap-2.5 mb-3 shadow-sm">
-                <div className="h-8 w-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-inner">
-                  <HardHat size={18} />
+                <div className="h-8 w-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-inner overflow-hidden">
+                  {companyImageUrl ? (
+                    <img src={companyImageUrl} alt="Logo" className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  ) : (
+                    <HardHat size={18} />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-xs truncate">{companyName}</p>
@@ -231,6 +260,18 @@ export default function Settings() {
 
               {/* Message Balloon */}
               <div className="self-end max-w-[95%] sm:max-w-[85%] bg-[#D9FDD3] dark:bg-[#005c4b] text-slate-900 dark:text-slate-100 rounded-2xl rounded-tr-sm p-3.5 shadow text-xs whitespace-pre-wrap font-sans leading-relaxed border border-emerald-200/40">
+                {/* Media Preview Card */}
+                {companyImageUrl && (
+                  <div className="mb-2.5 bg-white dark:bg-slate-900/80 rounded-xl overflow-hidden border border-emerald-300/50 dark:border-slate-700 shadow-sm">
+                    <div className="h-28 w-full bg-amber-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                      <img src={companyImageUrl} alt="Anbu Traders" className="h-full w-full object-contain p-1" />
+                    </div>
+                    <div className="p-2 text-[11px] font-bold text-slate-800 dark:text-slate-200 border-t border-slate-100 dark:border-slate-800">
+                      🏢 {companyName} Official Dispatch
+                    </div>
+                  </div>
+                )}
+
                 {previewMessage}
                 <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 dark:text-emerald-200/80 mt-1">
                   <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>

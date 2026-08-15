@@ -1,5 +1,7 @@
 import { type Dispatch, type Bill, type Customer } from './api';
 
+export const DEFAULT_COMPANY_IMAGE_URL = 'https://raw.githubusercontent.com/bhalaganapathym/anbutraders-project/main/public/pwa-512x512.png';
+
 export const DEFAULT_WHATSAPP_TEMPLATE = `🏗️ *ANBU TRADERS - Order Dispatched* 🚚
 ----------------------------------------
 Dear *{customer_name}*,
@@ -15,6 +17,9 @@ Your materials (*{dispatch_no}*) are out for delivery!
 
 📍 *Delivery Location:* {delivery_address}
 ----------------------------------------
+🖼️ *Company Logo & Order Verification:*
+{image_url}
+
 📞 *Contact Office:* 0413-2964204 / 9626325204
 _Thank you for choosing Anbu Traders!_`;
 
@@ -29,6 +34,7 @@ export interface WhatsAppTemplateData {
   paid_amount?: string | number;
   balance_to_collect?: string | number;
   delivery_address?: string;
+  image_url?: string;
   company_name?: string;
   company_phone?: string;
 }
@@ -50,6 +56,7 @@ export function formatWhatsAppMessage(
     '{paid_amount}': typeof data.paid_amount === 'number' ? data.paid_amount.toFixed(2) : (data.paid_amount || '0.00'),
     '{balance_to_collect}': typeof data.balance_to_collect === 'number' ? data.balance_to_collect.toFixed(2) : (data.balance_to_collect || '0.00'),
     '{delivery_address}': data.delivery_address || 'As per order',
+    '{image_url}': data.image_url || DEFAULT_COMPANY_IMAGE_URL,
     '{company_name}': data.company_name || 'ANBU TRADERS',
     '{company_phone}': data.company_phone || '0413-2964204 / 9626325204',
   };
@@ -65,7 +72,8 @@ export function buildDispatchWhatsAppMessage(
   dispatch: Dispatch,
   template?: string,
   customer?: Customer | null,
-  bill?: Bill | null
+  bill?: Bill | null,
+  companyImageUrl?: string
 ): string {
   const custName = customer?.name || dispatch.customer?.name || 'Customer';
   const itemsStr = dispatch.items?.map(it => `${it.quantity} ${it.unit || 'nos'} ${it.product_name}`).join(', ') || 'Building Materials';
@@ -85,6 +93,7 @@ export function buildDispatchWhatsAppMessage(
     paid_amount: paid,
     balance_to_collect: balance,
     delivery_address: dispatch.delivery_address || dispatch.customer?.address || 'Site Delivery',
+    image_url: companyImageUrl || DEFAULT_COMPANY_IMAGE_URL,
     company_name: 'ANBU TRADERS',
     company_phone: '0413-2964204 / 9626325204',
   };
@@ -93,7 +102,6 @@ export function buildDispatchWhatsAppMessage(
 }
 
 export function openWhatsApp(phone: string, text: string): void {
-  // Clean phone number (strip spaces, dashes, add +91 country code if standard 10 digits)
   let cleanPhone = (phone || '').replace(/[^0-9]/g, '');
   if (cleanPhone.length === 10) {
     cleanPhone = '91' + cleanPhone;
