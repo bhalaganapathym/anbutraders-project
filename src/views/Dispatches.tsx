@@ -8,10 +8,11 @@ import {
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import { useToast } from '@/components/Toast';
 import {
-  Plus, Search, Truck, Trash2, Package, AlertCircle, Clock
+  Plus, Search, Truck, Trash2, Package, AlertCircle, Clock, MessageSquare
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import DispatchDashboard from './DispatchDashboard';
+import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
 
 type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string } };
 type ConfirmedOrder = Order & { customer: { name: string } | null };
@@ -187,6 +188,16 @@ export default function Dispatches() {
     setCreating(false);
   };
 
+  const handleWhatsAppAlert = (d: DispatchRow) => {
+    const phone = d.customer?.phone || '';
+    if (!phone) {
+      toast('Customer phone number not available', 'error');
+      return;
+    }
+    const msg = buildDispatchWhatsAppMessage(d, undefined, d.customer, d.bill);
+    openWhatsApp(phone, msg);
+  };
+
   const removeDispatch = async (d: DispatchRow) => {
     if (!confirm(`Delete dispatch ${d.dispatch_no}?`)) return;
     try {
@@ -337,13 +348,23 @@ export default function Dispatches() {
                   </div>
 
                   {/* Touch Action Bar */}
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                     <button
                       onClick={() => setDetail(d)}
                       className="btn-secondary flex-1 py-2 px-3 text-xs font-semibold flex items-center justify-center gap-1.5"
                     >
                       <Package size={14} /> Open Verification
                     </button>
+
+                    {d.customer?.phone && (
+                      <button
+                        onClick={() => handleWhatsAppAlert(d)}
+                        className="btn-ghost p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg"
+                        title="Send WhatsApp Update"
+                      >
+                        <MessageSquare size={16} />
+                      </button>
+                    )}
 
                     <button
                       onClick={() => removeDispatch(d)}
@@ -389,7 +410,7 @@ export default function Dispatches() {
                     >
                       <td className="td">
                         <input
-                          type="checkbox"
+                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(d.id)}
                           className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
@@ -416,6 +437,15 @@ export default function Dispatches() {
                       </td>
                       <td className="td text-right">
                         <div className="flex justify-end gap-1">
+                          {d.customer?.phone && (
+                            <button
+                              onClick={() => handleWhatsAppAlert(d)}
+                              className="btn-ghost p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                              title="Send WhatsApp Update"
+                            >
+                              <MessageSquare size={15} />
+                            </button>
+                          )}
                           <button onClick={() => setDetail(d)} className="btn-ghost p-1.5" title="Verify / Complete">
                             <Package size={15} />
                           </button>

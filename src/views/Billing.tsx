@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { api, type Dispatch, type Driver, type Customer } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { FileText, Download, CreditCard, User as UserIcon, IndianRupee, AlertCircle } from 'lucide-react';
+import { FileText, Download, CreditCard, User as UserIcon, IndianRupee, AlertCircle, MessageSquare } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { useRealtime } from '@/lib/useRealtime';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
 
 function numberToWords(num: number): string {
   if (num === 0) return 'INR Zero Only';
@@ -167,6 +168,30 @@ export default function Billing() {
     } finally {
       setDownloadingPdf(false);
     }
+  };
+
+  const handleWhatsAppAlert = () => {
+    if (!selectedDispatch) return;
+    const customer = customers.find(c => c.id === selectedDispatch.customer_id) || selectedDispatch.customer;
+    const phone = customer?.phone || '';
+    if (!phone) {
+      toast('Customer phone number not found', 'error');
+      return;
+    }
+    const driver = drivers.find(d => d.id === selectedDriver);
+    const dispatchWithDriver = {
+      ...selectedDispatch,
+      driver_name: driver?.name || selectedDispatch.driver_name,
+      driver_mobile: driver?.phone_number || selectedDispatch.driver_mobile,
+      vehicle_number: driver?.vehicle_number || selectedDispatch.vehicle_number,
+    };
+    const billData = {
+      total_amount: (parseFloat(paidAmount) || 0) + (parseFloat(toCollectAmount) || 0),
+      paid_amount: parseFloat(paidAmount) || 0,
+      pending_amount: parseFloat(toCollectAmount) || 0,
+    } as any;
+    const msg = buildDispatchWhatsAppMessage(dispatchWithDriver, undefined, customer, billData);
+    openWhatsApp(phone, msg);
   };
 
   if (loading) return <div className="p-6">Loading billing...</div>;
@@ -359,25 +384,34 @@ export default function Billing() {
             </div>
 
             <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <button
-                onClick={handleDownloadPDF}
-                disabled={downloadingPdf}
-                className="btn-secondary flex items-center gap-1.5"
-              >
-                <Download size={16} /> {downloadingPdf ? 'Generating PDF...' : 'Download PDF (Anbu Groups Format)'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={downloadingPdf}
+                  className="btn-secondary flex items-center gap-1.5 text-xs"
+                >
+                  <Download size={15} /> {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleWhatsAppAlert}
+                  className="btn-secondary text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 flex items-center gap-1.5 text-xs font-bold"
+                >
+                  <MessageSquare size={15} /> WhatsApp Alert
+                </button>
+              </div>
 
               <div className="flex gap-2">
                 <button
                   onClick={() => setSelectedDispatch(null)}
-                  className="btn-secondary"
+                  className="btn-secondary text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleCreateBill}
                   disabled={creatingBill}
-                  className="btn-primary bg-blue-600 hover:bg-blue-700"
+                  className="btn-primary bg-blue-600 hover:bg-blue-700 text-xs font-bold"
                 >
                   {creatingBill ? 'Creating...' : 'Confirm & Send to Dispatch'}
                 </button>
