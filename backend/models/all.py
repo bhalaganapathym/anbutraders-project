@@ -167,6 +167,7 @@ class Bill(Base):
     driver_id = Column(UUID(as_uuid=True), ForeignKey("drivers.id", ondelete="SET NULL"), nullable=True, index=True)
     payment_method = Column(String, nullable=False)
     total_amount = Column(Numeric, default=0, nullable=False)
+    paid_amount = Column(Numeric, default=0, nullable=False)
     pending_amount = Column(Numeric, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 

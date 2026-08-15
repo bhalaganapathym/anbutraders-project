@@ -44,6 +44,7 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
     
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "bills"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
     
     return bill
 

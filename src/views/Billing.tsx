@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api, type Dispatch, type Driver, type Customer } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { FileText, Download, CreditCard, User as UserIcon } from 'lucide-react';
+import { FileText, Download, CreditCard, User as UserIcon, IndianRupee, AlertCircle } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { useRealtime } from '@/lib/useRealtime';
 import jsPDF from 'jspdf';
@@ -34,6 +34,8 @@ export default function Billing() {
   const [selectedDispatch, setSelectedDispatch] = useState<Dispatch | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
+  const [paidAmount, setPaidAmount] = useState<string>('');
+  const [toCollectAmount, setToCollectAmount] = useState<string>('');
   const [creatingBill, setCreatingBill] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -71,6 +73,45 @@ export default function Billing() {
 
   const selectedCustomer = customers.find(c => c.id === selectedDispatch?.customer_id);
 
+  // Auto-calculate amounts when selectedDispatch or paymentMethod changes
+  useEffect(() => {
+    if (!selectedDispatch) return;
+    const total = selectedDispatch.items?.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0) || 0;
+    
+    if (paymentMethod === 'full payment done') {
+      setPaidAmount(String(total));
+      setToCollectAmount('0');
+    } else if (paymentMethod === 'full payment on site' || paymentMethod === 'credit') {
+      setPaidAmount('0');
+      setToCollectAmount(String(total));
+    } else if (paymentMethod.includes('partial')) {
+      // Partial payment default (if empty or previously equal to total)
+      const currentPaid = Number(paidAmount) || 0;
+      if (currentPaid > 0 && currentPaid < total) {
+        setToCollectAmount(String(Math.max(0, total - currentPaid)));
+      } else {
+        setPaidAmount('0');
+        setToCollectAmount(String(total));
+      }
+    }
+  }, [selectedDispatch, paymentMethod]);
+
+  const handlePaidAmountChange = (val: string) => {
+    setPaidAmount(val);
+    const total = selectedDispatch?.items?.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0) || 0;
+    const p = parseFloat(val) || 0;
+    const remaining = Math.max(0, total - p);
+    setToCollectAmount(String(remaining));
+  };
+
+  const handleToCollectAmountChange = (val: string) => {
+    setToCollectAmount(val);
+    const total = selectedDispatch?.items?.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0) || 0;
+    const toCol = parseFloat(val) || 0;
+    const p = Math.max(0, total - toCol);
+    setPaidAmount(String(p));
+  };
+
   const handleCreateBill = async () => {
     if (!selectedDispatch) return;
     if (!selectedDriver) {
@@ -85,6 +126,9 @@ export default function Billing() {
       totalAmount += (item.price || 0) * (item.quantity || 1);
     });
 
+    const paidVal = parseFloat(paidAmount) || 0;
+    const toCollectVal = parseFloat(toCollectAmount) || 0;
+
     try {
       await api.post('/bills', {
         dispatch_id: selectedDispatch.id,
@@ -93,7 +137,8 @@ export default function Billing() {
         driver_id: selectedDriver || null,
         payment_method: paymentMethod,
         total_amount: totalAmount,
-        pending_amount: paymentMethod.includes('partial') || paymentMethod.includes('credit') ? totalAmount : 0,
+        paid_amount: paidVal,
+        pending_amount: toCollectVal,
       });
       toast('Bill created successfully. Sent back to dispatch!', 'success');
       setSelectedDispatch(null);
@@ -225,7 +270,7 @@ export default function Billing() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                   <UserIcon size={16} /> Assign Driver *
@@ -257,6 +302,59 @@ export default function Billing() {
                     <option key={pm} value={pm}>{pm.toUpperCase()}</option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* Payment Details / Amount Paid & To Collect Breakdown */}
+            <div className="bg-amber-50/50 dark:bg-slate-900 border border-amber-200/80 dark:border-slate-700 p-4 rounded-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <IndianRupee size={14} className="text-amber-600" />
+                  Payment & Collection Breakdown
+                </span>
+                <span className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                  Total Bill: ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500"></span> Amount Paid / Advance Received (₹)
+                  </label>
+                  <div className="relative">
+                    <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={paidAmount}
+                      onChange={(e) => handlePaidAmountChange(e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="any"
+                      className="input pl-8 font-bold text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">Amount received by cashier / advance</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-rose-500"></span> Amount to Collect on Site / Balance (₹)
+                  </label>
+                  <div className="relative">
+                    <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={toCollectAmount}
+                      onChange={(e) => handleToCollectAmountChange(e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="any"
+                      className="input pl-8 font-bold text-rose-700 dark:text-rose-400 bg-white dark:bg-slate-800"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">Amount driver must collect upon delivery</p>
+                </div>
               </div>
             </div>
 
@@ -350,7 +448,23 @@ export default function Billing() {
 
                 <div className="space-y-1 pt-1 text-[11px]">
                   <p><strong>Amount Chargeable (in words):</strong> {numberToWords(totalAmount)}</p>
-                  <p className="text-amber-800 font-bold"><strong>Customer Pending Dues:</strong> ₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
+
+                  <div className="grid grid-cols-3 gap-2 border border-black p-2 my-2 bg-gray-50 text-[11px]">
+                    <div>
+                      <p className="text-[10px] text-gray-600">Total Invoice Amount</p>
+                      <p className="font-bold text-sm">₹{totalAmount.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-600">Amount Paid / Received</p>
+                      <p className="font-bold text-sm text-green-800">₹{(parseFloat(paidAmount) || 0).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-600">Balance to Collect on Site</p>
+                      <p className="font-bold text-sm text-red-800">₹{(parseFloat(toCollectAmount) || 0).toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-amber-800 font-bold"><strong>Customer Prior Pending Dues:</strong> ₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
                   <p><strong>Payment Mode:</strong> {paymentMethod.toUpperCase()}</p>
                 </div>
 

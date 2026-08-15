@@ -325,7 +325,8 @@ class BillCreate(BaseModel):
     driver_id: Optional[UUID] = None
     payment_method: str
     total_amount: float
-    pending_amount: float
+    paid_amount: Optional[float] = 0.0
+    pending_amount: Optional[float] = 0.0
 
 class BillResponse(BaseModel):
     id: UUID
@@ -335,7 +336,8 @@ class BillResponse(BaseModel):
     driver_id: Optional[UUID] = None
     payment_method: str
     total_amount: float
-    pending_amount: float
+    paid_amount: float = 0.0
+    pending_amount: float = 0.0
     created_at: datetime
     
     driver: Optional[DriverResponse] = None

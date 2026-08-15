@@ -115,6 +115,7 @@ export type Bill = {
   driver_id: string | null;
   payment_method: string;
   total_amount: number;
+  paid_amount: number;
   pending_amount: number;
   created_at: string;
   driver?: Driver | null;
