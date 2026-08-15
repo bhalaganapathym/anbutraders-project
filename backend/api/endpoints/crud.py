@@ -502,14 +502,22 @@ def update_notification(id: UUID, notification_in: NotificationCreate, backgroun
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
     return notification
 
-@router.delete("/notifications/{id}")
-def delete_notification(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    notification = db.query(Notification).filter(Notification.id == id).first()
-    if notification:
-        db.delete(notification)
-        db.commit()
-        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-    return {"status": "ok"}
+@router.post("/notifications/bulk-delete")
+def bulk_delete_notifications(payload: BulkDeleteRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    if not payload.ids:
+        return {"status": "ok", "deleted": 0}
+        
+    deleted = db.query(Notification).filter(Notification.id.in_(payload.ids)).delete(synchronize_session=False)
+    db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return {"status": "ok", "deleted": deleted}
+
+@router.delete("/notifications/clear-all")
+def clear_all_notifications(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    deleted = db.query(Notification).delete(synchronize_session=False)
+    db.commit()
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return {"status": "ok", "deleted": deleted}
 
 @router.delete("/notifications/{id}/image")
 def delete_notification_image(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -531,20 +539,12 @@ def delete_notification_image(id: UUID, background_tasks: BackgroundTasks, db: S
     
     return {"status": "ok"}
 
-@router.post("/notifications/bulk-delete")
-def bulk_delete_notifications(payload: BulkDeleteRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    if not payload.ids:
-        return {"status": "ok", "deleted": 0}
-        
-    deleted = db.query(Notification).filter(Notification.id.in_(payload.ids)).delete(synchronize_session=False)
-    db.commit()
-    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-    return {"status": "ok", "deleted": deleted}
-
-@router.delete("/notifications/clear-all")
-def clear_all_notifications(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    deleted = db.query(Notification).delete(synchronize_session=False)
-    db.commit()
-    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-    return {"status": "ok", "deleted": deleted}
+@router.delete("/notifications/{id}")
+def delete_notification(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    notification = db.query(Notification).filter(Notification.id == id).first()
+    if notification:
+        db.delete(notification)
+        db.commit()
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return {"status": "ok"}
 
