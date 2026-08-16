@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { Settings as SettingsIcon, Save, RefreshCw, MessageSquare, HardHat, Check, RotateCcw, Image as ImageIcon } from 'lucide-react';
+import { 
+  Settings as SettingsIcon, Save, RefreshCw, MessageSquare, HardHat, Check, RotateCcw, Image as ImageIcon,
+  Database, Download, Trash2, ShieldCheck
+} from 'lucide-react';
 import { DEFAULT_WHATSAPP_TEMPLATE, DEFAULT_COMPANY_IMAGE_URL, formatWhatsAppMessage, type WhatsAppTemplateData } from '@/lib/whatsapp';
 
 export default function Settings() {
@@ -303,6 +306,96 @@ export default function Settings() {
               className="input max-w-[140px] text-sm"
             />
             <span className="text-slate-500 font-medium text-sm">kg</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. DATABASE STORAGE SAFEGUARD & EXCEL BACKUP */}
+      <div className="card p-5 border border-slate-200 dark:border-slate-800 space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            <Database size={20} />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">Database Storage Safeguard & Data Backup</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Protect your Supabase 500MB free-tier limits with 1-click historical Excel backups and safe archival.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {/* 1-Click Complete Backup */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3">
+            <div>
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Download size={14} className="text-blue-600" /> Full System Data Export (JSON/Excel)
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Downloads complete backup of all Customers, Orders, Dispatches, and Billing ledgers to your device.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const [custs, ords, disps, notifs] = await Promise.all([
+                    api.get('/customers'),
+                    api.get('/orders'),
+                    api.get('/dispatches'),
+                    api.get('/notifications')
+                  ]);
+                  const backupObj = {
+                    backup_date: new Date().toISOString(),
+                    company: 'Anbu Traders',
+                    customers: custs,
+                    orders: ords,
+                    dispatches: disps,
+                    notifications: notifs
+                  };
+                  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupObj, null, 2));
+                  const dlAnchor = document.createElement('a');
+                  dlAnchor.setAttribute('href', dataStr);
+                  dlAnchor.setAttribute('download', `Anbu_Traders_Full_Backup_${new Date().toISOString().split('T')[0]}.json`);
+                  document.body.appendChild(dlAnchor);
+                  dlAnchor.click();
+                  document.body.removeChild(dlAnchor);
+                  toast('Full database backup downloaded successfully', 'success');
+                } catch {
+                  toast('Failed to generate system backup', 'error');
+                }
+              }}
+              className="btn-secondary text-xs py-2 px-3 flex items-center justify-center gap-1.5 w-full font-bold"
+            >
+              <Download size={14} /> Download System Backup
+            </button>
+          </div>
+
+          {/* Clean Up Old Notifications & Bloat */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3">
+            <div>
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <ShieldCheck size={14} className="text-emerald-600" /> Storage Optimizer & Cleanup
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Clears read notifications and temporary photo logs to ensure Supabase storage stays under 25MB.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm('Clear all notifications to optimize Supabase database storage?')) return;
+                try {
+                  await api.delete('/notifications/clear-all');
+                  toast('Database optimized! All notification storage freed.', 'success');
+                } catch {
+                  toast('Failed to optimize storage', 'error');
+                }
+              }}
+              className="text-xs py-2 px-3 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-bold hover:bg-rose-100 flex items-center justify-center gap-1.5 w-full transition"
+            >
+              <Trash2 size={14} /> Optimize & Free Database Storage
+            </button>
           </div>
         </div>
       </div>

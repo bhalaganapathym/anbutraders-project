@@ -17,6 +17,9 @@ Your materials (*{dispatch_no}*) are out for delivery!
 
 📍 *Delivery Location:* {delivery_address}
 ----------------------------------------
+🔗 *Live Tracking & Digital Receipt:*
+{tracking_url}
+
 🖼️ *Company Logo & Order Verification:*
 {image_url}
 
@@ -34,6 +37,7 @@ export interface WhatsAppTemplateData {
   paid_amount?: string | number;
   balance_to_collect?: string | number;
   delivery_address?: string;
+  tracking_url?: string;
   image_url?: string;
   company_name?: string;
   company_phone?: string;
@@ -44,6 +48,10 @@ export function formatWhatsAppMessage(
   data: WhatsAppTemplateData
 ): string {
   let msg = template || DEFAULT_WHATSAPP_TEMPLATE;
+
+  const defaultTrackUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/#/track/${data.dispatch_no || 'DSP-0001'}`
+    : `https://anbutraders.com/#/track/${data.dispatch_no || 'DSP-0001'}`;
 
   const map: Record<string, string> = {
     '{customer_name}': data.customer_name || 'Valued Customer',
@@ -56,6 +64,7 @@ export function formatWhatsAppMessage(
     '{paid_amount}': typeof data.paid_amount === 'number' ? data.paid_amount.toFixed(2) : (data.paid_amount || '0.00'),
     '{balance_to_collect}': typeof data.balance_to_collect === 'number' ? data.balance_to_collect.toFixed(2) : (data.balance_to_collect || '0.00'),
     '{delivery_address}': data.delivery_address || 'As per order',
+    '{tracking_url}': data.tracking_url || defaultTrackUrl,
     '{image_url}': data.image_url || DEFAULT_COMPANY_IMAGE_URL,
     '{company_name}': data.company_name || 'ANBU TRADERS',
     '{company_phone}': data.company_phone || '0413-2964204 / 9626325204',
@@ -82,6 +91,10 @@ export function buildDispatchWhatsAppMessage(
   const paid = bill?.paid_amount ?? 0;
   const balance = bill?.pending_amount ?? (total - paid);
 
+  const trackUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/#/track/${dispatch.dispatch_no || dispatch.id}`
+    : `https://anbutraders.com/#/track/${dispatch.dispatch_no || dispatch.id}`;
+
   const data: WhatsAppTemplateData = {
     customer_name: custName,
     dispatch_no: dispatch.dispatch_no,
@@ -93,6 +106,7 @@ export function buildDispatchWhatsAppMessage(
     paid_amount: paid,
     balance_to_collect: balance,
     delivery_address: dispatch.delivery_address || dispatch.customer?.address || 'Site Delivery',
+    tracking_url: trackUrl,
     image_url: companyImageUrl || DEFAULT_COMPANY_IMAGE_URL,
     company_name: 'ANBU TRADERS',
     company_phone: '0413-2964204 / 9626325204',

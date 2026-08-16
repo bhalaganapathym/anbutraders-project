@@ -3,27 +3,46 @@ import { useRealtime } from '@/lib/useRealtime';
 import { api, type Customer } from '@/lib/api';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
-import { Pencil, Plus, Search, Trash2, Users, Phone, MapPin } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
+import CustomerLedgerModal from '@/components/CustomerLedgerModal';
+import { openWhatsApp, DEFAULT_COMPANY_IMAGE_URL } from '@/lib/whatsapp';
+import { 
+  Pencil, 
+  Plus, 
+  Search, 
+  Trash2, 
+  Users, 
+  Phone, 
+  MapPin, 
+  FileText, 
+  MessageSquare, 
+  DollarSign, 
+  CheckCircle2, 
+  AlertCircle 
+} from 'lucide-react';
 
 type Form = { name: string; phone: string; address: string };
 const empty: Form = { name: '', phone: '', address: '' };
 
 export default function Customers() {
   const toast = useToast();
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'dues' | 'settled'>('all');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState<Form>(empty);
   const [saving, setSaving] = useState(false);
+  const [selectedLedgerId, setSelectedLedgerId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.get('/customers');
       setCustomers(data);
-    } catch (e) {
+    } catch {
       toast('Failed to load customers', 'error');
     }
     setLoading(false);
@@ -35,9 +54,18 @@ export default function Customers() {
 
   useRealtime('customers', load);
 
-  const filtered = customers.filter((c) =>
-    [c.name, c.phone ?? '', c.address ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
-  );
+  const duesCustomers = customers.filter(c => Number(c.pending_amount || 0) > 0);
+  const settledCustomers = customers.filter(c => Number(c.pending_amount || 0) <= 0);
+
+  const filtered = customers
+    .filter((c) => {
+      if (filterMode === 'dues') return Number(c.pending_amount || 0) > 0;
+      if (filterMode === 'settled') return Number(c.pending_amount || 0) <= 0;
+      return true;
+    })
+    .filter((c) =>
+      [c.name, c.phone ?? '', c.address ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
+    );
 
   const openNew = () => {
     setEditing(null);
@@ -86,41 +114,110 @@ export default function Customers() {
       await api.delete(`/customers/${c.id}`);
       toast('Customer deleted', 'success');
       load();
-    } catch (e) {
+    } catch {
       toast('Failed to delete customer', 'error');
     }
   };
 
+  const sendDirectReminder = (c: Customer) => {
+    const pending = Number(c.pending_amount || 0);
+    if (!c.phone) {
+      toast('Customer phone number not available', 'error');
+      return;
+    }
+    const msg = `🏗️ *ANBU TRADERS - Payment Reminder* 🧾
+----------------------------------------
+Dear *${c.name}*,
+Friendly reminder from Anbu Traders regarding your outstanding dues.
+
+🔴 *Outstanding Balance:* *₹${pending.toFixed(2)}*
+🏢 *Company Logo & Verification:*
+${DEFAULT_COMPANY_IMAGE_URL}
+
+💳 *UPI / GPay:* 9626325204
+📞 *Office Contact:* 0413-2964204
+
+Kindly settle the balance at your earliest convenience.
+_Thank you for choosing Anbu Traders!_`;
+
+    openWhatsApp(c.phone, msg);
+    toast(`Payment reminder sent to ${c.name}`, 'success');
+  };
+
+  const totalOutstandingAll = customers.reduce((s, c) => s + Number(c.pending_amount || 0), 0);
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Customers</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Manage your shop customers</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Users className="text-amber-600" size={24} />
+            {t('customers')} & {t('customer_ledger')}
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Total Market Dues Outstanding: <strong className="text-rose-600">₹{totalOutstandingAll.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+          </p>
         </div>
-        <button onClick={openNew} className="btn-primary">
+        <button onClick={openNew} className="btn-primary flex items-center gap-1.5 shadow-sm">
           <Plus size={16} /> Add Customer
         </button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search customers..."
-          className="input pl-9"
-        />
+      {/* Filter Tabs & Search */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setFilterMode('all')}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition shadow-sm ${
+              filterMode === 'all'
+                ? 'bg-amber-600 text-white'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            All ({customers.length})
+          </button>
+          <button
+            onClick={() => setFilterMode('dues')}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition shadow-sm ${
+              filterMode === 'dues'
+                ? 'bg-rose-600 text-white'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            With Dues ({duesCustomers.length})
+          </button>
+          <button
+            onClick={() => setFilterMode('settled')}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition shadow-sm ${
+              filterMode === 'settled'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            Settled ({settledCustomers.length})
+          </button>
+        </div>
+
+        <div className="relative w-full sm:max-w-xs">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, phone, address..."
+            className="input pl-9 text-xs"
+          />
+        </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">Loading customers...</p>
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Users size={36} className="text-slate-300" />
-          <p className="text-slate-500 dark:text-slate-400">No customers found.</p>
+          <p className="text-slate-500 dark:text-slate-400">No customers match your filter.</p>
           <button onClick={openNew} className="btn-primary">
-            <Plus size={16} /> Add your first customer
+            <Plus size={16} /> Add new customer
           </button>
         </div>
       ) : (
@@ -128,50 +225,81 @@ export default function Customers() {
           {filtered.map((c) => {
             const pending = Number(c.pending_amount || 0);
             return (
-              <div key={c.id} className="card p-5 transition hover:shadow-md">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">
-                      {c.name.charAt(0).toUpperCase()}
+              <div key={c.id} className="card p-5 transition hover:shadow-md border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-slate-800 text-sm font-extrabold text-amber-700 dark:text-amber-400 shadow-inner">
+                        {c.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-800 dark:text-slate-100">{c.name}</p>
+                        <p className="text-[11px] text-slate-400">
+                          Added {new Date(c.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p>
-                      <p className="text-xs text-slate-400">
-                        {new Date(c.created_at).toLocaleDateString()}
+                    <div className="flex gap-1">
+                      <button onClick={() => openEdit(c)} className="btn-ghost p-1.5" aria-label="Edit">
+                        <Pencil size={15} />
+                      </button>
+                      <button onClick={() => remove(c)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3.5 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+                    {c.phone && (
+                      <p className="flex items-center gap-2">
+                        <Phone size={13} className="text-slate-400 shrink-0" /> 
+                        <a href={`tel:${c.phone}`} className="hover:underline font-mono">{c.phone}</a>
                       </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => openEdit(c)} className="btn-ghost p-1.5" aria-label="Edit">
-                      <Pencil size={15} />
-                    </button>
-                    <button onClick={() => remove(c)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
-                      <Trash2 size={15} />
-                    </button>
+                    )}
+                    {c.address && (
+                      <p className="flex items-center gap-2">
+                        <MapPin size={13} className="text-slate-400 shrink-0" /> 
+                        <span className="truncate">{c.address}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
-                <div className="mt-4 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
-                  {c.phone && (
-                    <p className="flex items-center gap-2">
-                      <Phone size={14} className="text-slate-400" /> {c.phone}
-                    </p>
-                  )}
-                  {c.address && (
-                    <p className="flex items-center gap-2">
-                      <MapPin size={14} className="text-slate-400" /> {c.address}
-                    </p>
-                  )}
-                  {!c.phone && !c.address && <p className="text-slate-400">No contact details</p>}
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-500">Pending Amount:</span>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                    pending > 0 
-                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
-                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                  }`}>
-                    ₹{pending.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500">Balance Dues:</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
+                      pending > 0 
+                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' 
+                        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    }`}>
+                      ₹{pending.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  {/* Action Buttons: Statement & WhatsApp Reminder */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      onClick={() => setSelectedLedgerId(c.id)}
+                      className="btn-secondary text-[11px] py-1.5 px-2 flex items-center justify-center gap-1 font-bold"
+                    >
+                      <FileText size={13} /> Statement
+                    </button>
+
+                    {pending > 0 ? (
+                      <button
+                        onClick={() => sendDirectReminder(c)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] py-1.5 px-2 flex items-center justify-center gap-1 font-bold shadow-sm transition"
+                        title="Send WhatsApp Dues Reminder"
+                      >
+                        <MessageSquare size={13} /> Reminder
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg">
+                        <CheckCircle2 size={13} /> Settled
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -179,6 +307,7 @@ export default function Customers() {
         </div>
       )}
 
+      {/* Customer Add / Edit Modal */}
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Customer' : 'Add Customer'}>
         <div className="space-y-4">
           <div>
@@ -217,6 +346,12 @@ export default function Customers() {
           </div>
         </div>
       </Modal>
+
+      {/* Customer Ledger Statement Modal */}
+      <CustomerLedgerModal
+        customerId={selectedLedgerId}
+        onClose={() => setSelectedLedgerId(null)}
+      />
     </div>
   );
 }

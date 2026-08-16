@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { ToastProvider } from '@/components/Toast';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import {
-  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut, Sun, Moon, Receipt, UserSquare, Settings as SettingsIcon, MapPin
+  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut, Sun, Moon, Receipt, UserSquare, Settings as SettingsIcon, MapPin, DollarSign, Globe
 } from 'lucide-react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n';
 import Dashboard from '@/views/Dashboard';
 import Customers from '@/views/Customers';
 import Products from '@/views/Products';
@@ -20,18 +21,21 @@ import Drivers from '@/views/Drivers';
 import Billing from '@/views/Billing';
 import Settings from '@/views/Settings';
 import DriverDelivery from '@/views/DriverDelivery';
+import DailyReconciliation from '@/views/DailyReconciliation';
+import PublicReceipt from '@/views/PublicReceipt';
 
 type NavItem = { id: string; label: string; icon: typeof LayoutDashboard };
 
 const allNavItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'customers', label: 'Customers', icon: Users },
+  { id: 'customers', label: 'Customers & Ledger', icon: Users },
   { id: 'products', label: 'Products', icon: Package },
   { id: 'pricelist', label: 'Price List', icon: Tags },
   { id: 'orders', label: 'Estimate', icon: ShoppingCart },
   { id: 'dispatches', label: 'Dispatches', icon: Truck },
   { id: 'delivery', label: 'Delivery / POD', icon: MapPin },
   { id: 'billing', label: 'Billing', icon: Receipt },
+  { id: 'reconciliation', label: 'Daily Settlement', icon: DollarSign },
   { id: 'drivers', label: 'Drivers', icon: UserSquare },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
@@ -43,6 +47,25 @@ function AppContent() {
   const [orderToEdit, setOrderToEdit] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isPublicTrack, setIsPublicTrack] = useState(() => 
+    typeof window !== 'undefined' && (window.location.hash.startsWith('#/track/') || window.location.hash.startsWith('#/receipt/'))
+  );
+  const { t, lang, changeLanguage } = useTranslation();
+
+  // Check URL hash for public tracking route #/track/:id
+  useEffect(() => {
+    const checkHash = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#/track/') || hash.startsWith('#/receipt/')) {
+        setIsPublicTrack(true);
+      } else {
+        setIsPublicTrack(false);
+      }
+    };
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, []);
 
   // Theme management
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
@@ -54,13 +77,11 @@ function AppContent() {
     }
     localStorage.setItem('theme', theme);
   }, [theme]);
-  const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
 
   const fetchUnread = async () => {
     try {
       if (!user) return;
       const data = await api.get('/notifications');
-      // Simple frontend filtering for unread notifications applicable to the user
       const applicable = data.filter((n: any) => {
         if (user.role === 'dispatch') return n.type === 'order_confirmed';
         if (user.role === 'billing') return n.type === 'dispatch_completed' || n.type === 'photo_uploaded' || n.type === 'billing_alert';
@@ -76,6 +97,11 @@ function AppContent() {
 
   useRealtime('notifications', fetchUnread);
 
+  // If customer is on public tracking URL, show PublicReceipt without login
+  if (isPublicTrack) {
+    return <PublicReceipt />;
+  }
+
   if (!user) {
     return <Login />;
   }
@@ -83,7 +109,7 @@ function AppContent() {
   const navItems = allNavItems.filter(item => {
     if (user.role === 'admin') return true;
     if (user.role === 'billing') {
-      return ['dashboard', 'customers', 'products', 'orders', 'delivery', 'billing', 'notifications', 'settings'].includes(item.id);
+      return ['dashboard', 'customers', 'products', 'orders', 'delivery', 'billing', 'reconciliation', 'notifications', 'settings'].includes(item.id);
     }
     if (user.role === 'dispatch') {
       return ['dashboard', 'products', 'dispatches', 'delivery', 'notifications'].includes(item.id);
@@ -103,21 +129,21 @@ function AppContent() {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-100 text-slate-800">
+    <div className="flex min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
       <GlobalNotificationAlert />
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-transform duration-200 lg:static lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } flex flex-col`}
       >
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 px-5">
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-600 text-white shadow-sm">
             <HardHat size={20} />
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight text-slate-800">Anbu Traders</p>
-            <p className="text-xs text-slate-500 capitalize">{user.role} Panel</p>
+            <p className="text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">{t('company_name')}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{user.role} Panel</p>
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
@@ -129,8 +155,8 @@ function AppContent() {
                 onClick={() => navigate(item.id)}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                   active
-                    ? 'bg-amber-50 text-amber-700'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                    ? 'bg-amber-50 dark:bg-slate-800 text-amber-700 dark:text-amber-400 font-bold'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-800'
                 }`}
               >
                 <item.icon size={18} />
@@ -146,15 +172,15 @@ function AppContent() {
           })}
         </nav>
         
-        <div className="shrink-0 border-t border-slate-200 p-4">
+        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-slate-700">{user.username}</p>
-              <p className="text-xs text-slate-500">{user.email}</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user.username}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
             </div>
             <button 
               onClick={logout}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-rose-600 transition"
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-rose-600 transition"
               title="Logout"
             >
               <LogOut size={18} />
@@ -172,26 +198,36 @@ function AppContent() {
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
-        <header className="sticky top-0 z-20 flex shrink-0 h-14 sm:h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-3 sm:px-4 backdrop-blur lg:px-8">
+        <header className="sticky top-0 z-20 flex shrink-0 h-14 sm:h-16 items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 sm:px-4 backdrop-blur lg:px-8">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="btn-ghost p-2 lg:hidden text-slate-700"
+            className="btn-ghost p-2 lg:hidden text-slate-700 dark:text-slate-200"
             aria-label="Open menu"
           >
             <Menu size={22} />
           </button>
           
           <div className="flex items-center gap-2">
-            <h1 className="text-base sm:text-lg font-bold capitalize text-slate-800">
+            <h1 className="text-base sm:text-lg font-bold capitalize text-slate-800 dark:text-slate-100">
               {navItems.find((n) => n.id === activeView)?.label ?? 'Dashboard'}
             </h1>
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            {/* Tamil / English Switch */}
+            <button
+              onClick={() => changeLanguage(lang === 'en' ? 'ta' : 'en')}
+              className="flex items-center gap-1 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 transition"
+              title="Toggle Tamil / English"
+            >
+              <Globe size={14} className="text-amber-600" />
+              <span>{lang === 'en' ? 'தமிழ்' : 'English'}</span>
+            </button>
+
             {/* Quick Mobile Notification Bell */}
             <button
               onClick={() => navigate('notifications')}
-              className="relative p-2 rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
+              className="relative p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
               aria-label="Notifications"
             >
               <Bell size={20} />
@@ -202,7 +238,7 @@ function AppContent() {
                 </span>
               )}
             </button>
-            <span className="badge bg-emerald-100 text-emerald-700 capitalize text-xs sm:text-sm">{user.role}</span>
+            <span className="badge bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 capitalize text-xs sm:text-sm">{user.role}</span>
           </div>
         </header>
 
@@ -215,14 +251,15 @@ function AppContent() {
           {activeView === 'dispatches' && <Dispatches />}
           {activeView === 'delivery' && <DriverDelivery />}
           {activeView === 'billing' && <Billing />}
+          {activeView === 'reconciliation' && <DailyReconciliation />}
           {activeView === 'drivers' && <Drivers />}
           {activeView === 'notifications' && <Notifications />}
           {activeView === 'settings' && <Settings />}
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation Bar (Fixed for single-thumb access on phones) */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 flex h-16 items-center justify-around border-t border-slate-200 bg-white/95 backdrop-blur px-2 shadow-lg lg:hidden">
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 flex h-16 items-center justify-around border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2 shadow-lg lg:hidden">
         <button
           onClick={() => navigate('dashboard')}
           className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
@@ -245,67 +282,65 @@ function AppContent() {
           </button>
         )}
 
-        {(user.role === 'admin' || user.role === 'dispatch') && (
-          <button
-            onClick={() => navigate('dispatches')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'dispatches' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Truck size={20} className={activeView === 'dispatches' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight">Dispatch</span>
-          </button>
-        )}
+        <button
+          onClick={() => navigate('delivery')}
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+            activeView === 'delivery' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <MapPin size={20} className={activeView === 'delivery' ? 'scale-110' : ''} />
+          <span className="text-[10px] mt-0.5 tracking-tight">Delivery</span>
+        </button>
 
         {(user.role === 'admin' || user.role === 'billing') && (
           <button
-            onClick={() => navigate('billing')}
+            onClick={() => navigate('reconciliation')}
             className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'billing' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+              activeView === 'reconciliation' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Receipt size={20} className={activeView === 'billing' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight">Billing</span>
+            <DollarSign size={20} className={activeView === 'reconciliation' ? 'scale-110' : ''} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Settlement</span>
           </button>
         )}
 
         <button
-          onClick={() => navigate('notifications')}
-          className={`relative flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-            activeView === 'notifications' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          onClick={() => navigate('settings')}
+          className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+            activeView === 'settings' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
-          <div className="relative">
-            <Bell size={20} className={activeView === 'notifications' ? 'scale-110' : ''} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] mt-0.5 tracking-tight">Alerts</span>
-        </button>
-
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="flex flex-col items-center justify-center flex-1 py-1.5 text-slate-500 hover:text-slate-800 transition"
-        >
-          <Menu size={20} />
-          <span className="text-[10px] mt-0.5 tracking-tight">More</span>
+          <SettingsIcon size={20} className={activeView === 'settings' ? 'scale-110' : ''} />
+          <span className="text-[10px] mt-0.5 tracking-tight">Settings</span>
         </button>
       </nav>
     </div>
   );
 }
 
-function App() {
+export default function App() {
+  const [isPublic, setIsPublic] = useState(() =>
+    typeof window !== 'undefined' && (window.location.hash.startsWith('#/track/') || window.location.hash.startsWith('#/receipt/'))
+  );
+
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      setIsPublic(hash.startsWith('#/track/') || hash.startsWith('#/receipt/'));
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  if (isPublic) {
+    return <PublicReceipt />;
+  }
+
   return (
-    <ToastProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <ToastProvider>
         <AppContent />
-      </AuthProvider>
-    </ToastProvider>
+      </ToastProvider>
+    </AuthProvider>
   );
 }
-
-export default App;

@@ -44,6 +44,80 @@ def get_customers(db: Session = Depends(get_db), skip: int = 0, limit: int = 100
         
     return customers
 
+@router.get("/customers/ledger/summary")
+def get_customer_ledger_summary(db: Session = Depends(get_db)):
+    from models.all import Bill, Customer
+    from sqlalchemy import func
+    
+    stmt = db.query(
+        Customer.id,
+        Customer.name,
+        Customer.phone,
+        Customer.address,
+        func.count(Bill.id).label("bill_count"),
+        func.coalesce(func.sum(Bill.total_amount), 0).label("total_billed"),
+        func.coalesce(func.sum(Bill.paid_amount), 0).label("total_paid"),
+        func.coalesce(func.sum(Bill.pending_amount), 0).label("total_balance"),
+        func.max(Bill.created_at).label("last_bill_date")
+    ).outerjoin(Bill, Bill.customer_id == Customer.id).group_by(Customer.id).order_by(func.coalesce(func.sum(Bill.pending_amount), 0).desc()).all()
+    
+    results = []
+    for row in stmt:
+        results.append({
+            "id": str(row.id),
+            "name": row.name,
+            "phone": row.phone,
+            "address": row.address,
+            "bill_count": row.bill_count,
+            "total_billed": float(row.total_billed),
+            "total_paid": float(row.total_paid),
+            "total_balance": float(row.total_balance),
+            "last_bill_date": row.last_bill_date.isoformat() if row.last_bill_date else None
+        })
+    return results
+
+@router.get("/customers/{id}/ledger")
+def get_customer_ledger(id: UUID, db: Session = Depends(get_db)):
+    from models.all import Bill, Customer
+    customer = db.query(Customer).filter(Customer.id == id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+        
+    bills = db.query(Bill).options(joinedload(Bill.dispatch)).filter(Bill.customer_id == id).order_by(Bill.created_at.asc()).all()
+    
+    running_balance = 0.0
+    transactions = []
+    for b in bills:
+        total = float(b.total_amount or 0)
+        paid = float(b.paid_amount or 0)
+        pending = float(b.pending_amount or (total - paid))
+        running_balance += pending
+        
+        transactions.append({
+            "bill_id": str(b.id),
+            "dispatch_no": b.dispatch.dispatch_no if b.dispatch else "—",
+            "dispatch_id": str(b.dispatch_id) if b.dispatch_id else None,
+            "date": b.created_at.isoformat() if b.created_at else None,
+            "payment_method": b.payment_method,
+            "total_amount": total,
+            "paid_amount": paid,
+            "pending_amount": pending,
+            "running_balance": running_balance
+        })
+        
+    return {
+        "customer": {
+            "id": str(customer.id),
+            "name": customer.name,
+            "phone": customer.phone,
+            "address": customer.address
+        },
+        "total_billed": sum(t["total_amount"] for t in transactions),
+        "total_paid": sum(t["paid_amount"] for t in transactions),
+        "total_balance": running_balance,
+        "transactions": transactions
+    }
+
 @router.put("/customers/{id}", response_model=CustomerResponse)
 def update_customer(id: UUID, customer_in: CustomerCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.id == id).first()
@@ -507,4 +581,146 @@ def delete_notification(id: UUID, background_tasks: BackgroundTasks, db: Session
         db.commit()
         background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
     return {"status": "ok"}
+
+# --- DAILY RECONCILIATION REPORT ---
+@router.get("/reports/daily-reconciliation")
+def get_daily_reconciliation(date: str = None, db: Session = Depends(get_db)):
+    from datetime import datetime, date as date_cls
+    from models.all import Bill
+    from sqlalchemy import cast, Date
+    
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = date_cls.today()
+    else:
+        target_date = date_cls.today()
+        
+    bills = db.query(Bill).options(
+        joinedload(Bill.dispatch),
+        joinedload(Bill.customer),
+        joinedload(Bill.driver)
+    ).filter(cast(Bill.created_at, Date) == target_date).all()
+    
+    total_billed = sum(float(b.total_amount or 0) for b in bills)
+    total_paid = sum(float(b.paid_amount or 0) for b in bills)
+    total_pending = sum(float(b.pending_amount or 0) for b in bills)
+    
+    by_payment_method = {}
+    for b in bills:
+        mode = b.payment_method or "Cash"
+        by_payment_method[mode] = by_payment_method.get(mode, 0.0) + float(b.paid_amount or 0)
+        
+    driver_map = {}
+    for b in bills:
+        driver_name = b.driver.name if b.driver else (b.dispatch.driver_name if b.dispatch and b.dispatch.driver_name else "Direct / Unassigned")
+        driver_id = str(b.driver_id) if b.driver_id else driver_name
+        
+        if driver_id not in driver_map:
+            driver_map[driver_id] = {
+                "driver_id": driver_id,
+                "driver_name": driver_name,
+                "vehicle_number": b.dispatch.vehicle_number if b.dispatch else "—",
+                "trips": 0,
+                "cash_collected": 0.0,
+                "upi_collected": 0.0,
+                "bills": []
+            }
+        driver_map[driver_id]["trips"] += 1
+        paid = float(b.paid_amount or 0)
+        if "cash" in (b.payment_method or "").lower():
+            driver_map[driver_id]["cash_collected"] += paid
+        else:
+            driver_map[driver_id]["upi_collected"] += paid
+            
+        driver_map[driver_id]["bills"].append({
+            "bill_id": str(b.id),
+            "dispatch_no": b.dispatch.dispatch_no if b.dispatch else "—",
+            "customer_name": b.customer.name if b.customer else "—",
+            "total_amount": float(b.total_amount or 0),
+            "paid_amount": paid,
+            "pending_amount": float(b.pending_amount or 0),
+            "payment_method": b.payment_method
+        })
+        
+    return {
+        "date": target_date.strftime("%Y-%m-%d"),
+        "total_bills_count": len(bills),
+        "total_billed": total_billed,
+        "total_paid": total_paid,
+        "total_pending": total_pending,
+        "payment_modes": by_payment_method,
+        "drivers_summary": list(driver_map.values())
+    }
+
+# --- PUBLIC ORDER TRACKING & DIGITAL RECEIPT ---
+@router.get("/public/track/{tracking_ref}")
+def get_public_tracking_info(tracking_ref: str, db: Session = Depends(get_db)):
+    from models.all import Dispatch, Bill, Customer, Photo, Weight
+    query = db.query(Dispatch).options(
+        joinedload(Dispatch.items),
+        joinedload(Dispatch.photos),
+        joinedload(Dispatch.customer),
+        joinedload(Dispatch.bill)
+    )
+    
+    dispatch = None
+    try:
+        uuid_obj = UUID(tracking_ref)
+        dispatch = query.filter(Dispatch.id == uuid_obj).first()
+    except (ValueError, AttributeError):
+        pass
+        
+    if not dispatch:
+        dispatch = query.filter(func.lower(Dispatch.dispatch_no) == tracking_ref.lower().strip()).first()
+        
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+        
+    bill = dispatch.bill
+    total_amount = float(bill.total_amount) if bill else sum((float(i.price or 0) * float(i.quantity or 1)) for i in dispatch.items)
+    paid_amount = float(bill.paid_amount) if bill else 0.0
+    pending_amount = float(bill.pending_amount) if bill else (total_amount - paid_amount)
+    
+    weights_list = [float(w.actual_weight) for w in dispatch.weights if w.actual_weight is not None]
+    actual_wt = weights_list[0] if weights_list else None
+
+    return {
+        "dispatch_id": str(dispatch.id),
+        "dispatch_no": dispatch.dispatch_no,
+        "status": dispatch.status,
+        "created_at": dispatch.created_at.isoformat() if dispatch.created_at else None,
+        "customer": {
+            "name": dispatch.customer.name if dispatch.customer else "Customer",
+            "phone": dispatch.customer.phone if dispatch.customer else "",
+            "address": dispatch.delivery_address or (dispatch.customer.address if dispatch.customer else "")
+        },
+        "transport": {
+            "vehicle_number": dispatch.vehicle_number or "—",
+            "driver_name": dispatch.driver_name or "Assigned Driver",
+            "driver_mobile": dispatch.driver_mobile or "—"
+        },
+        "weights": {
+            "gross_weight": actual_wt,
+            "tare_weight": None,
+            "net_weight": actual_wt
+        },
+        "items": [
+            {
+                "product_name": it.product_name,
+                "quantity": float(it.quantity),
+                "unit": it.unit,
+                "price": float(it.price or 0)
+            } for it in dispatch.items
+        ],
+        "financials": {
+            "total_amount": total_amount,
+            "paid_amount": paid_amount,
+            "pending_amount": pending_amount,
+            "payment_method": bill.payment_method if bill else "Cash"
+        },
+        "pod_photo": dispatch.photos[0].url if dispatch.photos else None
+    }
+
 

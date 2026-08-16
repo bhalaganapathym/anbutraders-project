@@ -3,7 +3,7 @@ import { api, type Customer, type Product, type Order } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import {
   ArrowLeft, Search, Plus, Trash2, CheckCircle2, User, Phone, MapPin, 
-  Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText
+  Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText, Mic, MicOff, Zap
 } from 'lucide-react';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
@@ -144,6 +144,77 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     setSelectedProduct(null);
     setProductSearch('');
     setItemQty(1);
+  };
+
+  const [quickText, setQuickText] = useState('');
+  const [isListening, setIsListening] = useState(false);
+
+  const handleQuickAdd = (input: string) => {
+    const raw = input.trim();
+    if (!raw) return;
+
+    // Extract quantity from text: e.g. "10 12mm sumangala" or "ramco cement 20"
+    const numberMatch = raw.match(/\b(\d+)\b/);
+    const qty = numberMatch ? parseInt(numberMatch[1], 10) : 1;
+    const textQuery = raw.replace(/\b\d+\b/g, '').trim().toLowerCase();
+
+    const words = textQuery.split(/\s+/).filter(w => w.length > 1);
+
+    const matched = products.find(p => {
+      const pFull = `${p.brand || ''} ${p.name || ''} ${p.size || ''}`.toLowerCase();
+      return words.every(w => pFull.includes(w));
+    }) || products.find(p => {
+      const pFull = `${p.brand || ''} ${p.name || ''}`.toLowerCase();
+      return words.some(w => pFull.includes(w));
+    });
+
+    if (matched) {
+      if (lines.some(l => l.product_id === matched.id)) {
+        setLines(lines.map(l => l.product_id === matched.id ? { ...l, quantity: l.quantity + qty } : l));
+        toast(`Updated ${matched.name} (+${qty})`, 'success');
+      } else {
+        setLines([...lines, {
+          product_id: matched.id,
+          quantity: qty,
+          unit: matched.unit || 'piece',
+          product: matched
+        }]);
+        toast(`Added ${qty} ${matched.unit} of ${matched.name}`, 'success');
+      }
+      setQuickText('');
+    } else {
+      toast(`No product match for "${raw}". Try selecting from dropdown below.`, 'error');
+    }
+  };
+
+  const startVoiceDictation = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast('Speech recognition not supported in this browser', 'error');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+    setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setQuickText(transcript);
+      handleQuickAdd(transcript);
+      setIsListening(false);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+      toast('Could not recognize voice, please try typing', 'error');
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
   };
   
   const updateLineQty = (pid: string, delta: number) => {
@@ -435,7 +506,51 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                 </h2>
               </div>
               
-              <div className="p-5 border-b border-slate-100 bg-slate-50/30">
+              <div className="p-5 border-b border-slate-100 bg-slate-50/30 space-y-4">
+                {/* 1-Tap Quick-Add Omnibar with Voice Dictation */}
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="flex items-center gap-2 text-amber-800 text-xs font-bold shrink-0">
+                    <Zap size={15} className="text-amber-600 fill-amber-500" />
+                    <span>Quick-Add / Voice:</span>
+                  </div>
+                  <div className="relative flex-1 flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={quickText}
+                      onChange={e => setQuickText(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleQuickAdd(quickText);
+                        }
+                      }}
+                      placeholder='e.g. "10 12mm sumangala" or "20 ramco cement" & press Enter...'
+                      className="w-full rounded-lg border border-amber-300 bg-white py-1.5 pl-3 pr-20 text-xs outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-500/20"
+                    />
+                    <div className="absolute right-1.5 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={startVoiceDictation}
+                        className={`p-1 rounded-md transition ${
+                          isListening
+                            ? 'bg-rose-500 text-white animate-pulse'
+                            : 'text-slate-500 hover:text-amber-700 hover:bg-amber-100'
+                        }`}
+                        title={isListening ? 'Listening...' : 'Voice Dictation'}
+                      >
+                        {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickAdd(quickText)}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-2 py-0.5 rounded shadow-sm"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid gap-4 md:grid-cols-12">
                   <div className="md:col-span-3">
                     <label className="mb-1.5 block text-sm font-medium text-slate-700">Brand</label>
