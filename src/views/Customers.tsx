@@ -227,23 +227,23 @@ _Thank you for choosing Anbu Traders!_`;
             return (
               <div key={c.id} className="card p-5 transition hover:shadow-md border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-slate-800 text-sm font-extrabold text-amber-700 dark:text-amber-400 shadow-inner">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-slate-800 text-sm font-extrabold text-amber-700 dark:text-amber-400 shadow-inner mt-0.5">
                         {c.name.charAt(0).toUpperCase()}
                       </div>
-                      <div>
-                        <p className="font-bold text-slate-800 dark:text-slate-100">{c.name}</p>
-                        <p className="text-[11px] text-slate-400">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-800 dark:text-slate-100 break-words leading-snug">{c.name}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
                           Added {new Date(c.created_at).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => openEdit(c)} className="btn-ghost p-1.5" aria-label="Edit">
+                    <div className="flex shrink-0 items-center gap-0.5 ml-1">
+                      <button onClick={() => openEdit(c)} className="btn-ghost p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200" aria-label="Edit" title="Edit Customer">
                         <Pencil size={15} />
                       </button>
-                      <button onClick={() => remove(c)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
+                      <button onClick={() => remove(c)} className="btn-ghost p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30" aria-label="Delete" title="Delete Customer">
                         <Trash2 size={15} />
                       </button>
                     </div>
