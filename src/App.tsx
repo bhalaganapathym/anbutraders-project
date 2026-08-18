@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ToastProvider } from '@/components/Toast';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import {
@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api } from '@/lib/api';
-import { useTranslation } from '@/lib/i18n';
+import { useTranslation, translations } from '@/lib/i18n';
 import Dashboard from '@/views/Dashboard';
 import Customers from '@/views/Customers';
 import Products from '@/views/Products';
@@ -24,21 +24,21 @@ import DriverDelivery from '@/views/DriverDelivery';
 import DailyReconciliation from '@/views/DailyReconciliation';
 import PublicReceipt from '@/views/PublicReceipt';
 
-type NavItem = { id: string; label: string; icon: typeof LayoutDashboard };
+type NavConfig = { id: string; labelKey: keyof typeof translations['en']; icon: typeof LayoutDashboard };
 
-const allNavItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'customers', label: 'Customers & Ledger', icon: Users },
-  { id: 'products', label: 'Products', icon: Package },
-  { id: 'pricelist', label: 'Price List', icon: Tags },
-  { id: 'orders', label: 'Estimate', icon: ShoppingCart },
-  { id: 'dispatches', label: 'Dispatches', icon: Truck },
-  { id: 'delivery', label: 'Delivery / POD', icon: MapPin },
-  { id: 'billing', label: 'Billing', icon: Receipt },
-  { id: 'reconciliation', label: 'Daily Settlement', icon: DollarSign },
-  { id: 'drivers', label: 'Drivers', icon: UserSquare },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'settings', label: 'Settings', icon: SettingsIcon },
+const navConfigs: NavConfig[] = [
+  { id: 'dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
+  { id: 'customers', labelKey: 'customers_ledger', icon: Users },
+  { id: 'products', labelKey: 'products', icon: Package },
+  { id: 'pricelist', labelKey: 'price_list', icon: Tags },
+  { id: 'orders', labelKey: 'estimate', icon: ShoppingCart },
+  { id: 'dispatches', labelKey: 'dispatches', icon: Truck },
+  { id: 'delivery', labelKey: 'delivery_pod', icon: MapPin },
+  { id: 'billing', labelKey: 'billing', icon: Receipt },
+  { id: 'reconciliation', labelKey: 'reconciliation', icon: DollarSign },
+  { id: 'drivers', labelKey: 'drivers', icon: UserSquare },
+  { id: 'notifications', labelKey: 'notifications', icon: Bell },
+  { id: 'settings', labelKey: 'settings', icon: SettingsIcon },
 ];
 
 function AppContent() {
@@ -97,6 +97,27 @@ function AppContent() {
 
   useRealtime('notifications', fetchUnread);
 
+  // Dynamic Nav Items with live translation
+  const navItems = useMemo(() => {
+    if (!user) return [];
+    const allowed = navConfigs.filter(item => {
+      if (user.role === 'admin') return true;
+      if (user.role === 'billing') {
+        return ['dashboard', 'customers', 'products', 'orders', 'delivery', 'billing', 'reconciliation', 'notifications', 'settings'].includes(item.id);
+      }
+      if (user.role === 'dispatch') {
+        return ['dashboard', 'products', 'dispatches', 'delivery', 'notifications'].includes(item.id);
+      }
+      return false;
+    });
+
+    return allowed.map(cfg => ({
+      id: cfg.id,
+      label: t(cfg.labelKey),
+      icon: cfg.icon,
+    }));
+  }, [user, t]);
+
   // If customer is on public tracking URL, show PublicReceipt without login
   if (isPublicTrack) {
     return <PublicReceipt />;
@@ -105,17 +126,6 @@ function AppContent() {
   if (!user) {
     return <Login />;
   }
-
-  const navItems = allNavItems.filter(item => {
-    if (user.role === 'admin') return true;
-    if (user.role === 'billing') {
-      return ['dashboard', 'customers', 'products', 'orders', 'delivery', 'billing', 'reconciliation', 'notifications', 'settings'].includes(item.id);
-    }
-    if (user.role === 'dispatch') {
-      return ['dashboard', 'products', 'dispatches', 'delivery', 'notifications'].includes(item.id);
-    }
-    return false;
-  });
 
   const activeView = view === 'new_order' ? 'new_order' : (navItems.find((n) => n.id === view)?.id || navItems[0]?.id || 'dashboard');
 
@@ -127,6 +137,13 @@ function AppContent() {
   if (activeView === 'new_order') {
     return <NewOrder onBack={() => navigate('orders')} orderToEdit={orderToEdit} />;
   }
+
+  const getRoleLabel = () => {
+    if (user.role === 'admin') return t('role_admin');
+    if (user.role === 'billing') return t('role_billing');
+    if (user.role === 'dispatch') return t('role_dispatch');
+    return user.role;
+  };
 
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
@@ -143,7 +160,7 @@ function AppContent() {
           </div>
           <div>
             <p className="text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">{t('company_name')}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{user.role} Panel</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{getRoleLabel()}</p>
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
@@ -181,7 +198,7 @@ function AppContent() {
             <button 
               onClick={logout}
               className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-rose-600 transition"
-              title="Logout"
+              title={t('logout')}
             >
               <LogOut size={18} />
             </button>
@@ -209,7 +226,7 @@ function AppContent() {
           
           <div className="flex items-center gap-2">
             <h1 className="text-base sm:text-lg font-bold capitalize text-slate-800 dark:text-slate-100">
-              {navItems.find((n) => n.id === activeView)?.label ?? 'Dashboard'}
+              {navItems.find((n) => n.id === activeView)?.label ?? t('dashboard')}
             </h1>
           </div>
 
@@ -217,7 +234,7 @@ function AppContent() {
             {/* Tamil / English Switch */}
             <button
               onClick={() => changeLanguage(lang === 'en' ? 'ta' : 'en')}
-              className="flex items-center gap-1 text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 transition"
+              className="flex items-center gap-1.5 text-xs font-bold bg-amber-50 hover:bg-amber-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-900 dark:text-amber-300 px-3 py-1.5 rounded-lg border border-amber-300/80 dark:border-slate-700 shadow-sm transition"
               title="Toggle Tamil / English"
             >
               <Globe size={14} className="text-amber-600" />
@@ -228,7 +245,7 @@ function AppContent() {
             <button
               onClick={() => navigate('notifications')}
               className="relative p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
-              aria-label="Notifications"
+              aria-label={t('notifications')}
             >
               <Bell size={20} />
               {unreadCount > 0 && (
@@ -238,7 +255,7 @@ function AppContent() {
                 </span>
               )}
             </button>
-            <span className="badge bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 capitalize text-xs sm:text-sm">{user.role}</span>
+            <span className="badge bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 capitalize text-xs sm:text-sm font-semibold">{getRoleLabel()}</span>
           </div>
         </header>
 
@@ -267,7 +284,7 @@ function AppContent() {
           }`}
         >
           <LayoutDashboard size={20} className={activeView === 'dashboard' ? 'scale-110' : ''} />
-          <span className="text-[10px] mt-0.5 tracking-tight">Home</span>
+          <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('home')}</span>
         </button>
 
         {(user.role === 'admin' || user.role === 'billing') && (
@@ -278,7 +295,7 @@ function AppContent() {
             }`}
           >
             <ShoppingCart size={20} className={activeView === 'orders' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight">Estimate</span>
+            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('estimate')}</span>
           </button>
         )}
 
@@ -289,7 +306,7 @@ function AppContent() {
           }`}
         >
           <MapPin size={20} className={activeView === 'delivery' ? 'scale-110' : ''} />
-          <span className="text-[10px] mt-0.5 tracking-tight">Delivery</span>
+          <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('delivery')}</span>
         </button>
 
         {(user.role === 'admin' || user.role === 'billing') && (
@@ -300,7 +317,7 @@ function AppContent() {
             }`}
           >
             <DollarSign size={20} className={activeView === 'reconciliation' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight">Settlement</span>
+            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('reconciliation')}</span>
           </button>
         )}
 
@@ -311,7 +328,7 @@ function AppContent() {
           }`}
         >
           <SettingsIcon size={20} className={activeView === 'settings' ? 'scale-110' : ''} />
-          <span className="text-[10px] mt-0.5 tracking-tight">Settings</span>
+          <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('settings')}</span>
         </button>
       </nav>
     </div>

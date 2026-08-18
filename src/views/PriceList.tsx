@@ -4,6 +4,7 @@ import { api, type Product } from '@/lib/api';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { Search, IndianRupee, Pencil, Layers, TrendingUp } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 const categories = ['Steel', 'Cement', 'TMT Bars', 'Pipes', 'Other'];
 
@@ -16,6 +17,7 @@ const categoryColor: Record<string, string> = {
 };
 
 export default function PriceList() {
+  const { t } = useTranslation();
   const toast = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,8 +83,8 @@ export default function PriceList() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Product Price List</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">View and update prices for all products</p>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('price_list')}</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('company_tagline')}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -92,7 +94,7 @@ export default function PriceList() {
           </div>
           <div>
             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{products.length}</p>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Total Products</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('products')}</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 p-4">
@@ -101,7 +103,7 @@ export default function PriceList() {
           </div>
           <div>
             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">₹{avgPrice.toFixed(2)}</p>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Average Price</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('price')}</p>
           </div>
         </div>
         <div className="card flex items-center gap-3 p-4">
@@ -110,7 +112,7 @@ export default function PriceList() {
           </div>
           <div>
             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">₹{maxPrice.toFixed(2)}</p>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">Highest Price</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('price')}</p>
           </div>
         </div>
       </div>
@@ -121,7 +123,7 @@ export default function PriceList() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search products..."
+            placeholder={t('search')}
             className="input pl-9"
           />
         </div>

@@ -3,8 +3,10 @@ import { api, type Driver } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { Search, Plus, Trash2, Edit2, Phone, RefreshCw } from 'lucide-react';
 import Modal from '@/components/Modal';
+import { useTranslation } from '@/lib/i18n';
 
 export default function Drivers() {
+  const { t } = useTranslation();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -118,17 +120,17 @@ ANBU GROUPS`;
     (d.vehicle_number || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) return <div className="p-6">Loading drivers...</div>;
+  if (loading) return <div className="p-6">{t('loading')}</div>;
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Driver Management</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Track driver availability (Free / Engaged) and send trip alerts</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('drivers')}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('company_tagline')}</p>
         </div>
         <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
-          <Plus size={18} /> Add Driver
+          <Plus size={18} /> {t('add')} {t('drivers')}
         </button>
       </div>
 
@@ -138,7 +140,7 @@ ANBU GROUPS`;
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
               type="text"
-              placeholder="Search drivers or vehicles..."
+              placeholder={t('search')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input pl-10"

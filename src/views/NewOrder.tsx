@@ -5,6 +5,7 @@ import {
   ArrowLeft, Search, Plus, Trash2, CheckCircle2, User, Phone, MapPin, 
   Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText, Mic, MicOff, Zap
 } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
 
@@ -14,6 +15,7 @@ type NewOrderProps = {
 };
 
 export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
+  const { t } = useTranslation();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);

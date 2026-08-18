@@ -5,6 +5,7 @@ import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box, Upload, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useTranslation } from '@/lib/i18n';
 
 type Form = { name: string; category: string; unit: string; price: string; stock_qty: string; brand: string; size: string; standard_weight: string; weight_tolerance: string };
 const empty: Form = { name: '', category: 'Steel', unit: 'piece', price: '0', stock_qty: '0', brand: '', size: '', standard_weight: '0', weight_tolerance: '' };
@@ -14,6 +15,7 @@ const knownBrands = ['Tata Steel', 'iSteel', 'Sumangala', 'Suryadev'];
 const knownSizes = ['8mm', '10mm', '12mm', '16mm', '20mm', '25mm', '32mm'];
 
 export default function Products() {
+  const { t } = useTranslation();
   const toast = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -251,13 +253,13 @@ export default function Products() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Products</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Manage your product catalog</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('products')}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('company_tagline')}</p>
         </div>
         <div className="flex gap-2">
           {canEditTolerance && (
             <button onClick={() => setBrandAdjustOpen(true)} className="btn-secondary flex items-center gap-1.5 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50">
-              <TrendingUp size={16} /> Adjust Brand Rates
+              <TrendingUp size={16} /> {t('edit_brand_prices')}
             </button>
           )}
           {isAdmin && (
@@ -270,10 +272,10 @@ export default function Products() {
                 className="hidden" 
               />
               <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-secondary">
-                <Upload size={16} /> {uploading ? 'Importing...' : 'Import CSV'}
+                <Upload size={16} /> {uploading ? t('loading') : t('export_csv')}
               </button>
               <button onClick={openNew} className="btn-primary">
-                <Plus size={16} /> Add Product
+                <Plus size={16} /> {t('add_product')}
               </button>
             </>
           )}
@@ -285,7 +287,7 @@ export default function Products() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search products..."
+          placeholder={t('search')}
           className="input pl-9"
         />
       </div>
@@ -297,7 +299,7 @@ export default function Products() {
             unitFilter === 'all' ? 'bg-indigo-600 dark:bg-indigo-600 text-white' : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
           }`}
         >
-          <Package size={14} /> All ({filtered.length})
+          <Package size={14} /> {t('all')} ({filtered.length})
         </button>
         <button
           onClick={() => setUnitFilter('kg')}
@@ -305,7 +307,7 @@ export default function Products() {
             unitFilter === 'kg' ? 'bg-indigo-600 dark:bg-indigo-600 text-white' : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
           }`}
         >
-          <Scale size={14} /> Kg Products ({kgProducts.length})
+          <Scale size={14} /> Kg ({kgProducts.length})
         </button>
         <button
           onClick={() => setUnitFilter('piece')}
@@ -313,12 +315,12 @@ export default function Products() {
             unitFilter === 'piece' ? 'bg-indigo-600 dark:bg-indigo-600 text-white' : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
           }`}
         >
-          <Box size={14} /> Piece Products ({pieceProducts.length})
+          <Box size={14} /> Piece ({pieceProducts.length})
         </button>
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
+        <p className="text-sm text-slate-400">{t('loading')}</p>
       ) : visible.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Package size={36} className="text-slate-300" />

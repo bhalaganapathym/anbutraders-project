@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
+import { useTranslation } from '@/lib/i18n';
 
 export default function DriverDelivery() {
+  const { t } = useTranslation();
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [selectedDriverId, setSelectedDriverId] = useState<string>('all');
@@ -159,10 +161,10 @@ export default function DriverDelivery() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Truck size={26} className="text-amber-600" />
-            Driver Delivery & POD Portal
+            {t('delivery_pod')}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Field delivery view for drivers: navigate, call customers, collect payments, and capture proof of delivery.
+            {t('driver_portal_title')}
           </p>
         </div>
       </div>
@@ -171,14 +173,14 @@ export default function DriverDelivery() {
       <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 border border-slate-200 dark:border-slate-800">
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-            <User size={14} /> Filter by Assigned Driver
+            <User size={14} /> {t('drivers')}
           </label>
           <select
             value={selectedDriverId}
             onChange={(e) => setSelectedDriverId(e.target.value)}
             className="input text-sm font-semibold"
           >
-            <option value="all">🚚 All Drivers & Deliveries</option>
+            <option value="all">🚚 {t('all')} {t('drivers')}</option>
             {drivers.map((drv) => (
               <option key={drv.id} value={drv.id}>
                 {drv.name} ({drv.phone_number}) — {drv.status === 'engaged' ? '🟡 On Delivery' : '🟢 Free'}
@@ -189,13 +191,13 @@ export default function DriverDelivery() {
 
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-            <Search size={14} /> Search Delivery
+            <Search size={14} /> {t('search')}
           </label>
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search dispatch ref, customer, phone, location..."
+            placeholder={t('search')}
             className="input text-sm"
           />
         </div>
@@ -211,7 +213,7 @@ export default function DriverDelivery() {
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
           }`}
         >
-          <Truck size={16} /> Active Trips ({dispatches.filter((d) => d.status !== 'completed').length})
+          <Truck size={16} /> {t('pending_deliveries')} ({dispatches.filter((d) => d.status !== 'completed').length})
         </button>
         <button
           onClick={() => setActiveTab('completed')}
@@ -221,7 +223,7 @@ export default function DriverDelivery() {
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
           }`}
         >
-          <CheckCircle2 size={16} /> Completed Deliveries ({dispatches.filter((d) => d.status === 'completed').length})
+          <CheckCircle2 size={16} /> {t('completed_deliveries')} ({dispatches.filter((d) => d.status === 'completed').length})
         </button>
       </div>
 

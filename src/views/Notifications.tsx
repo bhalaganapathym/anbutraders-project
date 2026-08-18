@@ -6,8 +6,10 @@ import { useAuth } from '@/context/AuthContext';
 import {
   Bell, CheckCircle2, Trash2, X, Truck, IndianRupee, Clock, Download
 } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 export default function Notifications() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const toast = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -157,12 +159,12 @@ export default function Notifications() {
         <div className="flex flex-wrap items-center gap-2">
           {unreadCount > 0 && (
             <button onClick={markAllRead} className="btn-secondary text-xs py-1.5 px-3">
-              <CheckCircle2 size={14} /> Mark all read
+              <CheckCircle2 size={14} /> {t('mark_all_read')}
             </button>
           )}
           {notifications.length > 0 && (
             <button onClick={handleClearAll} className="btn-secondary text-rose-600 border-rose-200 hover:bg-rose-50 text-xs py-1.5 px-3">
-              <Trash2 size={14} /> Clear All
+              <Trash2 size={14} /> {t('clear_all_notifs')}
             </button>
           )}
         </div>
@@ -176,7 +178,7 @@ export default function Notifications() {
               filter === 'all' ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            All ({notifications.length})
+            {t('all')} ({notifications.length})
           </button>
           <button
             onClick={() => setFilter('unread')}
@@ -184,7 +186,7 @@ export default function Notifications() {
               filter === 'unread' ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            Unread ({unreadCount})
+            {t('status_pending')} ({unreadCount})
           </button>
         </div>
 

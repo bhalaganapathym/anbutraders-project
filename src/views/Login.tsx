@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useAuth, User } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
-import { Lock, User as UserIcon, HelpCircle } from 'lucide-react';
+import { Lock, User as UserIcon, HelpCircle, Globe } from 'lucide-react';
 import Modal from '@/components/Modal';
+import { useTranslation } from '@/lib/i18n';
 
 export default function Login() {
+  const { t, lang, changeLanguage } = useTranslation();
   const { login } = useAuth();
   const toast = useToast();
   
@@ -132,20 +134,28 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-md overflow-hidden rounded-3xl glass-panel shadow-2xl border border-white/20 dark:border-slate-700/50">
-        <div className="bg-indigo-500/20 dark:bg-indigo-500/10 backdrop-blur-md p-8 text-center border-b border-white/10 dark:border-slate-700/50">
-          <h1 className="text-3xl font-extrabold text-indigo-700 dark:text-indigo-300 drop-shadow-sm">Anbu Traders</h1>
-          <p className="mt-2 font-medium text-slate-600 dark:text-slate-400">Sign in to your account</p>
+        <div className="bg-indigo-500/20 dark:bg-indigo-500/10 backdrop-blur-md p-8 text-center border-b border-white/10 dark:border-slate-700/50 relative">
+          <button
+            type="button"
+            onClick={() => changeLanguage(lang === 'en' ? 'ta' : 'en')}
+            className="absolute top-4 right-4 flex items-center gap-1 text-xs font-bold bg-white/60 dark:bg-slate-800/80 hover:bg-white text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm transition"
+          >
+            <Globe size={13} className="text-amber-600" />
+            <span>{lang === 'en' ? 'தமிழ்' : 'English'}</span>
+          </button>
+          <h1 className="text-3xl font-extrabold text-indigo-700 dark:text-indigo-300 drop-shadow-sm">{t('company_name')}</h1>
+          <p className="mt-2 font-medium text-slate-600 dark:text-slate-400">{t('sign_in_subtitle')}</p>
         </div>
         
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Username</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">{t('username_lbl')}</label>
             <div className="relative">
               <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input
                 type="text"
                 className="input pl-10"
-                placeholder="Enter your username"
+                placeholder={t('username_lbl')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -154,7 +164,7 @@ export default function Login() {
           
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Password</label>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">{t('password_lbl')}</label>
               <button 
                 type="button" 
                 onClick={() => setForgotOpen(true)}
@@ -180,7 +190,7 @@ export default function Login() {
             disabled={loading}
             className="btn-primary w-full py-3 text-lg"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? t('loading') : t('sign_in_btn')}
           </button>
 
           <div className="pt-4 border-t border-white/10 dark:border-slate-700/50">

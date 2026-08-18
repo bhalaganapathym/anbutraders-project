@@ -6,8 +6,10 @@ import {
   Database, Download, Trash2, ShieldCheck
 } from 'lucide-react';
 import { DEFAULT_WHATSAPP_TEMPLATE, DEFAULT_COMPANY_IMAGE_URL, formatWhatsAppMessage, type WhatsAppTemplateData } from '@/lib/whatsapp';
+import { useTranslation } from '@/lib/i18n';
 
 export default function Settings() {
+  const { t } = useTranslation();
   const [threshold, setThreshold] = useState<string>('3');
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>(DEFAULT_WHATSAPP_TEMPLATE);
   const [companyName, setCompanyName] = useState<string>('ANBU TRADERS');
@@ -131,10 +133,10 @@ export default function Settings() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <SettingsIcon size={24} className="text-amber-600" />
-            System & Notification Settings
+            {t('settings_title')}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Configure company branding, WhatsApp templates with logo, and dispatch thresholds.
+            {t('company_tagline')}
           </p>
         </div>
         <button onClick={fetchSettings} className="p-2 text-slate-500 hover:text-amber-600 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -150,8 +152,8 @@ export default function Settings() {
               <MessageSquare size={20} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">WhatsApp Customer Alert & Logo Template</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Personalize message content with Anbu Traders logo/image link sent to customers upon dispatch.</p>
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">{t('whatsapp_template_title')}</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('company_name_lbl')} & {t('company_logo_lbl')}</p>
             </div>
           </div>
 

@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Download,
 } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 type Stats = {
   customers: number;
@@ -57,6 +58,7 @@ function LiveTimer({ start, end }: { start: string, end?: string | null }) {
 }
 
 export default function Dashboard({ onNavigate }: { onNavigate: (view: string) => void }) {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<Stats | null>(null);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [recentDispatches, setRecentDispatches] = useState<
@@ -107,28 +109,28 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   useRealtime('products', load);
 
   const cards = [
-    { label: 'Customers', value: stats?.customers ?? 0, icon: Users, view: 'customers', color: 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30' },
-    { label: 'Products', value: stats?.products ?? 0, icon: Package, view: 'products', color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/30' },
-    { label: 'Orders', value: stats?.orders ?? 0, icon: ShoppingCart, view: 'orders', color: 'text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-900/30' },
-    { label: 'Dispatches', value: stats?.dispatches ?? 0, icon: Truck, view: 'dispatches', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/30' },
-    { label: 'In Progress', value: stats?.pendingDispatches ?? 0, icon: Clock, view: 'dispatches', color: 'text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/30' },
-    { label: 'Completed', value: stats?.completedDispatches ?? 0, icon: CheckCircle2, view: 'dispatches', color: 'text-teal-600 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-900/30' },
+    { label: t('customers'), value: stats?.customers ?? 0, icon: Users, view: 'customers', color: 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30' },
+    { label: t('products'), value: stats?.products ?? 0, icon: Package, view: 'products', color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/30' },
+    { label: t('estimate'), value: stats?.orders ?? 0, icon: ShoppingCart, view: 'orders', color: 'text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-900/30' },
+    { label: t('dispatches'), value: stats?.dispatches ?? 0, icon: Truck, view: 'dispatches', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/30' },
+    { label: t('pending_dispatches'), value: stats?.pendingDispatches ?? 0, icon: Clock, view: 'dispatches', color: 'text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/30' },
+    { label: t('dispatch_status_completed'), value: stats?.completedDispatches ?? 0, icon: CheckCircle2, view: 'dispatches', color: 'text-teal-600 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-900/30' },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 drop-shadow-sm">Dashboard</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Overview of orders and dispatch operations</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 drop-shadow-sm">{t('dashboard')}</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400">{t('company_tagline')}</p>
         </div>
         <button
           onClick={() => {
             window.location.href = `${import.meta.env.VITE_API_URL || (window.location.protocol === 'https:' ? 'https:' : 'http:') + '//' + window.location.hostname + ':8000/api/v1'}/orders/export`;
           }}
-          className="btn-secondary flex items-center gap-2"
+          className="btn-secondary flex items-center gap-2 text-xs sm:text-sm"
         >
-          <Download size={16} /> Export Orders (CSV)
+          <Download size={16} /> {t('export_csv')}
         </button>
       </div>
 

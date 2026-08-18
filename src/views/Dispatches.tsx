@@ -13,6 +13,7 @@ import {
 import Modal from '@/components/Modal';
 import DispatchDashboard from './DispatchDashboard';
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
+import { useTranslation } from '@/lib/i18n';
 
 type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string } };
 type ConfirmedOrder = Order & { customer: { name: string } | null };
@@ -55,6 +56,7 @@ function WaitClock({ timestamp }: { timestamp: string | Date }) {
 }
 
 export default function Dispatches() {
+  const { t } = useTranslation();
   const toast = useToast();
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,11 +219,11 @@ export default function Dispatches() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Dispatches</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Weight verification, photos, vehicle loading and completion</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('dispatches')}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('company_tagline')}</p>
         </div>
         <button onClick={openCreate} className="btn-primary">
-          <Plus size={16} /> Create Dispatch
+          <Plus size={16} /> {t('new_dispatch')}
         </button>
       </div>
 
@@ -230,13 +232,13 @@ export default function Dispatches() {
           className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'active' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
           onClick={() => setActiveTab('active')}
         >
-          Active Dispatches ({dispatches.filter(d => d.status !== 'completed').length})
+          {t('pending_deliveries')} ({dispatches.filter(d => d.status !== 'completed').length})
         </button>
         <button 
           className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'completed' ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
           onClick={() => setActiveTab('completed')}
         >
-          Completed Tab ({dispatches.filter(d => d.status === 'completed').length})
+          {t('completed_deliveries')} ({dispatches.filter(d => d.status === 'completed').length})
         </button>
       </div>
 
@@ -246,7 +248,7 @@ export default function Dispatches() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search dispatches or vehicle..."
+            placeholder={t('search')}
             className="input pl-9"
           />
         </div>

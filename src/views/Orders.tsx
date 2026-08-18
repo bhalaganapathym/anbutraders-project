@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import {
   Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock
 } from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type OrderItemWithProduct = OrderItem & { product: Product | null };
@@ -111,6 +112,7 @@ _Authorised Signatory_`;
 };
 
 export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () => void; onEditOrder?: (o: OrderWithCustomer) => void } = {}) {
+  const { t } = useTranslation();
   const toast = useToast();
   const [orders, setOrders] = useState<OrderWithCustomer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -386,11 +388,11 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Estimates</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Create estimates with new or existing customers</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('estimate')}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('company_tagline')}</p>
         </div>
         <button onClick={openNew} className="btn-primary">
-          <Plus size={16} /> New Estimate
+          <Plus size={16} /> {t('new_estimate_btn')}
         </button>
       </div>
 
@@ -399,13 +401,13 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
           className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'pending' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
           onClick={() => setActiveTab('pending')}
         >
-          Pending
+          {t('status_pending')}
         </button>
         <button 
           className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'confirmed' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
           onClick={() => setActiveTab('confirmed')}
         >
-          Completed
+          {t('settled')}
         </button>
       </div>
 
@@ -415,7 +417,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search customer or phone..."
+            placeholder={t('search_customer_placeholder')}
             className="input pl-9"
           />
         </div>

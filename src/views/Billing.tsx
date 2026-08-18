@@ -7,6 +7,7 @@ import { useRealtime } from '@/lib/useRealtime';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
+import { useTranslation } from '@/lib/i18n';
 
 function numberToWords(num: number): string {
   if (num === 0) return 'INR Zero Only';
@@ -26,6 +27,7 @@ function numberToWords(num: number): string {
 }
 
 export default function Billing() {
+  const { t } = useTranslation();
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -202,10 +204,10 @@ export default function Billing() {
   });
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Billing Team</h1>
-        <p className="text-slate-500 dark:text-slate-400">Review dispatches and assign drivers for loading.</p>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('billing_title')}</h1>
+        <p className="text-slate-500 dark:text-slate-400">{t('company_tagline')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -214,7 +216,7 @@ export default function Billing() {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <span className="badge bg-blue-100 text-blue-800 font-bold uppercase">
-                  New Dispatch
+                  {t('new_dispatch')}
                 </span>
                 <h3 className="font-bold text-lg mt-2 text-slate-800 dark:text-slate-100">{dispatch.dispatch_no}</h3>
               </div>
@@ -222,16 +224,16 @@ export default function Billing() {
             </div>
             
             <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300 mb-4">
-              <p><span className="font-medium text-slate-900 dark:text-slate-100">Customer:</span> {dispatch.customer?.name}</p>
-              <p><span className="font-medium text-slate-900 dark:text-slate-100">Phone:</span> {dispatch.customer?.phone}</p>
-              <p><span className="font-medium text-slate-900 dark:text-slate-100">Order Ref:</span> {dispatch.order?.order_no}</p>
+              <p><span className="font-medium text-slate-900 dark:text-slate-100">{t('customer_name')}:</span> {dispatch.customer?.name}</p>
+              <p><span className="font-medium text-slate-900 dark:text-slate-100">{t('customer_phone')}:</span> {dispatch.customer?.phone}</p>
+              <p><span className="font-medium text-slate-900 dark:text-slate-100">{t('order_no')}:</span> {dispatch.order?.order_no}</p>
             </div>
             
             <button
               onClick={() => setSelectedDispatch(dispatch)}
               className="btn-primary w-full"
             >
-              Review & Bill
+              {t('record_payment')}
             </button>
           </div>
         ))}
