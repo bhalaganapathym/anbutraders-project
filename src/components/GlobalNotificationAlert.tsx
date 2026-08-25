@@ -19,7 +19,7 @@ export default function GlobalNotificationAlert() {
       const notifs = data as Notification[];
       
       const myNotifs = notifs.filter(n => {
-        if (user.role === 'dispatch') return n.type === 'order_confirmed';
+        if (user.role === 'dispatch') return n.type === 'order_confirmed' || n.type === 'bill_generated';
         if (user.role === 'billing') return n.type === 'dispatch_completed' || n.type === 'photo_uploaded' || n.type === 'billing_alert';
         return true;
       });

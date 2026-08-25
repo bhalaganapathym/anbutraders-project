@@ -267,12 +267,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     const estimatedWeight = lines.reduce((acc, l) => acc + (l.quantity * Number(l.product.standard_weight || 0)), 0);
     msg += `Estimated Weight: ${estimatedWeight} kg\n`;
     const subtotal = lines.reduce((acc, l) => acc + (l.quantity * Number(l.product.price || 0)), 0);
-    const gst = subtotal * 0.18; 
-    msg += `*Grand Total: ₹${(subtotal + gst).toLocaleString()}*\n`;
+    msg += `*Grand Total (Tax Inclusive): ₹${subtotal.toLocaleString()}*\n`;
     
-    if (notes) {
-      msg += `\nNotes: ${notes}\n`;
-    }
     return encodeURIComponent(msg);
   };
 
@@ -310,7 +306,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       const payload = {
         customer_id: selectedCustomer.id,
         delivery_address: deliveryAddress,
-        notes,
+        notes: '',
         status: 'pending',
         items: lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, unit: l.unit }))
       };
@@ -334,8 +330,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const totalQty = lines.reduce((acc, l) => acc + l.quantity, 0);
   const estimatedWeight = lines.reduce((acc, l) => acc + (l.quantity * Number(l.product.standard_weight || 0)), 0);
   const subtotal = lines.reduce((acc, l) => acc + (l.quantity * Number(l.product.price || 0)), 0);
-  const gst = subtotal * 0.18; 
-  const grandTotal = subtotal + gst;
+  const grandTotal = subtotal;
 
   return (
     <div className="min-h-screen bg-[#F7F9FC] text-slate-800 pb-32">
@@ -660,24 +655,6 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                 )}
               </div>
             </div>
-
-            {/* Notes Section */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="rounded-t-xl border-b border-slate-100 bg-slate-50/50 px-5 py-4">
-                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                  <FileText size={18} className="text-blue-600" /> Additional Notes
-                </h2>
-              </div>
-              <div className="p-5">
-                <textarea
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  rows={3}
-                  className="w-full resize-none rounded-lg border border-slate-300 p-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                  placeholder="Special instructions for delivery or payment..."
-                />
-              </div>
-            </div>
           </div>
 
           {/* Right Column (Summary) */}
@@ -700,25 +677,13 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                 </div>
               </div>
               
-              <div className="my-5 border-t border-slate-100"></div>
-              
-              <div className="space-y-4 text-sm font-medium text-slate-600">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Subtotal</span>
-                  <span className="text-slate-900">₹{subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Estimated GST (18%)</span>
-                  <span className="text-slate-900">₹{gst.toLocaleString()}</span>
-                </div>
-              </div>
-              
               <div className="my-5 border-t border-slate-200 border-dashed"></div>
               
               <div className="flex justify-between items-center text-slate-900">
                 <span className="text-base font-bold">Grand Total</span>
                 <span className="text-2xl font-black text-blue-600 tracking-tight">₹{grandTotal.toLocaleString()}</span>
               </div>
+              <p className="text-[11px] text-slate-400 mt-2 text-right">Tax inclusive pricing</p>
             </div>
           </div>
           

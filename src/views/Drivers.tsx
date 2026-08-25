@@ -71,16 +71,16 @@ export default function Drivers() {
   const notifyDriverWhatsApp = (driver: Driver) => {
     const cleanPhone = driver.phone_number.replace(/[^0-9]/g, '');
     const text = 
-`🚛 *ANBU GROUPS — Trip Assignment Notice*
+`🚛 *அன்பு குரூப்ஸ் — டெலிவரி பணி ஒதுக்கீடு*
 ─────────────────────────────
-Hello ${driver.name},
+வணக்கம் ${driver.name},
 
-You have been assigned a delivery trip.
-Vehicle No: ${driver.vehicle_number || 'N/A'}
+உங்களுக்கு புதிய டெலிவரி பணி ஒதுக்கப்பட்டுள்ளது.
+வாகன எண்: ${driver.vehicle_number || 'N/A'}
 
-Please report to the warehouse for vehicle loading.
+பொருட்களை ஏற்றுவதற்கு குடோனுக்கு வரவும்.
 ─────────────────────────────
-ANBU GROUPS`;
+அன்பு குரூப்ஸ்`;
 
     const url = `https://wa.me/${cleanPhone ? (cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone) : ''}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');

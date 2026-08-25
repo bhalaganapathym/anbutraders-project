@@ -3,7 +3,7 @@ import { useRealtime } from '@/lib/useRealtime';
 import { api, type Product } from '@/lib/api';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
-import { Search, IndianRupee, Pencil, Layers, TrendingUp } from 'lucide-react';
+import { Search, IndianRupee, Pencil, Layers, TrendingUp, Scale } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
 const categories = ['Steel', 'Cement', 'TMT Bars', 'Pipes', 'Other'];
@@ -25,6 +25,7 @@ export default function PriceList() {
   const [activeCat, setActiveCat] = useState('All');
   const [editing, setEditing] = useState<Product | null>(null);
   const [price, setPrice] = useState('');
+  const [ratePerKg, setRatePerKg] = useState('');
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -49,12 +50,34 @@ export default function PriceList() {
 
   const filtered = products
     .filter((p) => activeCat === 'All' || p.category === activeCat)
-    .filter((p) => [p.name, p.category].join(' ').toLowerCase().includes(query.toLowerCase()));
+    .filter((p) => [p.name, p.category, p.brand ?? ''].join(' ').toLowerCase().includes(query.toLowerCase()));
 
   const openEdit = (p: Product) => {
     setEditing(p);
-    setPrice(String(p.price ?? 0));
+    const pPrice = Number(p.price ?? 0);
+    setPrice(String(pPrice));
+    if (p.standard_weight && p.standard_weight > 0) {
+      setRatePerKg((pPrice / p.standard_weight).toFixed(2));
+    } else {
+      setRatePerKg('');
+    }
     setOpen(true);
+  };
+
+  const handlePriceChange = (val: string) => {
+    setPrice(val);
+    if (editing?.standard_weight && editing.standard_weight > 0) {
+      const pNum = parseFloat(val) || 0;
+      setRatePerKg((pNum / editing.standard_weight).toFixed(2));
+    }
+  };
+
+  const handleRatePerKgChange = (val: string) => {
+    setRatePerKg(val);
+    if (editing?.standard_weight && editing.standard_weight > 0) {
+      const rNum = parseFloat(val) || 0;
+      setPrice((rNum * editing.standard_weight).toFixed(2));
+    }
   };
 
   const save = async () => {
@@ -155,42 +178,55 @@ export default function PriceList() {
         <>
           {/* MOBILE CARD VIEW (< 768px) */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
-            {filtered.map((p) => (
-              <div key={p.id} className="card p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-bold text-slate-800 text-sm">{p.name}</p>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      {p.brand && (
-                        <span className="badge bg-indigo-50 text-indigo-700 text-xs">{p.brand}</span>
-                      )}
-                      <span className={`badge text-xs ${categoryColor[p.category] ?? categoryColor.Other}`}>
-                        {p.category}
+            {filtered.map((p) => {
+              const hasWeight = p.standard_weight && p.standard_weight > 0;
+              const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
+
+              return (
+                <div key={p.id} className="card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">{p.name}</p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        {p.brand && (
+                          <span className="badge bg-indigo-50 text-indigo-700 text-xs">{p.brand}</span>
+                        )}
+                        <span className={`badge text-xs ${categoryColor[p.category] ?? categoryColor.Other}`}>
+                          {p.category}
+                        </span>
+                        {p.size && (
+                          <span className="text-xs text-slate-500 font-medium">Size: {p.size}</span>
+                        )}
+                        {hasWeight && (
+                          <span className="text-xs text-slate-500 font-medium">Std: {p.standard_weight}kg</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="flex items-center text-base font-extrabold text-amber-600">
+                        ₹{(p.price ?? 0).toFixed(2)}
                       </span>
-                      {p.size && (
-                        <span className="text-xs text-slate-500 font-medium">Size: {p.size}</span>
+                      <span className="text-[11px] text-slate-400">per {p.unit}</span>
+                      {rateKg && (
+                        <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                          (₹{rateKg}/kg)
+                        </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span className="flex items-center text-base font-extrabold text-amber-600">
-                      ₹{(p.price ?? 0).toFixed(2)}
-                    </span>
-                    <span className="text-[11px] text-slate-400">per {p.unit}</span>
+                  <div className="pt-2 border-t border-slate-100 flex justify-end">
+                    <button
+                      onClick={() => openEdit(p)}
+                      className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-1.5 font-semibold"
+                    >
+                      <Pencil size={14} /> Edit Price
+                    </button>
                   </div>
                 </div>
-
-                <div className="pt-2 border-t border-slate-100 flex justify-end">
-                  <button
-                    onClick={() => openEdit(p)}
-                    className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-1.5 font-semibold"
-                  >
-                    <Pencil size={14} /> Edit Price
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* DESKTOP TABLE VIEW (>= 768px) */}
@@ -203,77 +239,139 @@ export default function PriceList() {
                   <th className="th">Size</th>
                   <th className="th">Category</th>
                   <th className="th">Unit</th>
-                  <th className="th">Price</th>
+                  <th className="th">Std Weight</th>
+                  <th className="th">Price / Rate</th>
                   <th className="th text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50/60 transition">
-                    <td className="td">
-                      <div className="flex items-center gap-2">
-                        <Layers size={16} className="text-slate-400" />
-                        <span className="font-medium text-slate-800">{p.name}</span>
-                      </div>
-                    </td>
-                    <td className="td">
-                      {p.brand ? <span className="badge bg-indigo-50 text-indigo-700">{p.brand}</span> : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="td">
-                      {p.size ? <span className="font-medium text-slate-600">{p.size}</span> : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="td">
-                      <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
-                        {p.category}
-                      </span>
-                    </td>
-                    <td className="td">{p.unit}</td>
-                    <td className="td">
-                      <span className="flex items-center text-base font-bold text-slate-800">
-                        ₹{(p.price ?? 0).toFixed(2)}
-                        <span className="ml-1 text-xs font-normal text-slate-400">per {p.unit}</span>
-                      </span>
-                    </td>
-                    <td className="td text-right">
-                      <button onClick={() => openEdit(p)} className="btn-secondary py-1.5 px-3 text-xs">
-                        <Pencil size={14} /> Edit Price
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((p) => {
+                  const hasWeight = p.standard_weight && p.standard_weight > 0;
+                  const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
+
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                      <td className="td">
+                        <div className="flex items-center gap-2">
+                          <Layers size={16} className="text-slate-400" />
+                          <span className="font-medium text-slate-800">{p.name}</span>
+                        </div>
+                      </td>
+                      <td className="td">
+                        {p.brand ? <span className="badge bg-indigo-50 text-indigo-700">{p.brand}</span> : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="td">
+                        {p.size ? <span className="font-medium text-slate-600">{p.size}</span> : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="td">
+                        <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
+                          {p.category}
+                        </span>
+                      </td>
+                      <td className="td">{p.unit}</td>
+                      <td className="td">
+                        {hasWeight ? <span className="font-medium text-slate-600">{p.standard_weight} kg</span> : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="td">
+                        <div>
+                          <span className="flex items-center text-base font-bold text-slate-800">
+                            ₹{(p.price ?? 0).toFixed(2)}
+                            <span className="ml-1 text-xs font-normal text-slate-400">per {p.unit}</span>
+                          </span>
+                          {rateKg && (
+                            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                              ₹{rateKg} / kg
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="td text-right">
+                        <button onClick={() => openEdit(p)} className="btn-secondary py-1.5 px-3 text-xs">
+                          <Pencil size={14} /> Edit Price
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Update Price" size="sm">
+      {/* Edit Price Modal */}
+      <Modal open={open} onClose={() => setOpen(false)} title="Update Price" size="md">
         {editing && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-white/20 dark:bg-slate-800/30 p-3">
-              <p className="font-semibold text-slate-800 dark:text-slate-100">{editing.name}</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                {editing.brand && `${editing.brand} `}
-                {editing.size && `· ${editing.size} `}
-                {editing.category} · per {editing.unit}
-              </p>
-            </div>
-            <div>
-              <label className="label">Price per unit (₹)</label>
-              <div className="relative">
-                <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-                <input
-                  type="number"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="input pl-9"
-                  min="0"
-                  step="0.01"
-                  autoFocus
-                />
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 border border-slate-200 dark:border-slate-700">
+              <p className="font-bold text-slate-800 dark:text-slate-100">{editing.name}</p>
+              <div className="flex gap-2 text-xs text-slate-500 mt-1 flex-wrap">
+                {editing.brand && <span>Brand: <strong>{editing.brand}</strong></span>}
+                {editing.size && <span>• Size: <strong>{editing.size}</strong></span>}
+                <span>• Unit: <strong>{editing.unit}</strong></span>
+                {editing.standard_weight ? <span>• Std Weight: <strong>{editing.standard_weight} kg</strong></span> : null}
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+
+            {/* Steel / Product Pricing Linkage */}
+            {editing.standard_weight && editing.standard_weight > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-indigo-50/40 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/40">
+                <div>
+                  <label className="label flex items-center gap-1">
+                    <Scale size={13} className="text-indigo-600" /> Rate per kg (₹/kg)
+                  </label>
+                  <div className="relative">
+                    <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={ratePerKg}
+                      onChange={(e) => handleRatePerKgChange(e.target.value)}
+                      className="input pl-8 font-bold text-indigo-700 dark:text-indigo-300"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Price per {editing.unit} (₹)</label>
+                  <div className="relative">
+                    <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={price}
+                      onChange={(e) => handlePriceChange(e.target.value)}
+                      className="input pl-8 font-bold text-slate-800 dark:text-slate-100"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                <div className="col-span-full text-xs text-indigo-700 dark:text-indigo-300 bg-white/70 dark:bg-slate-800/70 p-2 rounded-lg border border-indigo-200/60 dark:border-indigo-800">
+                  💡 1 {editing.unit} ({editing.standard_weight} kg) × ₹{parseFloat(ratePerKg) || 0}/kg = <strong>₹{parseFloat(price) || 0} / {editing.unit}</strong>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="label">Price per {editing.unit} (₹)</label>
+                <div className="relative">
+                  <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="input pl-9 font-bold"
+                    min="0"
+                    step="0.01"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
               <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
               <button onClick={save} disabled={saving} className="btn-primary">
                 {saving ? 'Saving...' : 'Save Price'}

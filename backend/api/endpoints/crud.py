@@ -191,7 +191,14 @@ def adjust_brand_prices(
     updated_count = 0
     for p in brand_products:
         curr_price = p.price or Decimal("0")
-        p.price = max(Decimal("0"), curr_price + delta)
+        cat = (p.category or "").lower()
+        if ("steel" in cat or "tmt" in cat) and p.standard_weight and p.standard_weight > 0:
+            std_weight = Decimal(str(p.standard_weight))
+            price_change = delta * std_weight
+        else:
+            price_change = delta
+            
+        p.price = max(Decimal("0"), curr_price + price_change)
         updated_count += 1
         
     db.commit()

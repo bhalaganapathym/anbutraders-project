@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, type Dispatch, type DispatchItem, type Product } from '@/lib/api';
+import { api, type Dispatch, type DispatchItem, type Product, type Driver } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import {
-  ArrowLeft, CheckCircle2, AlertCircle, Camera, User, Calendar, MapPin, Search, Plus, Truck
+  ArrowLeft, CheckCircle2, AlertCircle, Camera, User, Calendar, MapPin, Search, Plus, Truck, UserCheck
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 
-type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null };
+type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string; order_no?: string } };
 
 // Utility to compress images
 const compressImage = async (file: File): Promise<File> => {
@@ -72,10 +72,12 @@ export default function DispatchDashboard({
   
   // Products lookup to get standard_weight
   const [products, setProducts] = useState<Product[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [weightThreshold, setWeightThreshold] = useState<number>(3);
   
   useEffect(() => {
     api.get('/products').then(data => setProducts(data)).catch(() => {});
+    api.get('/drivers').then(data => setDrivers(data)).catch(() => {});
     api.get('/settings/weight_difference_threshold')
        .then(data => { if (data && data.value) setWeightThreshold(Number(data.value)); })
        .catch(() => {});
@@ -158,42 +160,43 @@ export default function DispatchDashboard({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+    
     canvas.toBlob(async (blob) => {
-      if (blob) {
-        if (cameraType === 'item' && activeCameraItemId) {
-          const file = new File([blob], `item_${activeCameraItemId}_${Date.now()}.jpg`, { type: 'image/jpeg' });
-          const compressed = await compressImage(file);
-          const previewUrl = URL.createObjectURL(compressed);
-          setItemVerification(prev => ({
-            ...prev,
-            [activeCameraItemId]: { ...prev[activeCameraItemId], photoFile: compressed, photoPreview: previewUrl }
-          }));
-        } else if (cameraType === 'vehicle') {
-          const file = new File([blob], `goods_${Date.now()}.jpg`, { type: 'image/jpeg' });
-          const compressed = await compressImage(file);
-          setVehicleLeavePhotoFile(compressed);
-          setVehicleLeavePhotoPreview(URL.createObjectURL(compressed));
-        }
-        
-        toast('Photo captured', 'success');
-        stopCamera();
+      if (!blob) return;
+      const file = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const compressed = await compressImage(file);
+      const preview = URL.createObjectURL(compressed);
+
+      if (cameraType === 'item' && activeCameraItemId) {
+        setItemVerification(prev => ({
+          ...prev,
+          [activeCameraItemId]: {
+            ...prev[activeCameraItemId],
+            photoFile: compressed,
+            photoPreview: preview
+          }
+        }));
+      } else if (cameraType === 'vehicle') {
+        setVehicleLeavePhotoFile(compressed);
+        setVehicleLeavePhotoPreview(preview);
       }
-    }, 'image/jpeg', 0.85);
+      stopCamera();
+    }, 'image/jpeg', 0.6);
   };
-  
-  // Calculate weights
+
+  // Calculations
   let estimatedTotal = 0;
   let actualTotal = 0;
-  
+
   detailItems.forEach(item => {
     const prod = products.find(p => p.id === item.product_id);
-    const stdWt = prod?.standard_weight || 0;
-    estimatedTotal += stdWt * item.quantity;
+    if (prod && prod.standard_weight) {
+      estimatedTotal += prod.standard_weight * item.quantity;
+    }
     
-    // For read-only completed state, use saved weights, else use inputs
-    if (detail.status !== 'completed') {
+    if (itemVerification[item.id]) {
       const iv = itemVerification[item.id];
-      if (iv && iv.weight) {
+      if (iv.weight) {
         let wt = Number(iv.weight);
         if (iv.weightUnit === 'g') wt = wt / 1000;
         actualTotal += wt;
@@ -206,19 +209,32 @@ export default function DispatchDashboard({
   }
 
   const weightDiff = Math.abs(estimatedTotal - actualTotal);
-  const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && weightDiff > weightThreshold;
+  const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && actualTotal > 0 && weightDiff > weightThreshold;
 
-  // Vehicle Details State (Pre-filled from billing if ready)
+  // Vehicle Details State (Phase 1 Driver assignment)
+  const [selectedDriverId, setSelectedDriverId] = useState('');
   const [vehicleNo, setVehicleNo] = useState(detail.vehicle_number || '');
   const [driverName, setDriverName] = useState(detail.driver_name || '');
   const [driverMobile, setDriverMobile] = useState(detail.driver_mobile || '');
-  const [remarks, setRemarks] = useState('');
+  const [remarks, setRemarks] = useState(detail.notes || '');
+
+  const handleSelectDriver = (id: string) => {
+    setSelectedDriverId(id);
+    const drv = drivers.find(d => d.id === id);
+    if (drv) {
+      setDriverName(drv.name);
+      setDriverMobile(drv.phone_number);
+      if (drv.vehicle_number) {
+        setVehicleNo(drv.vehicle_number);
+      }
+    }
+  };
 
   // Completion Logic
   const [isCompletedLocal, setIsCompletedLocal] = useState(false);
   const allVerified = detailItems.every(item => itemVerification[item.id]?.verified);
   
-  const canSendToBilling = allVerified && !isWeightWarning && detail.status === 'pending';
+  const canSendToBilling = allVerified && detail.status === 'pending';
   const canLoadAndComplete = detail.status === 'ready_for_loading';
   
   const [completing, setCompleting] = useState(false);
@@ -252,6 +268,10 @@ export default function DispatchDashboard({
       await api.put(`/dispatches/${detail.id}`, {
         ...detail,
         status: 'sent_to_billing',
+        vehicle_number: vehicleNo.trim() || null,
+        driver_name: driverName.trim() || null,
+        driver_mobile: driverMobile.trim() || null,
+        notes: remarks,
         weights: [...(detail.weights || []), ...newWeights],
         photos: [...(detail.photos || []), ...newPhotos]
       });
@@ -260,7 +280,7 @@ export default function DispatchDashboard({
       await api.post('/notifications', {
         type: 'billing_alert',
         title: `Dispatch ${detail.dispatch_no} ready for billing`,
-        message: `Dispatch ${detail.dispatch_no} for ${customerName} has been verified and is ready for billing.`,
+        message: `Dispatch ${detail.dispatch_no} for ${customerName} has been verified and assigned driver ${driverName || 'N/A'}. Ready for billing.`,
         dispatch_id: detail.id,
         order_id: detail.order_id,
         customer_name: customerName,
@@ -313,7 +333,6 @@ export default function DispatchDashboard({
       setConfirmModalOpen(false);
       setIsCompletedLocal(true);
       onRefresh();
-      // We do NOT close the modal so they can see the WhatsApp buttons
     } catch {
       toast('Failed to complete dispatch', 'error');
     }
@@ -322,8 +341,31 @@ export default function DispatchDashboard({
 
   const isCompleted = detail.status === 'completed' || isCompletedLocal;
 
+  // Driver WhatsApp Tamil Message
+  const getTamilDriverWhatsAppUrl = () => {
+    const phone = (detail.driver_mobile || driverMobile || '').replace(/\D/g, '');
+    const finalPhone = phone.length === 10 ? `91${phone}` : phone;
+    const pendingAmt = (detail as any).bill?.pending_amount ?? 0;
+    const text = 
+`🚛 *அன்பு குரூப்ஸ் — டெலிவரி விவரம்*
+─────────────────────────────
+வணக்கம் ${detail.driver_name || driverName || 'ஓட்டுநர்'},
+
+உங்களுக்கு புதிய டெலிவரி பணி ஒதுக்கப்பட்டுள்ளது:
+📋 *ஆர்டர் எண்:* ${detail.order?.order_no || detail.dispatch_no || ''}
+👤 *வாடிக்கையாளர்:* ${detail.customer?.name || ''}
+📞 *தொலைபேசி:* ${detail.customer?.phone || '—'}
+📍 *டெலிவரி முகவரி:* ${detail.delivery_address || detail.customer?.address || 'முகவரி குறிப்பிடப்படவில்லை'}
+💰 *வாடிக்கையாளரிடம் பெற வேண்டிய தொகை:* ₹${Number(pendingAmt).toLocaleString('en-IN')}
+🚛 *வாகன எண்:* ${detail.vehicle_number || vehicleNo || '—'}
+─────────────────────────────
+அன்பு குரூப்ஸ்`;
+
+    return `https://wa.me/${finalPhone}?text=${encodeURIComponent(text)}`;
+  };
+
   return (
-    <div className={`flex flex-col min-h-[85vh] bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border ${isWeightWarning ? 'border-rose-500 animate-screen-blink' : 'border-slate-200 dark:border-slate-800'}`}>
+    <div className="flex flex-col min-h-[85vh] bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800">
       
       {/* Sticky Header */}
       <header className="sticky top-0 z-30 flex items-center justify-between bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-6 py-4">
@@ -342,7 +384,7 @@ export default function DispatchDashboard({
       </header>
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        {/* Top Summary Cards (12-column grid inside) */}
+        {/* Top Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center gap-2 text-slate-500 mb-2">
@@ -390,12 +432,16 @@ export default function DispatchDashboard({
               const catLower = (prod?.category || '').toLowerCase();
               const isSteel = catLower.includes('steel') || catLower.includes('tmt');
               let isSteelMismatch = false;
-              if (isSteel && requiresWeight && !isVerificationDone && iv.weight) {
+              let expectedWt = 0;
+              let itemDiff = 0;
+              let tolerance = weightThreshold;
+
+              if (requiresWeight && !isVerificationDone && iv.weight) {
                 let actualWt = Number(iv.weight);
                 if (iv.weightUnit === 'g') actualWt = actualWt / 1000;
-                const expectedWt = (prod?.standard_weight || 0) * item.quantity;
-                const tolerance = prod?.weight_tolerance != null ? Number(prod.weight_tolerance) : weightThreshold;
-                const itemDiff = Math.abs(expectedWt - actualWt);
+                expectedWt = (prod?.standard_weight || 0) * item.quantity;
+                tolerance = prod?.weight_tolerance != null ? Number(prod.weight_tolerance) : weightThreshold;
+                itemDiff = Math.abs(expectedWt - actualWt);
                 if (itemDiff > tolerance) {
                   isSteelMismatch = true;
                 }
@@ -406,7 +452,7 @@ export default function DispatchDashboard({
                   key={item.id} 
                   className={`grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border transition ${
                     isSteelMismatch 
-                      ? 'border-2 border-rose-500 animate-pulse bg-rose-50/40 dark:bg-rose-950/20' 
+                      ? 'border-2 border-rose-400 bg-rose-50/30 dark:bg-rose-950/20' 
                       : iv.verified 
                         ? 'bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/50' 
                         : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700/50'
@@ -427,28 +473,42 @@ export default function DispatchDashboard({
                     <p className="text-sm font-medium text-slate-500 mb-2">Weight Verification</p>
                     {requiresWeight ? (
                       !isVerificationDone ? (
-                        <div className="flex gap-2 items-center">
-                          <input 
-                            type="number" 
-                            value={iv.weight} 
-                            onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weight: e.target.value}}))}
-                            disabled={iv.verified}
-                            className={`input w-24 text-center font-bold ${isSteelMismatch ? 'border-rose-500 text-rose-600 bg-rose-50' : ''}`}
-                            placeholder="0.0" 
-                          />
-                          <select 
-                            value={iv.weightUnit} 
-                            onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weightUnit: e.target.value as 'kg'|'g'}}))}
-                            disabled={iv.verified}
-                            className="input w-20 px-2"
-                          >
-                            <option value="kg">kg</option>
-                            <option value="g">g</option>
-                          </select>
-                          {!iv.verified && iv.weight && !isSteelMismatch && (
-                            <div className="text-emerald-600 flex items-center gap-1 text-sm ml-2 font-medium">
-                              <CheckCircle2 size={14} /> Recorded
+                        <div>
+                          <div className="flex gap-2 items-center">
+                            {/* Localized Shake Alert on weight box every 4s during mismatch */}
+                            <div className={isSteelMismatch ? 'animate-shake-periodic' : ''}>
+                              <input 
+                                type="number" 
+                                value={iv.weight} 
+                                onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weight: e.target.value}}))}
+                                disabled={iv.verified}
+                                className={`input w-28 text-center font-bold transition-all ${
+                                  isSteelMismatch 
+                                    ? 'border-2 border-rose-500 text-rose-700 bg-rose-50 ring-2 ring-rose-300 dark:ring-rose-900 shadow-sm' 
+                                    : 'focus:ring-2 focus:ring-blue-400'
+                                }`}
+                                placeholder="0.0" 
+                              />
                             </div>
+                            <select 
+                              value={iv.weightUnit} 
+                              onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weightUnit: e.target.value as 'kg'|'g'}}))}
+                              disabled={iv.verified}
+                              className="input w-20 px-2"
+                            >
+                              <option value="kg">kg</option>
+                              <option value="g">g</option>
+                            </select>
+                            {!iv.verified && iv.weight && !isSteelMismatch && (
+                              <div className="text-emerald-600 flex items-center gap-1 text-sm ml-2 font-medium">
+                                <CheckCircle2 size={14} /> Recorded
+                              </div>
+                            )}
+                          </div>
+                          {isSteelMismatch && (
+                            <p className="text-[11px] text-rose-600 font-bold mt-1.5 flex items-center gap-1">
+                              <AlertCircle size={12} /> Expected: ~{expectedWt.toFixed(1)}kg (Diff: {itemDiff.toFixed(1)}kg &gt; {tolerance}kg tol)
+                            </p>
                           )}
                         </div>
                       ) : (
@@ -513,7 +573,7 @@ export default function DispatchDashboard({
           </div>
         </div>
 
-        {/* Lower Section: Weights & Vehicle */}
+        {/* Lower Section: Weights & Phase 1 Driver Assignment */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Weight Summary */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-6 shadow-sm">
@@ -529,76 +589,91 @@ export default function DispatchDashboard({
               </div>
               
               {/* Validation UI */}
-              <div className={`p-4 rounded-lg border flex justify-between items-center ${isWeightWarning ? 'bg-rose-50 border-rose-200 animate-pulse' : weightDiff === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+              <div className={`p-4 rounded-lg border flex justify-between items-center ${isWeightWarning ? 'bg-rose-50 border-rose-200' : weightDiff === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                 <span className={`font-medium ${isWeightWarning ? 'text-rose-700' : weightDiff === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  Difference
+                  Total Difference
                 </span>
                 <span className={`text-lg font-bold ${isWeightWarning ? 'text-rose-800' : weightDiff === 0 ? 'text-emerald-800' : 'text-amber-800'}`}>
-                  {weightDiff === 0 ? 'Matched' : `${weightDiff.toFixed(2)} kg`}
+                  {actualTotal === 0 ? 'Pending Entry' : weightDiff === 0 ? 'Matched' : `${weightDiff.toFixed(2)} kg`}
                 </span>
               </div>
-              {isWeightWarning && (
-                <p className="text-sm text-rose-600 font-bold flex items-center gap-1 mt-[-8px]">
-                  <AlertCircle size={14} /> Difference exceeds allowed threshold ({weightThreshold}kg). Dispatch cannot be processed.
-                </p>
-              )}
             </div>
           </div>
 
-          {/* Vehicle Details & Remarks */}
+          {/* Phase 1: Driver Assignment & Vehicle Details */}
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4">
-              {detail.status === 'ready_for_loading' || detail.status === 'completed' ? 'Vehicle Details & Remarks' : 'Remarks / Notes'}
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center justify-between">
+              <span>Driver Assignment & Transport</span>
+              <span className="text-xs px-2.5 py-1 rounded bg-amber-100 text-amber-800 font-bold uppercase">Phase 1</span>
             </h2>
-            <div className="grid grid-cols-2 gap-4">
-              {(detail.status === 'ready_for_loading' || detail.status === 'completed') && (
-                <>
-                  <div>
-                    <label className="label">Vehicle Number</label>
-                    <input 
-                      type="text" 
-                      value={vehicleNo} 
-                      onChange={(e) => setVehicleNo(e.target.value)}
-                      disabled={isCompleted}
-                      className="input font-semibold" 
-                      placeholder="e.g. TN 38 AB 1234" 
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Transport Company</label>
-                    <input type="text" className="input" placeholder="e.g. SR Travels" disabled={isCompleted} />
-                  </div>
-                  <div>
-                    <label className="label">Driver Name</label>
-                    <input 
-                      type="text" 
-                      value={driverName} 
-                      onChange={(e) => setDriverName(e.target.value)}
-                      disabled={isCompleted}
-                      className="input" 
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Driver Mobile</label>
-                    <input 
-                      type="text" 
-                      value={driverMobile} 
-                      onChange={(e) => setDriverMobile(e.target.value)}
-                      disabled={isCompleted}
-                      className="input" 
-                    />
-                  </div>
-                </>
+            
+            <div className="space-y-4">
+              {/* Driver Dropdown */}
+              {!isCompleted && (
+                <div>
+                  <label className="label flex items-center gap-1">
+                    <UserCheck size={14} className="text-amber-600" /> Select Registered Driver
+                  </label>
+                  <select
+                    value={selectedDriverId}
+                    onChange={(e) => handleSelectDriver(e.target.value)}
+                    disabled={isCompleted}
+                    className="input font-medium"
+                  >
+                    <option value="">Choose driver from fleet...</option>
+                    {drivers.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({d.phone_number}) {d.vehicle_number ? `— Vehicle: ${d.vehicle_number}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
-              <div className="col-span-2">
-                <label className="label">Remarks / Notes</label>
-                <textarea 
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  disabled={isCompleted}
-                  className="input min-h-[80px]" 
-                  placeholder="Any specific instructions..."
-                ></textarea>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Driver Name</label>
+                  <input 
+                    type="text" 
+                    value={driverName} 
+                    onChange={(e) => setDriverName(e.target.value)}
+                    disabled={isCompleted}
+                    className="input font-semibold" 
+                    placeholder="e.g. Ramesh" 
+                  />
+                </div>
+                <div>
+                  <label className="label">Driver Mobile</label>
+                  <input 
+                    type="text" 
+                    value={driverMobile} 
+                    onChange={(e) => setDriverMobile(e.target.value)}
+                    disabled={isCompleted}
+                    className="input" 
+                    placeholder="e.g. 9876543210" 
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Vehicle Number</label>
+                  <input 
+                    type="text" 
+                    value={vehicleNo} 
+                    onChange={(e) => setVehicleNo(e.target.value)}
+                    disabled={isCompleted}
+                    className="input font-semibold" 
+                    placeholder="e.g. TN 38 AB 1234" 
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Remarks / Delivery Instructions</label>
+                  <textarea 
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    disabled={isCompleted}
+                    className="input min-h-[60px]" 
+                    placeholder="Special instructions for loading or delivery..."
+                  ></textarea>
+                </div>
               </div>
             </div>
           </div>
@@ -610,7 +685,7 @@ export default function DispatchDashboard({
       <div className="sticky bottom-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center">
         <div>
           {isCompleted && (
-            <div className="flex gap-4">
+            <div className="flex gap-3">
               <a
                 href={`https://wa.me/${detail.customer?.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.customer?.name}, your order ${detail.order?.order_no || ''} has been dispatched via vehicle ${detail.vehicle_number || ''}. Driver: ${detail.driver_name || ''} (${detail.driver_mobile || ''}). Pending amount to pay: Rs. ${(detail as any).bill?.pending_amount || 0}.`)}`}
                 target="_blank"
@@ -619,13 +694,14 @@ export default function DispatchDashboard({
               >
                 Message Customer
               </a>
+              {/* Message Driver in Tamil */}
               <a
-                href={`https://wa.me/${detail.driver_mobile?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${detail.driver_name}, you have been assigned to order ${detail.order?.order_no || ''} for ${detail.customer?.name}. Delivery Address: ${detail.delivery_address || ''}. Pending amount to collect from customer: Rs. ${(detail as any).bill?.pending_amount || 0}.`)}`}
+                href={getTamilDriverWhatsAppUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-secondary"
+                className="btn-secondary text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 font-bold"
               >
-                Message Driver
+                Message Driver (தமிழ்)
               </a>
             </div>
           )}
@@ -638,7 +714,7 @@ export default function DispatchDashboard({
               disabled={!canSendToBilling || completing}
               className={`flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition ${
                 canSendToBilling 
-                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg' 
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg cursor-pointer' 
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }`}
             >
@@ -705,7 +781,7 @@ export default function DispatchDashboard({
       <Modal open={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Send to Billing">
         <div className="space-y-4">
           <div className="p-4 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 rounded-lg">
-            Are you sure you want to send this dispatch to billing? All weights and images will be finalized.
+            Are you sure you want to send this dispatch to billing? All weights, photos, and assigned driver details will be finalized.
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setConfirmModalOpen(false)} className="btn-secondary" disabled={completing}>Cancel</button>

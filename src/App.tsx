@@ -83,7 +83,7 @@ function AppContent() {
       if (!user) return;
       const data = await api.get('/notifications');
       const applicable = data.filter((n: any) => {
-        if (user.role === 'dispatch') return n.type === 'order_confirmed';
+        if (user.role === 'dispatch') return n.type === 'order_confirmed' || n.type === 'bill_generated';
         if (user.role === 'billing') return n.type === 'dispatch_completed' || n.type === 'photo_uploaded' || n.type === 'billing_alert';
         return true;
       });

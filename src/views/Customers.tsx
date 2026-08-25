@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { useTranslation } from '@/lib/i18n';
 import CustomerLedgerModal from '@/components/CustomerLedgerModal';
-import { openWhatsApp, DEFAULT_COMPANY_IMAGE_URL } from '@/lib/whatsapp';
+import { openWhatsApp, shareWhatsAppWithMedia, DEFAULT_COMPANY_IMAGE_URL } from '@/lib/whatsapp';
 import { 
   Pencil, 
   Plus, 
@@ -126,22 +126,20 @@ export default function Customers() {
       return;
     }
     const msg = `🏗️ *ANBU TRADERS - Payment Reminder* 🧾
-----------------------------------------
+────────────────────────────────────────
 Dear *${c.name}*,
 Friendly reminder from Anbu Traders regarding your outstanding dues.
 
-🔴 *Outstanding Balance:* *₹${pending.toFixed(2)}*
-🏢 *Company Logo & Verification:*
-${DEFAULT_COMPANY_IMAGE_URL}
+🔴 *Outstanding Balance:* *₹${pending.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*
 
 💳 *UPI / GPay:* 9626325204
-📞 *Office Contact:* 0413-2964204
+📞 *Office Contact:* 0413-2964204 / 9626325204
 
 Kindly settle the balance at your earliest convenience.
 _Thank you for choosing Anbu Traders!_`;
 
     openWhatsApp(c.phone, msg);
-    toast(`Payment reminder sent to ${c.name}`, 'success');
+    toast(`WhatsApp payment reminder opened for ${c.name}`, 'success');
   };
 
   const totalOutstandingAll = customers.reduce((s, c) => s + Number(c.pending_amount || 0), 0);

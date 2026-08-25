@@ -8,15 +8,15 @@ import {
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import { useToast } from '@/components/Toast';
 import {
-  Plus, Search, Truck, Trash2, Package, AlertCircle, Clock, MessageSquare
+  Plus, Search, Truck, Trash2, Package, AlertCircle, Clock, MessageSquare, Play, MapPin, User
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import DispatchDashboard from './DispatchDashboard';
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
 import { useTranslation } from '@/lib/i18n';
 
-type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string } };
-type ConfirmedOrder = Order & { customer: { name: string } | null };
+type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string; order_no?: string } };
+type ConfirmedOrder = Order & { customer: { name: string; phone: string | null; address?: string | null } | null };
 
 function WaitClock({ timestamp }: { timestamp: string | Date }) {
   const [elapsed, setElapsed] = useState('');
@@ -59,12 +59,12 @@ export default function Dispatches() {
   const { t } = useTranslation();
   const toast = useToast();
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
+  const [confirmedOrders, setConfirmedOrders] = useState<ConfirmedOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [activeTab, setActiveTab] = useState<'new' | 'active' | 'completed'>('new');
   
   const [createOpen, setCreateOpen] = useState(false);
-  const [confirmedOrders, setConfirmedOrders] = useState<ConfirmedOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -80,7 +80,7 @@ export default function Dispatches() {
     });
   };
 
-  const toggleSelectAll = (items: DispatchRow[]) => {
+  const toggleSelectAll = (items: (DispatchRow | ConfirmedOrder)[]) => {
     if (selectedIds.size === items.length && items.length > 0) {
       setSelectedIds(new Set());
     } else {
@@ -102,11 +102,16 @@ export default function Dispatches() {
   };
 
   const load = useCallback(async () => {
-
     setLoading(true);
     try {
-      const data = await api.get('/dispatches');
-      setDispatches(data as DispatchRow[]);
+      const [allOrders, allDispatches]: [ConfirmedOrder[], DispatchRow[]] = await Promise.all([
+        api.get('/orders'),
+        api.get('/dispatches')
+      ]);
+      const existingDispatchOrderIds = new Set(allDispatches.map(d => d.order_id));
+      const freshConfirmed = allOrders.filter(o => o.status === 'confirmed' && !existingDispatchOrderIds.has(o.id));
+      setConfirmedOrders(freshConfirmed);
+      setDispatches(allDispatches);
     } catch {
       toast('Failed to load dispatches', 'error');
     }
@@ -118,47 +123,14 @@ export default function Dispatches() {
   }, [load]);
 
   useRealtime('dispatches', load);
+  useRealtime('orders', load);
 
-  const loadConfirmedOrders = useCallback(async () => {
-    try {
-      const [allOrders, allDispatches]: [ConfirmedOrder[], DispatchRow[]] = await Promise.all([
-        api.get('/orders'),
-        api.get('/dispatches')
-      ]);
-      const existingDispatchOrderIds = new Set(allDispatches.map(d => d.order_id));
-      const freshConfirmed = allOrders.filter(o => o.status === 'confirmed' && !existingDispatchOrderIds.has(o.id));
-      setConfirmedOrders(freshConfirmed);
-    } catch {
-      toast('Failed to load confirmed orders', 'error');
-    }
-  }, [toast]);
-
-  const openCreate = () => {
-    loadConfirmedOrders();
-    setSelectedOrder('');
-    setCreateOpen(true);
-  };
-
-  const filtered = dispatches.filter((d) => {
-    const isCompleted = d.status === 'completed';
-    const matchesTab = activeTab === 'completed' ? isCompleted : !isCompleted;
-    const matchesQuery = [d.dispatch_no, d.customer?.name ?? '', d.delivery_address ?? '', d.vehicle_number ?? ''].join(' ').toLowerCase().includes(query.toLowerCase());
-    return matchesTab && matchesQuery;
-  });
-
-  const createDispatch = async () => {
-    if (!selectedOrder) {
-      toast('Select a confirmed order', 'error');
-      return;
-    }
+  const handleStartDispatch = async (order: ConfirmedOrder) => {
     setCreating(true);
     try {
-      const order = confirmedOrders.find((o) => o.id === selectedOrder);
-      if (!order) throw new Error();
-      
       const orderItems = order.items || [];
       if (orderItems.length === 0) {
-        toast('This order has no products', 'error');
+        toast('This estimate has no items', 'error');
         setCreating(false);
         return;
       }
@@ -167,27 +139,60 @@ export default function Dispatches() {
       
       const payload = {
         dispatch_no: dispatchNo,
-        order_id: selectedOrder,
+        order_id: order.id,
         customer_id: order.customer_id,
-        delivery_address: order.delivery_address,
+        delivery_address: order.delivery_address || order.customer?.address || null,
         status: 'pending',
         items: orderItems.map((it) => ({
           product_id: it.product_id,
           product_name: it.product?.name ?? 'Unknown',
           quantity: it.quantity,
-          unit: it.product?.unit ?? 'piece',
+          unit: it.unit || it.product?.unit || 'piece',
           price: Number(it.product?.price ?? 0),
         }))
       };
       
-      await api.post('/dispatches', payload);
-      toast('Dispatch list created', 'success');
-      setCreateOpen(false);
-      load();
+      const created: any = await api.post('/dispatches', payload);
+      toast('Dispatch started - Opening verification', 'success');
+      await load();
+      setDetail({ 
+        ...created, 
+        customer: order.customer ? { name: order.customer.name, phone: order.customer.phone || null } : null,
+        order: { confirmed_at: order.confirmed_at, order_no: order.order_no }
+      });
     } catch {
-      toast('Failed to create dispatch', 'error');
+      toast('Failed to start dispatch', 'error');
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
+  };
+
+  const openCreate = () => {
+    setSelectedOrder('');
+    setCreateOpen(true);
+  };
+
+  const filteredDispatches = dispatches.filter((d) => {
+    const isCompleted = d.status === 'completed';
+    const matchesTab = activeTab === 'completed' ? isCompleted : !isCompleted;
+    const matchesQuery = [d.dispatch_no, d.customer?.name ?? '', d.delivery_address ?? '', d.vehicle_number ?? ''].join(' ').toLowerCase().includes(query.toLowerCase());
+    return matchesTab && matchesQuery;
+  });
+
+  const filteredNewDeliveries = confirmedOrders.filter((o) => {
+    return [o.order_no ?? '', o.customer?.name ?? '', o.delivery_address ?? '', o.customer?.phone ?? ''].join(' ').toLowerCase().includes(query.toLowerCase());
+  });
+
+  const createDispatch = async () => {
+    if (!selectedOrder) {
+      toast('Select a confirmed estimate', 'error');
+      return;
+    }
+    const order = confirmedOrders.find((o) => o.id === selectedOrder);
+    if (order) {
+      await handleStartDispatch(order);
+      setCreateOpen(false);
+    }
   };
 
   const handleWhatsAppAlert = (d: DispatchRow) => {
@@ -215,6 +220,10 @@ export default function Dispatches() {
     return <DispatchDashboard detail={detail} onClose={() => setDetail(null)} onRefresh={load} />;
   }
 
+  const newDeliveriesCount = confirmedOrders.length;
+  const activeDeliveriesCount = dispatches.filter(d => d.status !== 'completed').length;
+  const completedDeliveriesCount = dispatches.filter(d => d.status === 'completed').length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -227,39 +236,74 @@ export default function Dispatches() {
         </button>
       </div>
 
-      <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700">
+      {/* 3-Tab Navigation */}
+      <div className="flex gap-2 sm:gap-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
         <button 
-          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'active' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+          className={`pb-2.5 px-2 border-b-2 font-bold text-sm transition-colors whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'new' 
+              ? 'border-amber-500 text-amber-600 dark:text-amber-400' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+          }`}
+          onClick={() => setActiveTab('new')}
+        >
+          <span>New Deliveries</span>
+          {newDeliveriesCount > 0 ? (
+            <span className="badge bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 text-xs px-2 py-0.5 animate-pulse">
+              {newDeliveriesCount} New
+            </span>
+          ) : (
+            <span className="badge bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs">0</span>
+          )}
+        </button>
+
+        <button 
+          className={`pb-2.5 px-2 border-b-2 font-bold text-sm transition-colors whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'active' 
+              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+          }`}
           onClick={() => setActiveTab('active')}
         >
-          {t('pending_deliveries')} ({dispatches.filter(d => d.status !== 'completed').length})
+          <span>Active Deliveries</span>
+          <span className="badge bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 text-xs">
+            {activeDeliveriesCount}
+          </span>
         </button>
+
         <button 
-          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'completed' ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+          className={`pb-2.5 px-2 border-b-2 font-bold text-sm transition-colors whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'completed' 
+              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+          }`}
           onClick={() => setActiveTab('completed')}
         >
-          {t('completed_deliveries')} ({dispatches.filter(d => d.status === 'completed').length})
+          <span>Completed Deliveries</span>
+          <span className="badge bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-xs">
+            {completedDeliveriesCount}
+          </span>
         </button>
       </div>
 
+      {/* Search & Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('search')}
+            placeholder={activeTab === 'new' ? "Search estimate, customer, phone..." : t('search')}
             className="input pl-9"
           />
         </div>
 
-        {filtered.length > 0 && (
+        {activeTab !== 'new' && filteredDispatches.length > 0 && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => toggleSelectAll(filtered)}
+              onClick={() => toggleSelectAll(filteredDispatches)}
               className="btn-secondary text-xs py-1.5 px-3"
             >
-              {selectedIds.size === filtered.length ? 'Deselect All' : `Select All (${filtered.length})`}
+              {selectedIds.size === filteredDispatches.length ? 'Deselect All' : `Select All (${filteredDispatches.length})`}
             </button>
             {selectedIds.size > 0 && (
               <button
@@ -274,8 +318,80 @@ export default function Dispatches() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">Loading...</p>
-      ) : filtered.length === 0 ? (
+        <p className="text-sm text-slate-400">Loading deliveries...</p>
+      ) : activeTab === 'new' ? (
+        /* TAB 1: NEW DELIVERIES (Confirmed estimates awaiting dispatch start) */
+        filteredNewDeliveries.length === 0 ? (
+          <div className="card flex flex-col items-center gap-3 p-12 text-center">
+            <Package size={40} className="text-slate-300 dark:text-slate-600" />
+            <p className="text-slate-600 dark:text-slate-400 font-medium">No new confirmed estimates waiting for dispatch.</p>
+            <p className="text-xs text-slate-400">When an estimate is confirmed in the Estimate page, it will immediately appear here with full details.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredNewDeliveries.map((order) => {
+              const totalItemsCount = order.items?.length || 0;
+              const estWeight = (order.items || []).reduce((acc, it) => acc + ((it.quantity || 0) * Number(it.product?.standard_weight || 0)), 0);
+              const totalAmt = (order.items || []).reduce((acc, it) => acc + ((it.quantity || 0) * Number(it.product?.price || 0)), 0);
+              
+              return (
+                <div key={order.id} className="card p-5 border-2 border-amber-200 dark:border-amber-900/50 bg-gradient-to-br from-white to-amber-50/20 dark:from-slate-900 dark:to-amber-950/10 shadow-sm hover:shadow-md transition">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <span className="badge bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 font-extrabold uppercase text-[11px] px-2 py-0.5">
+                        New Confirmed Estimate
+                      </span>
+                      <h3 className="font-mono font-bold text-lg text-slate-800 dark:text-slate-100 mt-1">
+                        {order.order_no || `ORD-${order.id.slice(0, 6).toUpperCase()}`}
+                      </h3>
+                    </div>
+                    <WaitClock timestamp={order.confirmed_at || order.created_at} />
+                  </div>
+
+                  <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300 py-2 border-y border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <User size={15} className="text-amber-600 shrink-0" />
+                      <span className="font-bold text-slate-800 dark:text-slate-100">{order.customer?.name || 'Unknown Customer'}</span>
+                    </div>
+                    {order.customer?.phone && (
+                      <p className="text-xs text-slate-500 pl-6">📞 {order.customer.phone}</p>
+                    )}
+                    <div className="flex items-start gap-2 text-xs text-slate-500">
+                      <MapPin size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{order.delivery_address || order.customer?.address || 'Site delivery'}</span>
+                    </div>
+                  </div>
+
+                  {/* Order Items Preview */}
+                  <div className="mt-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg p-3 text-xs space-y-1">
+                    <div className="flex justify-between font-semibold text-slate-700 dark:text-slate-300">
+                      <span>Items: {totalItemsCount}</span>
+                      <span>Weight: {estWeight.toFixed(1)} kg</span>
+                    </div>
+                    <p className="text-slate-500 line-clamp-2 pt-1 border-t border-slate-200/60 dark:border-slate-700">
+                      {order.items?.map(it => `${it.quantity} ${it.unit || 'nos'} ${it.product?.name || 'Item'}`).join(', ')}
+                    </p>
+                    <div className="pt-1.5 flex justify-between items-center text-slate-700 dark:text-slate-300 font-bold">
+                      <span>Order Value:</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">₹{totalAmt.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  {/* Start Dispatch Button */}
+                  <button
+                    onClick={() => handleStartDispatch(order)}
+                    disabled={creating}
+                    className="btn-primary w-full mt-4 flex items-center justify-center gap-2 py-2.5 font-bold shadow-md bg-amber-600 hover:bg-amber-700"
+                  >
+                    <Play size={16} /> Start Verification & Dispatch
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : filteredDispatches.length === 0 ? (
+        /* TAB 2 & 3: EMPTY STATE */
         <div className="card flex flex-col items-center gap-3 p-12 text-center">
           <Truck size={36} className="text-slate-300" />
           <p className="text-slate-500 dark:text-slate-400">No {activeTab} dispatches found.</p>
@@ -286,10 +402,11 @@ export default function Dispatches() {
           )}
         </div>
       ) : (
+        /* TAB 2 & 3: ACTIVE & COMPLETED DISPATCHES */
         <>
           {/* MOBILE CARD VIEW (< 768px) */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
-            {filtered.map((d) => {
+            {filteredDispatches.map((d) => {
               const isSelected = selectedIds.has(d.id);
               return (
                 <div
@@ -298,7 +415,7 @@ export default function Dispatches() {
                     isSelected ? 'ring-2 ring-amber-500 bg-amber-50/20' : ''
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                     <div className="flex items-center gap-2.5">
                       <input
                         type="checkbox"
@@ -309,7 +426,7 @@ export default function Dispatches() {
                       <div>
                         <button
                           onClick={() => setDetail(d)}
-                          className="font-mono font-bold text-slate-800 text-sm hover:text-amber-600 underline-offset-2 hover:underline"
+                          className="font-mono font-bold text-slate-800 dark:text-slate-100 text-sm hover:text-amber-600 underline-offset-2 hover:underline"
                         >
                           {d.dispatch_no}
                         </button>
@@ -326,13 +443,13 @@ export default function Dispatches() {
 
                   <div className="py-2.5 space-y-1.5 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-slate-800">{d.customer?.name ?? 'Unknown Customer'}</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{d.customer?.name ?? 'Unknown Customer'}</span>
                       {d.customer?.phone && (
                         <span className="text-xs text-slate-500">{d.customer.phone}</span>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between text-xs pt-1 text-slate-600 bg-slate-50 rounded-lg px-2.5 py-2">
+                    <div className="flex items-center justify-between text-xs pt-1 text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded-lg px-2.5 py-2">
                       <div className="flex items-center gap-1.5">
                         <Truck size={14} className="text-amber-600 shrink-0" />
                         <span className="font-semibold">{d.vehicle_number || 'Vehicle not set'}</span>
@@ -384,31 +501,31 @@ export default function Dispatches() {
           {/* DESKTOP TABLE VIEW (>= 768px) */}
           <div className="hidden md:block table-wrap">
             <table className="w-full">
-              <thead className="border-b border-slate-200 bg-slate-50/75">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/75">
                 <tr>
                   <th className="th w-10">
                     <input
                       type="checkbox"
-                      checked={selectedIds.size === filtered.length && filtered.length > 0}
-                      onChange={() => toggleSelectAll(filtered)}
+                      checked={selectedIds.size === filteredDispatches.length && filteredDispatches.length > 0}
+                      onChange={() => toggleSelectAll(filteredDispatches)}
                       className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                     />
                   </th>
                   <th className="th">Dispatch No</th>
                   <th className="th">Customer</th>
-                  <th className="th">Vehicle</th>
+                  <th className="th">Vehicle / Driver</th>
                   <th className="th">Status</th>
                   <th className="th">Time Elapsed</th>
                   <th className="th text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.map((d) => {
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredDispatches.map((d) => {
                   const isSelected = selectedIds.has(d.id);
                   return (
                     <tr
                       key={d.id}
-                      className={`hover:bg-slate-50/60 transition ${isSelected ? 'bg-amber-50/30' : ''}`}
+                      className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition ${isSelected ? 'bg-amber-50/30' : ''}`}
                     >
                       <td className="td">
                         <input
@@ -419,15 +536,15 @@ export default function Dispatches() {
                         />
                       </td>
                       <td className="td">
-                        <button onClick={() => setDetail(d)} className="font-semibold text-slate-800 hover:underline">
+                        <button onClick={() => setDetail(d)} className="font-semibold text-slate-800 dark:text-slate-100 hover:underline">
                           {d.dispatch_no}
                         </button>
                       </td>
-                      <td className="td">{d.customer?.name ?? 'Unknown'}</td>
+                      <td className="td font-medium">{d.customer?.name ?? 'Unknown'}</td>
                       <td className="td">
-                        {d.vehicle_number ? (
-                          <span className="flex items-center gap-1 font-semibold text-slate-700">
-                            <Truck size={14} className="text-amber-600" /> {d.vehicle_number}
+                        {d.vehicle_number || d.driver_name ? (
+                          <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
+                            <Truck size={14} className="text-amber-600" /> {d.vehicle_number || ''} {d.driver_name ? `(${d.driver_name})` : ''}
                           </span>
                         ) : (
                           <span className="text-slate-400 italic">Not set</span>
@@ -448,7 +565,7 @@ export default function Dispatches() {
                               <MessageSquare size={15} />
                             </button>
                           )}
-                          <button onClick={() => setDetail(d)} className="btn-ghost p-1.5" title="Verify / Complete">
+                          <button onClick={() => setDetail(d)} className="btn-ghost p-1.5 text-blue-600 hover:bg-blue-50" title="Verify / View">
                             <Package size={15} />
                           </button>
                           <button onClick={() => removeDispatch(d)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" title="Delete">
@@ -486,21 +603,22 @@ export default function Dispatches() {
         </>
       )}
 
+      {/* Manual New Dispatch Modal */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create Dispatch" size="md">
         <div className="space-y-4">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Select a fresh pending confirmed estimate to generate a dispatch list.
+            Select a confirmed estimate to generate a dispatch list.
           </p>
           {confirmedOrders.length === 0 ? (
             <div className="rounded-lg bg-amber-50 dark:bg-amber-900/30 p-4 text-sm text-amber-700 dark:text-amber-300">
               <AlertCircle size={16} className="mr-1 inline" />
-              No fresh confirmed estimates available. Confirm an estimate first or check if a dispatch already exists.
+              No fresh confirmed estimates available. Confirm an estimate first in the Estimate page.
             </div>
           ) : (
             <div>
               <label className="label">Fresh Confirmed Estimate * ({confirmedOrders.length} available)</label>
               <select value={selectedOrder} onChange={(e) => setSelectedOrder(e.target.value)} className="input">
-                <option value="">Select a fresh estimate...</option>
+                <option value="">Select a confirmed estimate...</option>
                 {confirmedOrders.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.order_no || o.id.split('-')[0].toUpperCase()} — {o.customer?.name ?? 'Unknown'}
@@ -512,7 +630,7 @@ export default function Dispatches() {
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setCreateOpen(false)} className="btn-secondary">Cancel</button>
             <button onClick={createDispatch} disabled={creating || !selectedOrder} className="btn-primary">
-              {creating ? 'Creating...' : 'Create Dispatch'}
+              {creating ? 'Creating...' : 'Start Dispatch'}
             </button>
           </div>
         </div>

@@ -7,8 +7,31 @@ import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box,
 import { useAuth } from '@/context/AuthContext';
 import { useTranslation } from '@/lib/i18n';
 
-type Form = { name: string; category: string; unit: string; price: string; stock_qty: string; brand: string; size: string; standard_weight: string; weight_tolerance: string };
-const empty: Form = { name: '', category: 'Steel', unit: 'piece', price: '0', stock_qty: '0', brand: '', size: '', standard_weight: '0', weight_tolerance: '' };
+type Form = {
+  name: string;
+  category: string;
+  unit: string;
+  price: string;
+  rate_per_kg: string;
+  stock_qty: string;
+  brand: string;
+  size: string;
+  standard_weight: string;
+  weight_tolerance: string;
+};
+
+const empty: Form = {
+  name: '',
+  category: 'Steel',
+  unit: 'piece',
+  price: '0',
+  rate_per_kg: '0',
+  stock_qty: '0',
+  brand: '',
+  size: '',
+  standard_weight: '0',
+  weight_tolerance: ''
+};
 
 const categories = ['Steel', 'Cement', 'TMT Bars', 'Pipes', 'Other'];
 const knownBrands = ['Tata Steel', 'iSteel', 'Sumangala', 'Suryadev'];
@@ -169,18 +192,42 @@ export default function Products() {
 
   const openEdit = (p: Product) => {
     setEditing(p);
+    const pPrice = Number(p.price ?? 0);
+    const pStdWeight = Number(p.standard_weight ?? 0);
     setForm({
       name: p.name,
       category: p.category,
       unit: p.unit,
-      price: String(p.price ?? 0),
+      price: String(pPrice),
+      rate_per_kg: pStdWeight > 0 ? (pPrice / pStdWeight).toFixed(2) : '0',
       stock_qty: String(p.stock_qty ?? 0),
       brand: p.brand ?? '',
       size: p.size ?? '',
-      standard_weight: String(p.standard_weight ?? 0),
+      standard_weight: String(pStdWeight),
       weight_tolerance: p.weight_tolerance != null ? String(p.weight_tolerance) : '',
     });
     setOpen(true);
+  };
+
+  const handleRatePerKgChange = (val: string) => {
+    const rNum = parseFloat(val) || 0;
+    const wNum = parseFloat(form.standard_weight) || 0;
+    const newPrice = wNum > 0 ? (rNum * wNum).toFixed(2) : form.price;
+    setForm(prev => ({ ...prev, rate_per_kg: val, price: newPrice }));
+  };
+
+  const handlePriceChange = (val: string) => {
+    const pNum = parseFloat(val) || 0;
+    const wNum = parseFloat(form.standard_weight) || 0;
+    const newRate = wNum > 0 ? (pNum / wNum).toFixed(2) : form.rate_per_kg;
+    setForm(prev => ({ ...prev, price: val, rate_per_kg: newRate }));
+  };
+
+  const handleStdWeightChange = (val: string) => {
+    const wNum = parseFloat(val) || 0;
+    const rNum = parseFloat(form.rate_per_kg) || 0;
+    const newPrice = (rNum > 0 && wNum > 0) ? (rNum * wNum).toFixed(2) : form.price;
+    setForm(prev => ({ ...prev, standard_weight: val, price: newPrice }));
   };
 
   const save = async () => {
@@ -370,14 +417,14 @@ export default function Products() {
       )}
 
       {/* Add / Edit Product Modal */}
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Product' : 'Add Product'}>
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Product' : 'Add Product'} size="md">
         <div className="space-y-4">
           <div>
             <label className="label">Name *</label>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="input"
+              className="input font-semibold"
               placeholder="e.g. TMT Steel Bar 12mm"
               autoFocus
             />
@@ -439,14 +486,15 @@ export default function Products() {
               <input
                 type="number"
                 value={form.standard_weight}
-                onChange={(e) => setForm({ ...form, standard_weight: e.target.value })}
-                className="input"
+                onChange={(e) => handleStdWeightChange(e.target.value)}
+                className="input font-semibold"
                 min="0"
                 step="0.01"
+                placeholder="e.g. 4.7"
               />
             </div>
             <div>
-              <label className="label">Est. Difference Tolerance (kg)</label>
+              <label className="label">Difference Tolerance (kg)</label>
               <input
                 type="number"
                 value={form.weight_tolerance}
@@ -458,23 +506,55 @@ export default function Products() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Price per unit (₹)</label>
-              <input
-                type="number"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
-                className="input"
-                min="0"
-                step="0.01"
-              />
+
+          {/* Linked Rate per kg & Unit Price */}
+          <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label flex items-center gap-1">
+                  <Scale size={13} className="text-indigo-600" /> Rate per kg (₹/kg)
+                </label>
+                <div className="relative">
+                  <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    value={form.rate_per_kg}
+                    onChange={(e) => handleRatePerKgChange(e.target.value)}
+                    className="input pl-8 font-bold text-indigo-700 dark:text-indigo-300"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Price per {form.unit || 'unit'} (₹)</label>
+                <div className="relative">
+                  <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    value={form.price}
+                    onChange={(e) => handlePriceChange(e.target.value)}
+                    className="input pl-8 font-bold text-slate-800 dark:text-slate-100"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
             </div>
+
+            {parseFloat(form.standard_weight) > 0 && (
+              <div className="text-xs text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800 p-2.5 rounded-lg border border-indigo-200/80 dark:border-indigo-800 font-medium">
+                💡 1 {form.unit || 'piece'} ({form.standard_weight} kg) × ₹{parseFloat(form.rate_per_kg) || 0}/kg = <strong>₹{parseFloat(form.price) || 0} / {form.unit || 'piece'}</strong>
+              </div>
+            )}
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
             <button onClick={() => setOpen(false)} className="btn-secondary">Cancel</button>
             <button onClick={save} disabled={saving} className="btn-primary">
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? 'Saving...' : 'Save Product'}
             </button>
           </div>
         </div>
@@ -484,7 +564,7 @@ export default function Products() {
       <Modal open={brandAdjustOpen} onClose={() => setBrandAdjustOpen(false)} title="Brand Steel Rate Adjuster" size="lg">
         <div className="space-y-5">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Adjust the rate for all steel products of a brand simultaneously by entering a price difference (e.g. <strong className="text-emerald-600">+3</strong> or <strong className="text-amber-600">-3</strong> ₹).
+            Adjust the rate per kg for all steel products of a brand simultaneously by entering a per-kg price difference (e.g. <strong className="text-emerald-600">+3</strong> or <strong className="text-amber-600">-3</strong> ₹/kg). Unit prices will be updated automatically based on standard weights.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -502,7 +582,7 @@ export default function Products() {
             </div>
 
             <div>
-              <label className="label">Price Difference (₹) *</label>
+              <label className="label">Per-Kg Rate Difference (₹/kg) *</label>
               <div className="relative">
                 <input
                   type="number"
@@ -510,7 +590,7 @@ export default function Products() {
                   value={priceDelta}
                   onChange={(e) => setPriceDelta(e.target.value)}
                   placeholder="e.g. +3 or -3"
-                  className="input font-bold text-lg"
+                  className="input font-bold text-lg text-indigo-700 dark:text-indigo-300"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
                   {parseFloat(priceDelta) > 0 ? 'Increase (+)' : parseFloat(priceDelta) < 0 ? 'Decrease (-)' : 'No change'}
@@ -532,12 +612,18 @@ export default function Products() {
               <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                 {brandProducts.map((p) => {
                   const deltaNum = parseFloat(priceDelta) || 0;
-                  const newPrice = Math.max(0, (p.price || 0) + deltaNum);
+                  const isSteel = (p.category || '').toLowerCase().includes('steel') || (p.category || '').toLowerCase().includes('tmt');
+                  const stdWeight = p.standard_weight && p.standard_weight > 0 ? p.standard_weight : 1;
+                  const priceChange = isSteel && p.standard_weight && p.standard_weight > 0 ? deltaNum * stdWeight : deltaNum;
+                  const newPrice = Math.max(0, (p.price || 0) + priceChange);
+                  
                   return (
                     <div key={p.id} className="p-3 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                       <div>
                         <p className="font-bold text-slate-800 dark:text-slate-100">{p.name}</p>
-                        <p className="text-xs text-slate-500">Size: {p.size || 'N/A'} | Unit: {p.unit}</p>
+                        <p className="text-xs text-slate-500">
+                          Size: {p.size || 'N/A'} • Unit: {p.unit} • Std Weight: {p.standard_weight || 1} kg
+                        </p>
                       </div>
                       <div className="text-right">
                         <span className="text-xs text-slate-400 line-through mr-2">₹{(p.price || 0).toFixed(2)}</span>
@@ -545,8 +631,8 @@ export default function Products() {
                           ₹{newPrice.toFixed(2)}
                         </span>
                         {deltaNum !== 0 && (
-                          <span className={`text-xs ml-1 font-semibold ${deltaNum > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                            ({deltaNum > 0 ? `+${deltaNum}` : deltaNum})
+                          <span className={`text-xs ml-1.5 font-semibold ${deltaNum > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            ({deltaNum > 0 ? `+₹${deltaNum}/kg` : `₹${deltaNum}/kg`})
                           </span>
                         )}
                       </div>
@@ -565,7 +651,7 @@ export default function Products() {
               className="btn-primary flex items-center gap-1.5"
             >
               <TrendingUp size={16} />
-              {adjustingBrand ? 'Updating...' : `Apply ${parseFloat(priceDelta) > 0 ? `+₹${priceDelta}` : `₹${priceDelta}`} to ${brandProducts.length} Items`}
+              {adjustingBrand ? 'Updating...' : `Apply ${parseFloat(priceDelta) > 0 ? `+₹${priceDelta}/kg` : `₹${priceDelta}/kg`} to ${brandProducts.length} Items`}
             </button>
           </div>
         </div>
@@ -620,78 +706,90 @@ function ProductTable({
             <th className="th">Unit</th>
             <th className="th">Std Wt (kg)</th>
             <th className="th">Est. Diff (kg)</th>
-            <th className="th">Price</th>
+            <th className="th">Price / Rate</th>
             {isAdmin && <th className="th text-right">Actions</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {products.map((p) => (
-            <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-              <td className="td">
-                <div className="flex items-center gap-2">
-                  <Layers size={16} className="text-slate-400" />
-                  <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
-                </div>
-              </td>
-              <td className="td">
-                {p.brand ? <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{p.brand}</span> : <span className="text-slate-300">—</span>}
-              </td>
-              <td className="td">
-                {p.size ? <span className="font-medium text-slate-600 dark:text-slate-300">{p.size}</span> : <span className="text-slate-300">—</span>}
-              </td>
-              <td className="td">
-                <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
-                  {p.category}
-                </span>
-              </td>
-              <td className="td">{p.unit}</td>
-              <td className="td">
-                <span className="font-medium text-slate-600 dark:text-slate-300">
-                  {p.standard_weight ? `${p.standard_weight} kg` : '—'}
-                </span>
-              </td>
-              <td className="td">
-                {editingTolId === p.id ? (
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={tolValue}
-                    onChange={(e) => setTolValue(e.target.value)}
-                    onBlur={() => finishEditTol(p)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') finishEditTol(p);
-                      if (e.key === 'Escape') setEditingTolId(null);
-                    }}
-                    className="input py-0.5 px-2 w-20 text-xs font-bold text-amber-600 border-amber-400"
-                    autoFocus
-                  />
-                ) : (
-                  <span 
-                    onClick={() => startEditTol(p)}
-                    className={`font-medium ${canEditTolerance ? 'cursor-pointer hover:underline text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}
-                    title={canEditTolerance ? 'Click to edit weight tolerance' : undefined}
-                  >
-                    {p.weight_tolerance != null ? `±${p.weight_tolerance} kg` : 'Default'}
-                  </span>
-                )}
-              </td>
-              <td className="td">
-                <span className="flex items-center font-semibold text-slate-700 dark:text-slate-200">
-                  <IndianRupee size={13} className="text-slate-400" />{(p.price ?? 0).toFixed(2)}
-                </span>
-              </td>
-              {isAdmin && (
-                <td className="td text-right">
-                  <button onClick={() => onEdit(p)} className="btn-ghost p-1.5" aria-label="Edit">
-                    <Pencil size={15} />
-                  </button>
-                  <button onClick={() => onRemove(p)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
-                    <Trash2 size={15} />
-                  </button>
+          {products.map((p) => {
+            const hasWeight = p.standard_weight && p.standard_weight > 0;
+            const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
+
+            return (
+              <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <td className="td">
+                  <div className="flex items-center gap-2">
+                    <Layers size={16} className="text-slate-400" />
+                    <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
+                  </div>
                 </td>
-              )}
-            </tr>
-          ))}
+                <td className="td">
+                  {p.brand ? <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{p.brand}</span> : <span className="text-slate-300">—</span>}
+                </td>
+                <td className="td">
+                  {p.size ? <span className="font-medium text-slate-600 dark:text-slate-300">{p.size}</span> : <span className="text-slate-300">—</span>}
+                </td>
+                <td className="td">
+                  <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
+                    {p.category}
+                  </span>
+                </td>
+                <td className="td">{p.unit}</td>
+                <td className="td">
+                  <span className="font-medium text-slate-600 dark:text-slate-300">
+                    {p.standard_weight ? `${p.standard_weight} kg` : '—'}
+                  </span>
+                </td>
+                <td className="td">
+                  {editingTolId === p.id ? (
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={tolValue}
+                      onChange={(e) => setTolValue(e.target.value)}
+                      onBlur={() => finishEditTol(p)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') finishEditTol(p);
+                        if (e.key === 'Escape') setEditingTolId(null);
+                      }}
+                      className="input py-0.5 px-2 w-20 text-xs font-bold text-amber-600 border-amber-400"
+                      autoFocus
+                    />
+                  ) : (
+                    <span 
+                      onClick={() => startEditTol(p)}
+                      className={`font-medium ${canEditTolerance ? 'cursor-pointer hover:underline text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}
+                      title={canEditTolerance ? 'Click to edit weight tolerance' : undefined}
+                    >
+                      {p.weight_tolerance != null ? `±${p.weight_tolerance} kg` : 'Default'}
+                    </span>
+                  )}
+                </td>
+                <td className="td">
+                  <div>
+                    <span className="flex items-center font-bold text-slate-800 dark:text-slate-200">
+                      <IndianRupee size={13} className="text-slate-400" />{(p.price ?? 0).toFixed(2)}
+                    </span>
+                    {rateKg && (
+                      <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                        (₹{rateKg}/kg)
+                      </span>
+                    )}
+                  </div>
+                </td>
+                {isAdmin && (
+                  <td className="td text-right">
+                    <button onClick={() => onEdit(p)} className="btn-ghost p-1.5" aria-label="Edit">
+                      <Pencil size={15} />
+                    </button>
+                    <button onClick={() => onRemove(p)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
+                      <Trash2 size={15} />
+                    </button>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

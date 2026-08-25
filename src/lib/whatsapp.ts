@@ -3,7 +3,7 @@ import { type Dispatch, type Bill, type Customer } from './api';
 export const DEFAULT_COMPANY_IMAGE_URL = 'https://raw.githubusercontent.com/bhalaganapathym/anbutraders-project/main/public/pwa-512x512.png';
 
 export const DEFAULT_WHATSAPP_TEMPLATE = `🏗️ *ANBU TRADERS - Order Dispatched* 🚚
-----------------------------------------
+────────────────────────────────────────
 Dear *{customer_name}*,
 Your materials (*{dispatch_no}*) are out for delivery!
 
@@ -16,12 +16,9 @@ Your materials (*{dispatch_no}*) are out for delivery!
 🔴 *Balance to Pay on Delivery:* ₹{balance_to_collect}
 
 📍 *Delivery Location:* {delivery_address}
-----------------------------------------
+────────────────────────────────────────
 🔗 *Live Tracking & Digital Receipt:*
 {tracking_url}
-
-🖼️ *Company Logo & Order Verification:*
-{image_url}
 
 📞 *Contact Office:* 0413-2964204 / 9626325204
 _Thank you for choosing Anbu Traders!_`;
@@ -65,7 +62,7 @@ export function formatWhatsAppMessage(
     '{balance_to_collect}': typeof data.balance_to_collect === 'number' ? data.balance_to_collect.toFixed(2) : (data.balance_to_collect || '0.00'),
     '{delivery_address}': data.delivery_address || 'As per order',
     '{tracking_url}': data.tracking_url || defaultTrackUrl,
-    '{image_url}': data.image_url || DEFAULT_COMPANY_IMAGE_URL,
+    '{image_url}': '',
     '{company_name}': data.company_name || 'ANBU TRADERS',
     '{company_phone}': data.company_phone || '0413-2964204 / 9626325204',
   };
@@ -73,6 +70,8 @@ export function formatWhatsAppMessage(
   for (const [tag, val] of Object.entries(map)) {
     msg = msg.split(tag).join(val);
   }
+
+  msg = msg.replace(/🖼️\s*\*Company Logo & Order Verification:\*\s*\n?/g, '').trim();
 
   return msg;
 }
@@ -115,6 +114,40 @@ export function buildDispatchWhatsAppMessage(
   return formatWhatsAppMessage(template || DEFAULT_WHATSAPP_TEMPLATE, data);
 }
 
+export function buildDriverTamilWhatsAppMessage(
+  dispatch: Dispatch,
+  driverName?: string,
+  customerName?: string,
+  customerPhone?: string,
+  deliveryAddress?: string,
+  pendingAmount?: number
+): string {
+  const drvName = driverName || dispatch.driver_name || 'ஓட்டுநர்';
+  const custName = customerName || dispatch.customer?.name || 'வாடிக்கையாளர்';
+  const custPhone = customerPhone || dispatch.customer?.phone || '—';
+  const addr = deliveryAddress || dispatch.delivery_address || dispatch.customer?.address || 'முகவரி குறிப்பிடப்படவில்லை';
+  const pending = pendingAmount ?? (dispatch.bill?.pending_amount || 0);
+  const vehicle = dispatch.vehicle_number || '—';
+  const orderRef = dispatch.order?.order_no || dispatch.dispatch_no || '';
+
+  return `🚛 *அன்பு குரூப்ஸ் — டெலிவரி விவரம்*
+─────────────────────────────
+வணக்கம் ${drvName},
+
+உங்களுக்கு புதிய டெலிவரி பணி ஒதுக்கப்பட்டுள்ளது:
+📋 *ஆர்டர் எண்:* ${orderRef}
+👤 *வாடிக்கையாளர்:* ${custName}
+📞 *தொலைபேசி:* ${custPhone}
+📍 *டெலிவரி முகவரி:* ${addr}
+💰 *வாடிக்கையாளரிடம் பெற வேண்டிய தொகை:* ₹${Number(pending).toLocaleString('en-IN')}
+🚛 *வாகன எண்:* ${vehicle}
+─────────────────────────────
+அன்பு குரூப்ஸ்`;
+}
+
+/**
+ * Directly opens WhatsApp chat for target phone with pre-filled message text.
+ */
 export function openWhatsApp(phone: string, text: string): void {
   let cleanPhone = (phone || '').replace(/[^0-9]/g, '');
   if (cleanPhone.length === 10) {
@@ -127,4 +160,30 @@ export function openWhatsApp(phone: string, text: string): void {
     : `https://wa.me/?text=${encodedText}`;
     
   window.open(url, '_blank');
+}
+
+/**
+ * Automatically launches WhatsApp to the target customer phone with full message text,
+ * and if an image blob/canvas is provided, automatically copies the image to clipboard
+ * so the user can paste (Ctrl+V) the photo in chat.
+ */
+export async function sendWhatsAppMessageWithAttachment(options: {
+  phone: string;
+  text: string;
+  imageBlob?: Blob;
+}): Promise<void> {
+  // 1. Copy image to clipboard if available
+  if (options.imageBlob && typeof navigator !== 'undefined' && navigator.clipboard && (window as any).ClipboardItem) {
+    try {
+      const pngBlob = options.imageBlob.type === 'image/png' ? options.imageBlob : new Blob([options.imageBlob], { type: 'image/png' });
+      await navigator.clipboard.write([
+        new (window as any).ClipboardItem({ 'image/png': pngBlob })
+      ]);
+    } catch (e) {
+      console.warn('Could not copy image to clipboard', e);
+    }
+  }
+
+  // 2. Open WhatsApp chat with pre-filled text
+  openWhatsApp(options.phone, options.text);
 }
