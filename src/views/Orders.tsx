@@ -7,6 +7,7 @@ import {
   Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
+import { calculateProductPrice } from '@/lib/pricing';
 
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type OrderItemWithProduct = OrderItem & { product: Product | null };
@@ -72,12 +73,16 @@ const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
   const dateStr = new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   
   let totalAmount = 0;
+  let totalWeight = 0;
   const itemLines = (o.items || []).map((it) => {
     const prName = it.product?.name ?? 'Item';
-    const price = it.product?.price ?? 0;
-    const subtotal = price * (it.quantity || 1);
-    totalAmount += subtotal;
-    return `• *${prName}*\n  Nos/Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? ''}\n  Rate: ₹${price}\n  Amount: ₹${subtotal.toLocaleString('en-IN')}`;
+    const pricing = calculateProductPrice(it.product, it.quantity || 1);
+    totalAmount += pricing.totalPrice;
+    totalWeight += pricing.totalWeight;
+    if (pricing.isSteel) {
+      return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? 'nos'} × ${pricing.standardWeight} kg = *${pricing.totalWeight.toFixed(2)} kg*\n  Rate: ₹${pricing.ratePerKg.toFixed(2)} / kg\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    }
+    return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? ''}\n  Rate: ₹${pricing.unitPrice.toFixed(2)}\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
   }).join('\n\n');
 
   const words = numberToWords(totalAmount);
@@ -99,7 +104,8 @@ Ph: 0413-2964204, 9626325204
 ${itemLines}
 
 ─────────────────────────────
-*Total Amount:* ₹${totalAmount.toLocaleString('en-IN')}
+*Total Weight:* ${totalWeight.toFixed(2)} kg
+*Total Amount:* ₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
 *Amount in words:* ${words}
 ─────────────────────────────
 _We declare that this invoice/estimate shows the actual price of the goods described and that all particulars are true and correct._
@@ -459,7 +465,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
             {filtered.map((o) => {
               const isSelected = selectedIds.has(o.id);
               const itemCount = o.items?.length || 0;
-              const totalEstimateAmount = (o.items || []).reduce((acc, it) => acc + (it.product?.price || 0) * (it.quantity || 1), 0);
+              const totalEstimateAmount = (o.items || []).reduce((acc, it) => acc + calculateProductPrice(it.product, it.quantity || 1).totalPrice, 0);
 
               return (
                 <div
