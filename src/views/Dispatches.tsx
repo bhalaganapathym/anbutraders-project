@@ -209,10 +209,24 @@ export default function Dispatches() {
     if (!confirm(`Delete dispatch ${d.dispatch_no}?`)) return;
     try {
       await api.delete(`/dispatches/${d.id}`);
-      toast('Dispatch deleted', 'success');
+      if (d.order_id) {
+        await api.delete(`/orders/${d.order_id}`).catch(() => {});
+      }
+      toast('Dispatch and order deleted', 'success');
       load();
     } catch {
       toast('Failed to delete dispatch', 'error');
+    }
+  };
+
+  const removeNewOrder = async (order: ConfirmedOrder) => {
+    if (!confirm(`Delete/Cancel estimate ${order.order_no || 'ORD-' + order.id.slice(0, 6)}?`)) return;
+    try {
+      await api.delete(`/orders/${order.id}`);
+      toast('Estimate deleted from new deliveries', 'success');
+      load();
+    } catch {
+      toast('Failed to delete estimate', 'error');
     }
   };
 
@@ -377,14 +391,23 @@ export default function Dispatches() {
                     </div>
                   </div>
 
-                  {/* Start Dispatch Button */}
-                  <button
-                    onClick={() => handleStartDispatch(order)}
-                    disabled={creating}
-                    className="btn-primary w-full mt-4 flex items-center justify-center gap-2 py-2.5 font-bold shadow-md bg-amber-600 hover:bg-amber-700"
-                  >
-                    <Play size={16} /> Start Verification & Dispatch
-                  </button>
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 mt-4">
+                    <button
+                      onClick={() => handleStartDispatch(order)}
+                      disabled={creating}
+                      className="btn-primary flex-1 flex items-center justify-center gap-2 py-2.5 font-bold shadow-md bg-amber-600 hover:bg-amber-700"
+                    >
+                      <Play size={16} /> Start Verification & Dispatch
+                    </button>
+                    <button
+                      onClick={() => removeNewOrder(order)}
+                      className="btn-ghost p-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
+                      title="Delete / Cancel Estimate"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               );
             })}

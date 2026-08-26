@@ -319,6 +319,10 @@ export default function DispatchDashboard({
         notes: remarks,
       });
 
+      if (detail.order_id) {
+        await api.put(`/orders/${detail.order_id}`, { status: 'completed' }).catch(() => {});
+      }
+
       await api.post('/notifications', {
         type: 'dispatch_completed',
         title: `Dispatch ${detail.dispatch_no} completed`,

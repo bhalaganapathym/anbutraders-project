@@ -1,10 +1,11 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from uuid import UUID
 from api.deps import get_db, get_current_active_user
-from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification
+from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification, Bill, Driver
 from schemas.all import CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest, OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, NotificationCreate, NotificationResponse, BulkDeleteRequest
 from core.websocket import manager
 
@@ -451,13 +452,15 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
         if value is not None: # Don't overwrite with none blindly if it wasn't provided, though pydantic will supply defaults
             setattr(dispatch, key, value)
             
-    from datetime import datetime
-    from models.all import Bill, Driver
     if old_status != dispatch.status:
         if dispatch.status == "sent_to_billing":
             dispatch.sent_to_billing_at = datetime.now()
-        elif dispatch.status == "completed":
+        elif dispatch_in.status == "completed":
             dispatch.completed_at = datetime.now()
+            if dispatch.order_id:
+                order = db.query(Order).filter(Order.id == dispatch.order_id).first()
+                if order:
+                    order.status = "completed"
             bill = db.query(Bill).filter(Bill.dispatch_id == id).first()
             if bill and bill.driver_id:
                 driver = db.query(Driver).filter(Driver.id == bill.driver_id).first()
@@ -486,18 +489,29 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
     db.commit()
     db.refresh(dispatch)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
     return dispatch
 
 @router.delete("/dispatches/{id}")
 def delete_dispatch(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
     if dispatch:
+        order_id = dispatch.order_id
         db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
         db.query(Weight).filter(Weight.dispatch_id == id).delete()
         db.query(Photo).filter(Photo.dispatch_id == id).delete()
+        db.query(Bill).filter(Bill.dispatch_id == id).delete()
         db.delete(dispatch)
+        
+        # Clean up associated order so it never resurrects under New Deliveries
+        if order_id:
+            db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
+            db.query(Order).filter(Order.id == order_id).delete()
+            
         db.commit()
         background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "bills"})
     return {"status": "ok"}
 
 @router.post("/dispatches/bulk-delete")
@@ -505,12 +519,23 @@ def bulk_delete_dispatches(payload: BulkDeleteRequest, background_tasks: Backgro
     if not payload.ids:
         return {"status": "ok", "deleted": 0}
         
+    dispatches = db.query(Dispatch).filter(Dispatch.id.in_(payload.ids)).all()
+    order_ids = [d.order_id for d in dispatches if d.order_id]
+    
     db.query(DispatchItem).filter(DispatchItem.dispatch_id.in_(payload.ids)).delete(synchronize_session=False)
     db.query(Weight).filter(Weight.dispatch_id.in_(payload.ids)).delete(synchronize_session=False)
     db.query(Photo).filter(Photo.dispatch_id.in_(payload.ids)).delete(synchronize_session=False)
+    db.query(Bill).filter(Bill.dispatch_id.in_(payload.ids)).delete(synchronize_session=False)
     deleted = db.query(Dispatch).filter(Dispatch.id.in_(payload.ids)).delete(synchronize_session=False)
+    
+    if order_ids:
+        db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(synchronize_session=False)
+        db.query(Order).filter(Order.id.in_(order_ids)).delete(synchronize_session=False)
+        
     db.commit()
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "bills"})
     return {"status": "ok", "deleted": deleted}
 
 # --- NOTIFICATIONS ---
