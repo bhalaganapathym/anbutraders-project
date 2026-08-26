@@ -91,7 +91,7 @@ export function calculateProductPrice(
 
     const totalWeight = quantity * stdWeight;
     const totalPrice = totalWeight * ratePerKg;
-    const displayBreakdown = `${quantity} ${unit} × ${stdWeight} kg = ${totalWeight.toFixed(2)} kg @ ₹${ratePerKg.toFixed(2)}/kg`;
+    const displayBreakdown = `${quantity} nos × ${stdWeight} kg = ${totalWeight.toFixed(2)} kg @ ₹${ratePerKg.toFixed(2)}/kg`;
 
     return {
       isSteel: true,

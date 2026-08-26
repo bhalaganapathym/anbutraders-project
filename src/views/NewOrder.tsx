@@ -273,7 +273,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       const p = calculateProductPrice(l.product, l.quantity);
       msg += `${idx + 1}. *${l.product.name}*\n`;
       if (p.isSteel) {
-        msg += `   ${l.quantity} units × ${p.standardWeight} kg = *${p.totalWeight.toFixed(2)} kg* @ ₹${p.ratePerKg.toFixed(2)}/kg = *₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
+        msg += `   ${l.quantity} nos × ${p.standardWeight} kg = *${p.totalWeight.toFixed(2)} kg* @ ₹${p.ratePerKg.toFixed(2)}/kg = *₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
       } else {
         msg += `   ${l.quantity} ${l.unit || l.product.unit} × ₹${p.unitPrice.toFixed(2)} = *₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
       }
@@ -685,11 +685,11 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                     ₹{pricing.ratePerKg.toFixed(2)} / kg
                                   </span>
                                   <span className="text-slate-300">•</span>
-                                  <span>{pricing.standardWeight} kg / {line.product.unit || 'unit'}</span>
+                                  <span>{pricing.standardWeight} kg / nos</span>
                                   <span className="text-slate-300">•</span>
-                                  <span className="text-slate-600 font-semibold">(₹{pricing.unitPrice.toFixed(2)} / {line.product.unit || 'unit'})</span>
+                                  <span className="text-slate-600 font-semibold">(₹{pricing.unitPrice.toFixed(2)} / nos)</span>
                                   <span className="text-slate-300">•</span>
-                                  <span className="text-blue-700 font-medium">{line.quantity} units × {pricing.standardWeight} kg = <strong>{pricing.totalWeight.toFixed(2)} kg</strong></span>
+                                  <span className="text-blue-700 font-medium">{line.quantity} nos × {pricing.standardWeight} kg = <strong>{pricing.totalWeight.toFixed(2)} kg</strong></span>
                                 </>
                               ) : (
                                 <>
