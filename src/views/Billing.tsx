@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, type Dispatch, type Driver, type Customer } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { FileText, Download, CreditCard, IndianRupee, AlertCircle, MessageSquare, Clock, Bell, CheckCircle2, User, MapPin, Phone, Truck } from 'lucide-react';
+import { FileText, Download, CreditCard, IndianRupee, AlertCircle, MessageSquare, Clock, Bell, CheckCircle2, User, MapPin, Phone, Truck, Package } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { useRealtime } from '@/lib/useRealtime';
 import jsPDF from 'jspdf';
@@ -480,53 +480,123 @@ export default function Billing() {
             </div>
 
             {/* Customer & Dispatch Details Card */}
-            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg flex flex-wrap gap-4 justify-between border border-slate-200 dark:border-slate-700 text-sm">
-              <div>
-                <p className="text-xs text-slate-500 uppercase font-bold">Customer Name</p>
-                <p className="font-bold text-slate-800 dark:text-slate-100">{selectedDispatch.customer?.name}</p>
+            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-4 border-2 border-slate-200 dark:border-slate-700 text-sm">
+              <div className="space-y-0.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-wide">Customer Name</p>
+                <p className="font-black text-slate-900 dark:text-slate-100 text-sm sm:text-base">{selectedDispatch.customer?.name}</p>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase font-bold">Phone Number</p>
-                <p className="font-medium text-slate-800 dark:text-slate-100">{selectedDispatch.customer?.phone || '—'}</p>
+              <div className="space-y-0.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-wide">Phone Number</p>
+                <p className="font-extrabold text-slate-800 dark:text-slate-200 text-sm">{selectedDispatch.customer?.phone || '—'}</p>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase font-bold">Pending Ledger Dues</p>
-                <p className="font-bold text-amber-600">₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
+              <div className="space-y-0.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-wide">Pending Dues</p>
+                <p className="font-black text-amber-600 dark:text-amber-400 text-sm sm:text-base">₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase font-bold">Assigned Transport</p>
-                <p className="font-medium text-slate-800 dark:text-slate-100">
+              <div className="space-y-0.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-wide">Transport</p>
+                <p className="font-extrabold text-slate-800 dark:text-slate-200 text-xs sm:text-sm line-clamp-2">
                   {selectedDispatch.vehicle_number ? `${selectedDispatch.vehicle_number} (${selectedDispatch.driver_name || 'Driver'})` : 'Assigned in Dispatch'}
                 </p>
               </div>
             </div>
 
-            {/* Order Items Table */}
+            {/* Order Items Section - High Contrast, Bold & Mobile-Optimized */}
             <div>
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-3">Order Items</h3>
-              <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Package size={18} className="text-blue-600 dark:text-blue-400" />
+                  Order Items ({selectedDispatch.items?.length || 0})
+                </h3>
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">
+                  Tax Inclusive
+                </span>
+              </div>
+
+              {/* Mobile View (< 768px): Bold, Non-Scrollable Cards */}
+              <div className="md:hidden space-y-3">
+                {selectedDispatch.items?.map((item, idx) => {
+                  const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
+                  const lineTotal = (item.price || 0) * item.quantity;
+                  return (
+                    <div 
+                      key={item.id || idx} 
+                      className="rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                            Item #{idx + 1}
+                          </span>
+                          <h4 className="text-base font-black text-slate-900 dark:text-slate-100 mt-1.5 leading-snug">
+                            {item.product_name}
+                          </h4>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Price</span>
+                          <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                            ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
+                          <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
+                            Quantity / Nos
+                          </span>
+                          <span className="text-base font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
+                            {item.quantity} <span className="text-xs font-bold text-slate-500">{item.unit}</span>
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
+                          <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
+                            Recorded Weight
+                          </span>
+                          <span className={`text-base font-black mt-0.5 block ${recordedWt ? 'text-blue-700 dark:text-blue-400' : 'text-slate-400'}`}>
+                            {recordedWt ? `${recordedWt} kg` : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop / Tablet View (>= 768px): High-Contrast, Ultra-Bold Table */}
+              <div className="hidden md:block border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Item Name</th>
-                      <th className="px-4 py-3 font-semibold text-right">No. of Items</th>
-                      <th className="px-4 py-3 font-semibold text-right">Recorded Weight</th>
-                      <th className="px-4 py-3 font-semibold text-right">Total Price</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">Item Name</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">No. of Items</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Recorded Weight</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Total Price</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {selectedDispatch.items?.map((item, idx) => (
-                      <tr key={item.id || idx}>
-                        <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{item.product_name}</td>
-                        <td className="px-4 py-3 text-right">{item.quantity} {item.unit}</td>
-                        <td className="px-4 py-3 text-right text-slate-500">
-                          {selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight 
-                            ? `${selectedDispatch.weights.find(w => w.notes?.includes(item.product_name))?.actual_weight} kg` 
-                            : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium">₹{((item.price || 0) * item.quantity).toLocaleString('en-IN')}</td>
-                      </tr>
-                    ))}
+                  <tbody className="divide-y-2 divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900">
+                    {selectedDispatch.items?.map((item, idx) => {
+                      const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
+                      const lineTotal = (item.price || 0) * item.quantity;
+                      return (
+                        <tr key={item.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                          <td className="px-5 py-4 font-black text-slate-900 dark:text-slate-100 text-sm">
+                            {item.product_name}
+                          </td>
+                          <td className="px-5 py-4 text-right font-black text-slate-900 dark:text-slate-100 text-sm">
+                            {item.quantity} <span className="font-bold text-xs text-slate-500">{item.unit}</span>
+                          </td>
+                          <td className="px-5 py-4 text-right font-bold text-sm">
+                            <span className={recordedWt ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}>
+                              {recordedWt ? `${recordedWt} kg` : '—'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-right font-black text-emerald-600 dark:text-emerald-400 text-base">
+                            ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
