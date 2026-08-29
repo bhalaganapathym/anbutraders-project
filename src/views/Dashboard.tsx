@@ -205,64 +205,104 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   useRealtime('bills', load);
   useRealtime('products', load);
 
-  const quickAccessItems = [
-    {
+  // Role-specific Quick Access Tools
+  const allQuickAccessMap = {
+    new_order: {
       name: 'New Estimate',
       icon: PlusCircle,
       view: 'new_order',
       color: 'bg-amber-500 text-white shadow-amber-500/20',
       border: 'hover:border-amber-500',
     },
-    {
+    orders: {
       name: 'Estimates',
       icon: ShoppingCart,
       view: 'orders',
       color: 'bg-violet-600 text-white shadow-violet-600/20',
       border: 'hover:border-violet-500',
     },
-    {
+    pricelist: {
       name: 'Price List',
       icon: Tags,
       view: 'pricelist',
       color: 'bg-slate-700 text-white shadow-slate-700/20',
       border: 'hover:border-slate-500',
     },
-    {
+    dispatches: {
       name: 'Dispatches',
       icon: Truck,
       view: 'dispatches',
       color: 'bg-emerald-500 text-white shadow-emerald-500/20',
       border: 'hover:border-emerald-500',
     },
-    {
+    billing: {
       name: 'Billing',
       icon: Receipt,
       view: 'billing',
       color: 'bg-blue-600 text-white shadow-blue-600/20',
       border: 'hover:border-blue-500',
     },
-    {
+    reconciliation: {
       name: 'Reconciliation',
       icon: DollarSign,
       view: 'reconciliation',
       color: 'bg-purple-600 text-white shadow-purple-600/20',
       border: 'hover:border-purple-500',
     },
-    {
+    customers: {
       name: 'Customer Ledger',
       icon: Users,
       view: 'customers',
       color: 'bg-sky-600 text-white shadow-sky-600/20',
       border: 'hover:border-sky-500',
     },
-    {
+    delivery: {
       name: 'Delivery / POD',
       icon: MapPin,
       view: 'delivery',
       color: 'bg-rose-500 text-white shadow-rose-500/20',
       border: 'hover:border-rose-500',
     },
-  ];
+  };
+
+  const getQuickAccessItems = () => {
+    const role = user?.role;
+    if (role === 'dispatch') {
+      return [
+        allQuickAccessMap.dispatches,
+        allQuickAccessMap.delivery,
+      ];
+    }
+    if (role === 'billing' || role === 'cashier') {
+      return [
+        allQuickAccessMap.new_order,
+        allQuickAccessMap.orders,
+        allQuickAccessMap.pricelist,
+        allQuickAccessMap.billing,
+        allQuickAccessMap.reconciliation,
+      ];
+    }
+    // Admin & other roles: Full 8 tools pipeline
+    return [
+      allQuickAccessMap.new_order,
+      allQuickAccessMap.orders,
+      allQuickAccessMap.pricelist,
+      allQuickAccessMap.dispatches,
+      allQuickAccessMap.billing,
+      allQuickAccessMap.reconciliation,
+      allQuickAccessMap.customers,
+      allQuickAccessMap.delivery,
+    ];
+  };
+
+  const quickAccessItems = getQuickAccessItems();
+
+  const getGridColsClass = (count: number) => {
+    if (count <= 2) return 'grid grid-cols-2 max-w-md gap-3 sm:gap-4';
+    if (count <= 4) return 'grid grid-cols-2 sm:grid-cols-4 max-w-3xl gap-3 sm:gap-4';
+    if (count === 5) return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4';
+    return 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4';
+  };
 
   return (
     <div className="space-y-8 pb-12">
@@ -594,7 +634,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
             Quick Access
           </h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
+        <div className={getGridColsClass(quickAccessItems.length)}>
           {quickAccessItems.map((item) => (
             <button
               key={item.name}
