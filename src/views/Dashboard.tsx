@@ -316,20 +316,22 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
             {t('company_tagline')}
           </p>
         </div>
-        <button
-          onClick={() => {
-            window.location.href = `${
-              import.meta.env.VITE_API_URL ||
-              (window.location.protocol === 'https:' ? 'https:' : 'http:') +
-                '//' +
-                window.location.hostname +
-                ':8000/api/v1'
-            }/orders/export`;
-          }}
-          className="btn-primary bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-xs sm:text-sm font-bold flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm transition"
-        >
-          <Download size={16} /> Export Orders
-        </button>
+        {user?.role !== 'dispatch' && (
+          <button
+            onClick={() => {
+              window.location.href = `${
+                import.meta.env.VITE_API_URL ||
+                (window.location.protocol === 'https:' ? 'https:' : 'http:') +
+                  '//' +
+                  window.location.hostname +
+                  ':8000/api/v1'
+              }/orders/export`;
+            }}
+            className="btn-primary bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-xs sm:text-sm font-bold flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm transition"
+          >
+            <Download size={16} /> Export Orders
+          </button>
+        )}
       </div>
 
       {/* 1.5. Pending Weight Mismatch Approvals (Prominent Admin Alert Card) */}
@@ -654,221 +656,223 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         </div>
       </section>
 
-      {/* 4. Recent Dispatches (Scrollable Feed with 5-Step Stepper Timeline) */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-            Recent Dispatches
-          </h2>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {recentDispatches.length} recent orders
-          </span>
-        </div>
-
-        {recentDispatches.length === 0 && !loading ? (
-          <div className="card p-12 text-center text-slate-400">
-            <Truck size={36} className="mx-auto mb-2 opacity-50" />
-            <p className="font-semibold text-slate-700 dark:text-slate-300">No dispatches yet today.</p>
+      {/* 4. Recent Dispatches (Scrollable Feed with 5-Step Stepper Timeline - Admin Only) */}
+      {user?.role !== 'dispatch' && user?.role !== 'billing' && user?.role !== 'cashier' && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              Recent Dispatches
+            </h2>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {recentDispatches.length} recent orders
+            </span>
           </div>
-        ) : (
-          <div className="max-h-[750px] overflow-y-auto space-y-4 pr-1 sm:pr-2">
-            {recentDispatches.map((d) => {
-              // 5 Stepper Stage Evaluations
-              const estimatedDone = true;
-              const estimatedTime = formatTime(d.order?.created_at || d.created_at);
 
-              const dispatchP1Done = Boolean(
-                d.sent_to_billing_at ||
-                d.ready_for_loading_at ||
-                d.loading_at ||
-                d.completed_at ||
-                d.status === 'sent_to_billing' ||
-                d.status === 'ready_for_loading' ||
-                d.status === 'completed'
-              );
-              const dispatchP1Active = d.status === 'pending';
-              const dispatchP1Time = d.sent_to_billing_at
-                ? formatTime(d.sent_to_billing_at)
-                : dispatchP1Done
-                ? formatTime(d.created_at)
-                : 'Pending';
+          {recentDispatches.length === 0 && !loading ? (
+            <div className="card p-12 text-center text-slate-400">
+              <Truck size={36} className="mx-auto mb-2 opacity-50" />
+              <p className="font-semibold text-slate-700 dark:text-slate-300">No dispatches yet today.</p>
+            </div>
+          ) : (
+            <div className="max-h-[750px] overflow-y-auto space-y-4 pr-1 sm:pr-2">
+              {recentDispatches.map((d) => {
+                // 5 Stepper Stage Evaluations
+                const estimatedDone = true;
+                const estimatedTime = formatTime(d.order?.created_at || d.created_at);
 
-              const billingDone = Boolean(
-                d.ready_for_loading_at ||
-                d.loading_at ||
-                d.completed_at ||
-                d.status === 'ready_for_loading' ||
-                d.status === 'completed'
-              );
-              const billingActive = d.status === 'sent_to_billing';
-              const billingTime = d.ready_for_loading_at
-                ? formatTime(d.ready_for_loading_at)
-                : billingDone
-                ? formatTime(d.sent_to_billing_at)
-                : 'Not processed';
+                const dispatchP1Done = Boolean(
+                  d.sent_to_billing_at ||
+                  d.ready_for_loading_at ||
+                  d.loading_at ||
+                  d.completed_at ||
+                  d.status === 'sent_to_billing' ||
+                  d.status === 'ready_for_loading' ||
+                  d.status === 'completed'
+                );
+                const dispatchP1Active = d.status === 'pending';
+                const dispatchP1Time = d.sent_to_billing_at
+                  ? formatTime(d.sent_to_billing_at)
+                  : dispatchP1Done
+                  ? formatTime(d.created_at)
+                  : 'Pending';
 
-              const dispatchP2Done = Boolean(d.loading_at || d.completed_at || d.status === 'completed');
-              const dispatchP2Active = d.status === 'ready_for_loading';
-              const dispatchP2Time = d.loading_at
-                ? formatTime(d.loading_at)
-                : d.completed_at
-                ? formatTime(d.completed_at)
-                : 'Not processed';
+                const billingDone = Boolean(
+                  d.ready_for_loading_at ||
+                  d.loading_at ||
+                  d.completed_at ||
+                  d.status === 'ready_for_loading' ||
+                  d.status === 'completed'
+                );
+                const billingActive = d.status === 'sent_to_billing';
+                const billingTime = d.ready_for_loading_at
+                  ? formatTime(d.ready_for_loading_at)
+                  : billingDone
+                  ? formatTime(d.sent_to_billing_at)
+                  : 'Not processed';
 
-              const deliveredDone = Boolean(d.completed_at || d.status === 'completed');
-              const deliveredActive = d.status === 'ready_for_loading';
-              const deliveredTime = d.completed_at ? formatTime(d.completed_at) : 'Not processed';
+                const dispatchP2Done = Boolean(d.loading_at || d.completed_at || d.status === 'completed');
+                const dispatchP2Active = d.status === 'ready_for_loading';
+                const dispatchP2Time = d.loading_at
+                  ? formatTime(d.loading_at)
+                  : d.completed_at
+                  ? formatTime(d.completed_at)
+                  : 'Not processed';
 
-              const steps = [
-                {
-                  name: 'Estimated',
-                  done: estimatedDone,
-                  active: false,
-                  time: estimatedTime,
-                },
-                {
-                  name: 'Dispatch P-I',
-                  done: dispatchP1Done,
-                  active: dispatchP1Active,
-                  time: dispatchP1Time,
-                },
-                {
-                  name: 'Billing',
-                  done: billingDone,
-                  active: billingActive,
-                  time: billingTime,
-                },
-                {
-                  name: 'Dispatch P-II',
-                  done: dispatchP2Done,
-                  active: dispatchP2Active,
-                  time: dispatchP2Time,
-                },
-                {
-                  name: 'Delivered',
-                  done: deliveredDone,
-                  active: deliveredActive,
-                  time: deliveredTime,
-                },
-              ];
+                const deliveredDone = Boolean(d.completed_at || d.status === 'completed');
+                const deliveredActive = d.status === 'ready_for_loading';
+                const deliveredTime = d.completed_at ? formatTime(d.completed_at) : 'Not processed';
 
-              return (
-                <div
-                  key={d.id}
-                  className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm hover:shadow-md transition space-y-4 sm:space-y-6"
-                >
-                  {/* Top Row: DispatchID, Customer Name, Live Timer */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs sm:text-sm font-black bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-3 py-1 rounded-xl shadow-sm tracking-wider">
-                        {d.dispatch_no}
-                      </span>
-                      <div>
-                        <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">
-                          {d.customers?.name || 'Customer'}
-                        </h3>
-                        {d.vehicle_number && (
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            🚚 {d.vehicle_number} {d.driver_name ? `(${d.driver_name})` : ''}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                const steps = [
+                  {
+                    name: 'Estimated',
+                    done: estimatedDone,
+                    active: false,
+                    time: estimatedTime,
+                  },
+                  {
+                    name: 'Dispatch P-I',
+                    done: dispatchP1Done,
+                    active: dispatchP1Active,
+                    time: dispatchP1Time,
+                  },
+                  {
+                    name: 'Billing',
+                    done: billingDone,
+                    active: billingActive,
+                    time: billingTime,
+                  },
+                  {
+                    name: 'Dispatch P-II',
+                    done: dispatchP2Done,
+                    active: dispatchP2Active,
+                    time: dispatchP2Time,
+                  },
+                  {
+                    name: 'Delivered',
+                    done: deliveredDone,
+                    active: deliveredActive,
+                    time: deliveredTime,
+                  },
+                ];
 
-                    <div className="flex items-center gap-2">
-                      <DispatchStatusBadge status={d.status} />
-                      <LiveTimer start={d.created_at} end={d.completed_at} />
-                    </div>
-                  </div>
-
-                  {/* Horizontal 5-Step Stepper Timeline (Responsive) */}
-                  <div className="pt-1">
-                    <div className="relative flex items-start justify-between">
-                      
-                      {/* Background Connecting Line */}
-                      <div className="absolute top-4 left-4 right-4 h-1 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0" />
-
-                      {steps.map((step, sIdx) => {
-                        return (
-                          <div
-                            key={step.name}
-                            className="relative z-10 flex flex-col items-center flex-1 text-center"
-                          >
-                            {/* Step Node Icon */}
-                            <div
-                              className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border-2 transition-all shadow-sm ${
-                                step.done
-                                  ? 'bg-emerald-500 border-emerald-600 text-white'
-                                  : step.active
-                                  ? 'bg-blue-600 border-blue-700 text-white animate-pulse'
-                                  : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400'
-                              }`}
-                            >
-                              {step.done ? (
-                                <CheckCircle2 size={18} className="stroke-[2.5]" />
-                              ) : step.active ? (
-                                <CircleDot size={18} className="animate-spin" />
-                              ) : (
-                                <Minus size={14} className="stroke-[2.5]" />
-                              )}
-                            </div>
-
-                            {/* Step Label */}
-                            <p
-                              className={`text-[11px] sm:text-xs font-extrabold mt-2 leading-tight ${
-                                step.done || step.active
-                                  ? 'text-slate-900 dark:text-slate-100'
-                                  : 'text-slate-400 dark:text-slate-500'
-                              }`}
-                            >
-                              {step.name}
+                return (
+                  <div
+                    key={d.id}
+                    className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm hover:shadow-md transition space-y-4 sm:space-y-6"
+                  >
+                    {/* Top Row: DispatchID, Customer Name, Live Timer */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs sm:text-sm font-black bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-3 py-1 rounded-xl shadow-sm tracking-wider">
+                          {d.dispatch_no}
+                        </span>
+                        <div>
+                          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">
+                            {d.customers?.name || 'Customer'}
+                          </h3>
+                          {d.vehicle_number && (
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                              🚚 {d.vehicle_number} {d.driver_name ? `(${d.driver_name})` : ''}
                             </p>
-
-                            {/* Step Timestamp */}
-                            <p
-                              className={`text-[10px] sm:text-[11px] font-bold mt-0.5 ${
-                                step.done
-                                  ? 'text-emerald-700 dark:text-emerald-400'
-                                  : step.active
-                                  ? 'text-blue-600 dark:text-blue-400 font-extrabold'
-                                  : 'text-slate-400 dark:text-slate-600'
-                              }`}
-                            >
-                              {step.time}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Mismatch Approval Banner in Timeline Card */}
-                    {d.mismatch_approval_status === 'pending' && (
-                      <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-900/60 flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <Mic size={16} className="text-amber-600 animate-pulse" />
-                          <div>
-                            <strong className="text-xs font-bold text-amber-950 dark:text-amber-200">Weight Mismatch Approval Pending</strong>
-                            {d.mismatch_reason && <p className="text-[11px] text-amber-800 dark:text-amber-300 italic">"{d.mismatch_reason}"</p>}
-                          </div>
+                          )}
                         </div>
-                        <button
-                          onClick={() => {
-                            setSelectedMismatchDispatch(d);
-                            setMismatchModalOpen(true);
-                          }}
-                          className="btn-primary py-1.5 px-3 text-xs bg-indigo-600 hover:bg-indigo-700 font-bold text-white flex items-center gap-1.5 shadow"
-                        >
-                          <Mic size={13} /> Listen & Approve
-                        </button>
                       </div>
-                    )}
+
+                      <div className="flex items-center gap-2">
+                        <DispatchStatusBadge status={d.status} />
+                        <LiveTimer start={d.created_at} end={d.completed_at} />
+                      </div>
+                    </div>
+
+                    {/* Horizontal 5-Step Stepper Timeline (Responsive) */}
+                    <div className="pt-1">
+                      <div className="relative flex items-start justify-between">
+                        
+                        {/* Background Connecting Line */}
+                        <div className="absolute top-4 left-4 right-4 h-1 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0" />
+
+                        {steps.map((step, sIdx) => {
+                          return (
+                            <div
+                              key={step.name}
+                              className="relative z-10 flex flex-col items-center flex-1 text-center"
+                            >
+                              {/* Step Node Icon */}
+                              <div
+                                className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border-2 transition-all shadow-sm ${
+                                  step.done
+                                    ? 'bg-emerald-500 border-emerald-600 text-white'
+                                    : step.active
+                                    ? 'bg-blue-600 border-blue-700 text-white animate-pulse'
+                                    : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400'
+                                }`}
+                              >
+                                {step.done ? (
+                                  <CheckCircle2 size={18} className="stroke-[2.5]" />
+                                ) : step.active ? (
+                                  <CircleDot size={18} className="animate-spin" />
+                                ) : (
+                                  <Minus size={14} className="stroke-[2.5]" />
+                                )}
+                              </div>
+
+                              {/* Step Label */}
+                              <p
+                                className={`text-[11px] sm:text-xs font-extrabold mt-2 leading-tight ${
+                                  step.done || step.active
+                                    ? 'text-slate-900 dark:text-slate-100'
+                                    : 'text-slate-400 dark:text-slate-500'
+                                }`}
+                              >
+                                {step.name}
+                              </p>
+
+                              {/* Step Timestamp */}
+                              <p
+                                className={`text-[10px] sm:text-[11px] font-bold mt-0.5 ${
+                                  step.done
+                                    ? 'text-emerald-700 dark:text-emerald-400'
+                                    : step.active
+                                    ? 'text-blue-600 dark:text-blue-400 font-extrabold'
+                                    : 'text-slate-400 dark:text-slate-600'
+                                }`}
+                              >
+                                {step.time}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Mismatch Approval Banner in Timeline Card */}
+                      {d.mismatch_approval_status === 'pending' && (
+                        <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-900/60 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Mic size={16} className="text-amber-600 animate-pulse" />
+                            <div>
+                              <strong className="text-xs font-bold text-amber-950 dark:text-amber-200">Weight Mismatch Approval Pending</strong>
+                              {d.mismatch_reason && <p className="text-[11px] text-amber-800 dark:text-amber-300 italic">"{d.mismatch_reason}"</p>}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setSelectedMismatchDispatch(d);
+                              setMismatchModalOpen(true);
+                            }}
+                            className="btn-primary py-1.5 px-3 text-xs bg-indigo-600 hover:bg-indigo-700 font-bold text-white flex items-center gap-1.5 shadow"
+                          >
+                            <Mic size={13} /> Listen & Approve
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Admin Weight Mismatch Approval Modal */}
       <WeightMismatchApprovalModal
