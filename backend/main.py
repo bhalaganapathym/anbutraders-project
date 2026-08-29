@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import os
 from core.config import settings
+import core.push  # Registers SQLAlchemy push event listeners
 from api.routes import api_router
 
 app = FastAPI(

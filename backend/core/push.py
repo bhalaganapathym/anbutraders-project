@@ -1,10 +1,12 @@
 import json
 import logging
+import threading
 from datetime import datetime, timezone
 from pywebpush import webpush, WebPushException
+from sqlalchemy import event
 from core.config import settings
 from db.session import SessionLocal
-from models.all import PushSubscription
+from models.all import PushSubscription, Notification
 
 logger = logging.getLogger("anbu_push")
 
@@ -92,3 +94,61 @@ def send_web_push(
         return {"sent": 0, "failed": 0, "error": str(e)}
     finally:
         db.close()
+
+def dispatch_web_push_async(title: str, body: str, url: str = "/", tag: str = "general", role: str = "all"):
+    """
+    Non-blocking background worker that executes send_web_push asynchronously.
+    """
+    thread = threading.Thread(
+        target=send_web_push,
+        kwargs={
+            "title": title,
+            "body": body,
+            "url": url,
+            "tag": tag,
+            "role": role
+        },
+        daemon=True
+    )
+    thread.start()
+
+def get_role_and_url_for_notification(notif_type: str, dispatch_id: str = None, order_id: str = None):
+    """
+    Maps notification types to target roles and in-app navigation routes.
+    """
+    if notif_type in ["order_confirmed", "bill_generated", "weight_mismatch_decision"]:
+        return "dispatch", "/#/dispatches"
+    elif notif_type in ["dispatch_completed", "photo_uploaded", "billing_alert", "discount_decision"]:
+        return "billing", "/#/billing"
+    elif notif_type in ["discount_approval_request", "weight_mismatch_request"]:
+        return "admin", "/#/dashboard"
+    elif notif_type in ["today_payment_overdue", "credit_overdue"]:
+        return "all", "/#/billing"
+    elif notif_type in ["advance_order_due"]:
+        return "all", "/#/orders"
+    return "all", "/#/notifications"
+
+# Automatic Push Trigger: Listen to all Notification insertions in database
+@event.listens_for(Notification, "after_insert")
+def auto_push_on_notification_insert(mapper, connection, target):
+    """
+    Automatically sends a Web Push notification to subscribed devices whenever ANY notification is created.
+    """
+    try:
+        title = target.title or "🔔 Anbu Traders Notification"
+        body = target.message or "New activity update"
+        role, url = get_role_and_url_for_notification(
+            target.type,
+            str(target.dispatch_id) if target.dispatch_id else None,
+            str(target.order_id) if target.order_id else None
+        )
+        tag = f"notif-{target.type}-{target.id or 'item'}"
+        dispatch_web_push_async(
+            title=title,
+            body=body,
+            url=url,
+            tag=tag,
+            role=role
+        )
+    except Exception as e:
+        logger.warning("Auto-push on notification insert warning: %s", e)
