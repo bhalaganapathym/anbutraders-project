@@ -1,12 +1,13 @@
+import os
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from api.deps import get_db, get_current_active_user
 from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification, Bill, Driver
-from schemas.all import CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest, OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, NotificationCreate, NotificationResponse, BulkDeleteRequest
+from schemas.all import CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest, OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, DispatchDraftUpdate, WeightMismatchDecision, NotificationCreate, NotificationResponse, BulkDeleteRequest
 from core.websocket import manager
 
 router = APIRouter()
@@ -603,6 +604,14 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
             dispatch.sent_to_billing_at = datetime.now()
         elif dispatch_in.status == "completed":
             dispatch.completed_at = datetime.now()
+            # Clean up temporary voice note file if any exists to free server storage
+            if dispatch.mismatch_voice_note_path and os.path.exists(dispatch.mismatch_voice_note_path):
+                try:
+                    os.remove(dispatch.mismatch_voice_note_path)
+                except Exception:
+                    pass
+                dispatch.mismatch_voice_note_url = None
+                dispatch.mismatch_voice_note_path = None
             if dispatch.order_id:
                 order = db.query(Order).filter(Order.id == dispatch.order_id).first()
                 if order:
@@ -636,6 +645,132 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
     db.refresh(dispatch)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
+    return dispatch
+
+@router.patch("/dispatches/{id}/draft", response_model=DispatchResponse)
+def save_dispatch_draft(
+    id: UUID, 
+    payload: DispatchDraftUpdate, 
+    background_tasks: BackgroundTasks, 
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    dispatch.phase1_draft = payload.phase1_draft
+    db.commit()
+    db.refresh(dispatch)
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    return dispatch
+
+@router.post("/dispatches/{id}/request-mismatch-approval", response_model=DispatchResponse)
+async def request_mismatch_approval(
+    id: UUID,
+    background_tasks: BackgroundTasks,
+    audio_file: Optional[UploadFile] = File(None),
+    reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    
+    # Save audio file if provided
+    voice_url = None
+    voice_path = None
+    if audio_file and audio_file.filename:
+        os.makedirs("uploads/voice_notes", exist_ok=True)
+        ext = audio_file.filename.split(".")[-1] if "." in audio_file.filename else "webm"
+        filename = f"mismatch_{dispatch.id}_{int(datetime.now().timestamp())}.{ext}"
+        local_path = os.path.join("uploads", "voice_notes", filename)
+        
+        content = await audio_file.read()
+        with open(local_path, "wb") as f:
+            f.write(content)
+        
+        voice_path = os.path.abspath(local_path)
+        voice_url = f"/uploads/voice_notes/{filename}"
+
+    dispatch.mismatch_approval_status = "pending"
+    if voice_url:
+        dispatch.mismatch_voice_note_url = voice_url
+        dispatch.mismatch_voice_note_path = voice_path
+    if reason:
+        dispatch.mismatch_reason = reason
+    dispatch.mismatch_requested_at = datetime.now()
+    
+    # Create high-priority Admin notification
+    customer_name = dispatch.customer.name if dispatch.customer else "Customer"
+    notif = Notification(
+        type="weight_mismatch_approval",
+        title=f"⚠️ Weight Mismatch Approval Needed — {dispatch.dispatch_no}",
+        message=f"Dispatcher recorded a voice note for weight mismatch on {dispatch.dispatch_no} ({customer_name}). Admin review required.",
+        dispatch_id=dispatch.id,
+        order_id=dispatch.order_id,
+        customer_name=customer_name
+    )
+    db.add(notif)
+    db.commit()
+    db.refresh(dispatch)
+    
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return dispatch
+
+@router.post("/dispatches/{id}/mismatch-decision", response_model=DispatchResponse)
+def decide_mismatch_approval(
+    id: UUID,
+    decision_in: WeightMismatchDecision,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+
+    decision = decision_in.decision.lower()  # 'approved' or 'rejected'
+    dispatch.mismatch_approval_status = decision
+    dispatch.mismatch_approved_by = decision_in.approved_by or "Admin"
+    dispatch.mismatch_approved_at = datetime.now()
+    
+    if decision == "rejected":
+        dispatch.mismatch_rejection_reason = decision_in.rejection_reason or "Weight discrepancy rejected by admin. Please re-weigh materials."
+    else:
+        dispatch.mismatch_rejection_reason = None
+
+    # Storage Cleanup: Delete temporary voice note file immediately from disk to free storage!
+    if dispatch.mismatch_voice_note_path and os.path.exists(dispatch.mismatch_voice_note_path):
+        try:
+            os.remove(dispatch.mismatch_voice_note_path)
+        except Exception as e:
+            print(f"Warning: Could not remove voice note file {dispatch.mismatch_voice_note_path}: {e}")
+    dispatch.mismatch_voice_note_url = None
+    dispatch.mismatch_voice_note_path = None
+
+    # Send notification to dispatch team
+    customer_name = dispatch.customer.name if dispatch.customer else "Customer"
+    notif_type = "mismatch_approved" if decision == "approved" else "mismatch_rejected"
+    notif_title = f"✅ Weight Mismatch Approved — {dispatch.dispatch_no}" if decision == "approved" else f"❌ Weight Mismatch Rejected — {dispatch.dispatch_no}"
+    notif_msg = (
+        f"Admin approved weight mismatch for {dispatch.dispatch_no}. You may now proceed to billing."
+        if decision == "approved"
+        else f"Admin rejected weight mismatch for {dispatch.dispatch_no}: {dispatch.mismatch_rejection_reason}"
+    )
+
+    notif = Notification(
+        type=notif_type,
+        title=notif_title,
+        message=notif_msg,
+        dispatch_id=dispatch.id,
+        order_id=dispatch.order_id,
+        customer_name=customer_name
+    )
+    db.add(notif)
+    db.commit()
+    db.refresh(dispatch)
+
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
     return dispatch
 
 @router.delete("/dispatches/{id}")

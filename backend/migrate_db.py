@@ -86,5 +86,19 @@ def migrate():
         except Exception as e:
             print("Skipping advance order fields: ", e)
 
+        try:
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS phase1_draft JSONB;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_approval_status VARCHAR;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_voice_note_url VARCHAR;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_voice_note_path VARCHAR;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_reason VARCHAR;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_requested_at TIMESTAMP WITH TIME ZONE;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_approved_by VARCHAR;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_approved_at TIMESTAMP WITH TIME ZONE;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_rejection_reason VARCHAR;"))
+            print("Added phase1_draft and mismatch approval fields to dispatches")
+        except Exception as e:
+            print("Skipping dispatch draft & mismatch fields: ", e)
+
 if __name__ == "__main__":
     migrate()

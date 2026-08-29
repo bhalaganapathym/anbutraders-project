@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
 from uuid import UUID
 
@@ -216,9 +216,26 @@ class DispatchCreate(BaseModel):
     vehicle_number: Optional[str] = None
     driver_name: Optional[str] = None
     driver_mobile: Optional[str] = None
+    phase1_draft: Optional[Any] = None
+    mismatch_approval_status: Optional[str] = None
+    mismatch_voice_note_url: Optional[str] = None
+    mismatch_voice_note_path: Optional[str] = None
+    mismatch_reason: Optional[str] = None
+    mismatch_requested_at: Optional[datetime] = None
+    mismatch_approved_by: Optional[str] = None
+    mismatch_approved_at: Optional[datetime] = None
+    mismatch_rejection_reason: Optional[str] = None
     items: Optional[List[DispatchItemCreate]] = []
     weights: Optional[List[WeightCreate]] = []
     photos: Optional[List[PhotoCreate]] = []
+
+class DispatchDraftUpdate(BaseModel):
+    phase1_draft: Any
+
+class WeightMismatchDecision(BaseModel):
+    decision: str  # 'approved' or 'rejected'
+    approved_by: Optional[str] = "Admin"
+    rejection_reason: Optional[str] = None
 
 class DispatchResponse(BaseModel):
     id: UUID
@@ -231,6 +248,15 @@ class DispatchResponse(BaseModel):
     vehicle_number: Optional[str] = None
     driver_name: Optional[str] = None
     driver_mobile: Optional[str] = None
+    phase1_draft: Optional[Any] = None
+    mismatch_approval_status: Optional[str] = None
+    mismatch_voice_note_url: Optional[str] = None
+    mismatch_voice_note_path: Optional[str] = None
+    mismatch_reason: Optional[str] = None
+    mismatch_requested_at: Optional[datetime] = None
+    mismatch_approved_by: Optional[str] = None
+    mismatch_approved_at: Optional[datetime] = None
+    mismatch_rejection_reason: Optional[str] = None
     sent_to_billing_at: Optional[datetime] = None
     ready_for_loading_at: Optional[datetime] = None
     loading_at: Optional[datetime] = None

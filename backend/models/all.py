@@ -112,6 +112,15 @@ class Dispatch(Base):
     completed_at = Column(DateTime(timezone=True))
     vehicle_leave_photo_url = Column(String, nullable=True)
     dispatch_team = Column(String)
+    phase1_draft = Column(JSON, nullable=True)
+    mismatch_approval_status = Column(String, nullable=True)  # 'pending', 'approved', 'rejected'
+    mismatch_voice_note_url = Column(String, nullable=True)
+    mismatch_voice_note_path = Column(String, nullable=True)
+    mismatch_reason = Column(String, nullable=True)
+    mismatch_requested_at = Column(DateTime(timezone=True), nullable=True)
+    mismatch_approved_by = Column(String, nullable=True)
+    mismatch_approved_at = Column(DateTime(timezone=True), nullable=True)
+    mismatch_rejection_reason = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     
     order = relationship("Order")

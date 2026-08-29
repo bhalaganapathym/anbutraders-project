@@ -20,6 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+os.makedirs("uploads/voice_notes", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")

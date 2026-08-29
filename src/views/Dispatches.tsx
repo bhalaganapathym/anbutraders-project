@@ -5,13 +5,15 @@ import {
   type Dispatch,
   type Order,
 } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import { useToast } from '@/components/Toast';
 import {
-  Plus, Search, Truck, Trash2, Package, AlertCircle, Clock, MessageSquare, Play, MapPin, User
+  Plus, Search, Truck, Trash2, Package, AlertCircle, Clock, MessageSquare, Play, MapPin, User, Mic, CheckCircle2
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import DispatchDashboard from './DispatchDashboard';
+import WeightMismatchApprovalModal from '@/components/WeightMismatchApprovalModal';
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice } from '@/lib/pricing';
@@ -58,6 +60,7 @@ function WaitClock({ timestamp }: { timestamp: string | Date }) {
 
 export default function Dispatches() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const toast = useToast();
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
   const [confirmedOrders, setConfirmedOrders] = useState<ConfirmedOrder[]>([]);
@@ -71,6 +74,15 @@ export default function Dispatches() {
 
   const [detail, setDetail] = useState<DispatchRow | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Mismatch Approval Modal State
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [selectedMismatchDispatch, setSelectedMismatchDispatch] = useState<DispatchRow | null>(null);
+
+  const handleOpenApprovalModal = (d: DispatchRow) => {
+    setSelectedMismatchDispatch(d);
+    setApprovalModalOpen(true);
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -463,8 +475,18 @@ export default function Dispatches() {
                       </div>
                     </div>
 
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-1">
                       <DispatchStatusBadge status={d.status} />
+                      {d.mismatch_approval_status === 'pending' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                          <Mic size={11} className="animate-pulse text-amber-600" /> Mismatch Pending
+                        </span>
+                      )}
+                      {d.mismatch_approval_status === 'approved' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
+                          <CheckCircle2 size={11} className="text-emerald-600" /> Mismatch Approved
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -490,6 +512,20 @@ export default function Dispatches() {
                       <p className="text-xs text-slate-500 line-clamp-1 pt-0.5">
                         📍 {d.delivery_address}
                       </p>
+                    )}
+
+                    {d.mismatch_approval_status === 'pending' && user?.role === 'admin' && (
+                      <div className="mt-2 p-2 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
+                          <Mic size={13} className="text-indigo-600 animate-pulse" /> Voice Note Awaiting Review
+                        </span>
+                        <button
+                          onClick={() => handleOpenApprovalModal(d)}
+                          className="text-[11px] font-black text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded shadow"
+                        >
+                          Review Voice Note
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -577,12 +613,35 @@ export default function Dispatches() {
                           <span className="text-slate-400 italic">Not set</span>
                         )}
                       </td>
-                      <td className="td"><DispatchStatusBadge status={d.status} /></td>
+                      <td className="td">
+                        <div className="flex flex-col gap-1 items-start">
+                          <DispatchStatusBadge status={d.status} />
+                          {d.mismatch_approval_status === 'pending' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                              <Mic size={10} className="animate-pulse text-amber-600" /> Mismatch Pending
+                            </span>
+                          )}
+                          {d.mismatch_approval_status === 'approved' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
+                              <CheckCircle2 size={10} className="text-emerald-600" /> Mismatch Approved
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="td">
                         <WaitClock timestamp={d.order?.confirmed_at || d.created_at} />
                       </td>
                       <td className="td text-right">
-                        <div className="flex justify-end gap-1">
+                        <div className="flex justify-end items-center gap-1">
+                          {user?.role === 'admin' && d.mismatch_approval_status === 'pending' && (
+                            <button
+                              onClick={() => handleOpenApprovalModal(d)}
+                              className="btn-ghost px-2 py-1 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1 rounded-md"
+                              title="Review Dispatcher Voice Note"
+                            >
+                              <Mic size={13} /> Review Voice Note
+                            </button>
+                          )}
                           {d.customer?.phone && (
                             <button
                               onClick={() => handleWhatsAppAlert(d)}
@@ -662,6 +721,14 @@ export default function Dispatches() {
           </div>
         </div>
       </Modal>
+
+      {/* Admin Weight Mismatch Approval Modal */}
+      <WeightMismatchApprovalModal
+        isOpen={approvalModalOpen}
+        onClose={() => setApprovalModalOpen(false)}
+        dispatch={selectedMismatchDispatch}
+        onSuccess={load}
+      />
     </div>
   );
 }

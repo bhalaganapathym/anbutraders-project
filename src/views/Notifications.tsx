@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRealtime } from '@/lib/useRealtime';
-import { api, type Notification } from '@/lib/api';
+import { api, type Notification, type Dispatch } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import {
-  Bell, CheckCircle2, Trash2, X, Truck, IndianRupee, Clock, Download
+  Bell, CheckCircle2, Trash2, X, Truck, IndianRupee, Clock, Download, Mic, AlertTriangle
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
+import WeightMismatchApprovalModal from '@/components/WeightMismatchApprovalModal';
 
 export default function Notifications() {
   const { t } = useTranslation();
@@ -16,6 +17,20 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Mismatch approval modal
+  const [selectedMismatchDispatch, setSelectedMismatchDispatch] = useState<Dispatch | null>(null);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+
+  const handleReviewMismatch = async (dispatchId: string) => {
+    try {
+      const d = await api.get(`/dispatches/${dispatchId}`);
+      setSelectedMismatchDispatch(d as Dispatch);
+      setApprovalModalOpen(true);
+    } catch (e: any) {
+      toast('Failed to load dispatch details', 'error');
+    }
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -265,6 +280,20 @@ export default function Notifications() {
                             </div>
                           </div>
                         )}
+
+                        {n.type === 'weight_mismatch_approval' && n.dispatch_id && user?.role === 'admin' && (
+                          <div className="mt-3 p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-900/60 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+                            <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                              <Mic size={16} className="text-indigo-600 animate-pulse" /> Dispatcher's voice note is ready for authorization
+                            </span>
+                            <button
+                              onClick={() => handleReviewMismatch(n.dispatch_id!)}
+                              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow transition flex items-center gap-1.5 active:scale-95"
+                            >
+                              <Mic size={14} /> Listen & Approve
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {!n.read && (
@@ -325,6 +354,14 @@ export default function Notifications() {
           </button>
         </div>
       )}
+
+      {/* Admin Weight Mismatch Approval Modal */}
+      <WeightMismatchApprovalModal
+        isOpen={approvalModalOpen}
+        onClose={() => setApprovalModalOpen(false)}
+        dispatch={selectedMismatchDispatch}
+        onSuccess={load}
+      />
     </div>
   );
 }
