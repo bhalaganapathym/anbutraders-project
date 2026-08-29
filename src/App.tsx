@@ -28,14 +28,14 @@ type NavConfig = { id: string; labelKey: keyof typeof translations['en']; icon: 
 
 const navConfigs: NavConfig[] = [
   { id: 'dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
-  { id: 'customers', labelKey: 'customers_ledger', icon: Users },
-  { id: 'products', labelKey: 'products', icon: Package },
-  { id: 'pricelist', labelKey: 'price_list', icon: Tags },
   { id: 'orders', labelKey: 'estimate', icon: ShoppingCart },
+  { id: 'pricelist', labelKey: 'price_list', icon: Tags },
   { id: 'dispatches', labelKey: 'dispatches', icon: Truck },
-  { id: 'delivery', labelKey: 'delivery_pod', icon: MapPin },
   { id: 'billing', labelKey: 'billing', icon: Receipt },
   { id: 'reconciliation', labelKey: 'reconciliation', icon: DollarSign },
+  { id: 'customers', labelKey: 'customers_ledger', icon: Users },
+  { id: 'delivery', labelKey: 'delivery_pod', icon: MapPin },
+  { id: 'products', labelKey: 'products', icon: Package },
   { id: 'drivers', labelKey: 'drivers', icon: UserSquare },
   { id: 'notifications', labelKey: 'notifications', icon: Bell },
   { id: 'settings', labelKey: 'settings', icon: SettingsIcon },
@@ -103,10 +103,10 @@ function AppContent() {
     const allowed = navConfigs.filter(item => {
       if (user.role === 'admin') return true;
       if (user.role === 'billing') {
-        return ['dashboard', 'customers', 'products', 'orders', 'delivery', 'billing', 'reconciliation', 'notifications', 'settings'].includes(item.id);
+        return ['dashboard', 'orders', 'pricelist', 'billing', 'reconciliation', 'customers', 'delivery', 'products', 'notifications', 'settings'].includes(item.id);
       }
       if (user.role === 'dispatch') {
-        return ['dashboard', 'products', 'dispatches', 'delivery', 'notifications'].includes(item.id);
+        return ['dashboard', 'dispatches', 'delivery', 'products', 'notifications'].includes(item.id);
       }
       return false;
     });
@@ -265,9 +265,9 @@ function AppContent() {
           {activeView === 'products' && <Products />}
           {activeView === 'pricelist' && <PriceList />}
           {activeView === 'orders' && <Orders onNewOrder={() => { setOrderToEdit(null); navigate('new_order'); }} onEditOrder={(o) => { setOrderToEdit(o); navigate('new_order'); }} />}
-          {activeView === 'dispatches' && <Dispatches />}
+          {activeView === 'dispatches' && <Dispatches onNavigate={navigate} />}
           {activeView === 'delivery' && <DriverDelivery />}
-          {activeView === 'billing' && <Billing />}
+          {activeView === 'billing' && <Billing onNavigate={navigate} />}
           {activeView === 'reconciliation' && <DailyReconciliation />}
           {activeView === 'drivers' && <Drivers />}
           {activeView === 'notifications' && <Notifications />}

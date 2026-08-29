@@ -207,20 +207,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
 
   const quickAccessItems = [
     {
-      name: 'Dispatches',
-      icon: Truck,
-      view: 'dispatches',
-      color: 'bg-emerald-500 text-white shadow-emerald-500/20',
-      border: 'hover:border-emerald-500',
-    },
-    {
-      name: 'Billing',
-      icon: Receipt,
-      view: 'billing',
-      color: 'bg-blue-600 text-white shadow-blue-600/20',
-      border: 'hover:border-blue-500',
-    },
-    {
       name: 'New Estimate',
       icon: PlusCircle,
       view: 'new_order',
@@ -235,13 +221,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
       border: 'hover:border-violet-500',
     },
     {
-      name: 'Customer Ledger',
-      icon: Users,
-      view: 'customers',
-      color: 'bg-sky-600 text-white shadow-sky-600/20',
-      border: 'hover:border-sky-500',
-    },
-    {
       name: 'Price List',
       icon: Tags,
       view: 'pricelist',
@@ -249,11 +228,32 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
       border: 'hover:border-slate-500',
     },
     {
+      name: 'Dispatches',
+      icon: Truck,
+      view: 'dispatches',
+      color: 'bg-emerald-500 text-white shadow-emerald-500/20',
+      border: 'hover:border-emerald-500',
+    },
+    {
+      name: 'Billing',
+      icon: Receipt,
+      view: 'billing',
+      color: 'bg-blue-600 text-white shadow-blue-600/20',
+      border: 'hover:border-blue-500',
+    },
+    {
       name: 'Reconciliation',
       icon: DollarSign,
       view: 'reconciliation',
       color: 'bg-purple-600 text-white shadow-purple-600/20',
       border: 'hover:border-purple-500',
+    },
+    {
+      name: 'Customer Ledger',
+      icon: Users,
+      view: 'customers',
+      color: 'bg-sky-600 text-white shadow-sky-600/20',
+      border: 'hover:border-sky-500',
     },
     {
       name: 'Delivery / POD',
@@ -438,35 +438,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         </section>
       )}
 
-      {/* 2. Quick Access Grid (8 App-Style Rounded Cards) */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Sparkles size={18} className="text-amber-500" />
-          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-            Quick Access
-          </h2>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
-          {quickAccessItems.map((item) => (
-            <button
-              key={item.name}
-              onClick={() => onNavigate(item.view)}
-              className={`group flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all text-center ${item.border}`}
-            >
-              <div
-                className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-md transition-transform group-hover:scale-110 mb-2.5 ${item.color}`}
-              >
-                <item.icon size={24} />
-              </div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-1">
-                {item.name}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* 3. Activities Today (3 Metric Cards: Dispatches, Estimates, Advance Orders) */}
+      {/* 2. Activities Today (3 Metric Cards: Dispatches, Estimates, Advance Orders) */}
       <section className="space-y-3">
         <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
           Activities Today
@@ -611,6 +583,34 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
             </div>
           </div>
 
+        </div>
+      </section>
+
+      {/* 3. Quick Access Grid (8 App-Style Rounded Cards - Placed Below Activities Today) */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Sparkles size={18} className="text-amber-500" />
+          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+            Quick Access
+          </h2>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
+          {quickAccessItems.map((item) => (
+            <button
+              key={item.name}
+              onClick={() => onNavigate(item.view)}
+              className={`group flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all text-center ${item.border}`}
+            >
+              <div
+                className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-md transition-transform group-hover:scale-110 mb-2.5 ${item.color}`}
+              >
+                <item.icon size={24} />
+              </div>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-1">
+                {item.name}
+              </span>
+            </button>
+          ))}
         </div>
       </section>
 
