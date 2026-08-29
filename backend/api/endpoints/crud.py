@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -331,7 +331,7 @@ def create_order(
     order_data = order_in.model_dump(exclude={"items", "order_no"})
     order = Order(**order_data, order_no=new_order_no)
     if order.status == "confirmed":
-        order.confirmed_at = datetime.now()
+        order.confirmed_at = datetime.now(timezone.utc)
     db.add(order)
     db.flush()
     
@@ -481,9 +481,8 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
         if value is not None or key == "delivery_address" or key == "notes":
             setattr(order, key, value)
             
-    from datetime import datetime
     if old_status != "confirmed" and order.status == "confirmed":
-        order.confirmed_at = datetime.now()
+        order.confirmed_at = datetime.now(timezone.utc)
     elif order.status != "confirmed":
         order.confirmed_at = None
         
@@ -601,9 +600,9 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
             
     if old_status != dispatch.status:
         if dispatch.status == "sent_to_billing":
-            dispatch.sent_to_billing_at = datetime.now()
+            dispatch.sent_to_billing_at = datetime.now(timezone.utc)
         elif dispatch_in.status == "completed":
-            dispatch.completed_at = datetime.now()
+            dispatch.completed_at = datetime.now(timezone.utc)
             # Clean up temporary voice note file if any exists to free server storage
             if dispatch.mismatch_voice_note_path and os.path.exists(dispatch.mismatch_voice_note_path):
                 try:
@@ -700,7 +699,7 @@ async def request_mismatch_approval(
         dispatch.mismatch_voice_note_path = voice_path
     if reason:
         dispatch.mismatch_reason = reason
-    dispatch.mismatch_requested_at = datetime.now()
+    dispatch.mismatch_requested_at = datetime.now(timezone.utc)
     
     # Create high-priority Admin notification
     customer_name = dispatch.customer.name if dispatch.customer else "Customer"
@@ -734,7 +733,7 @@ def decide_mismatch_approval(
     decision = decision_in.decision.lower()  # 'approved' or 'rejected'
     dispatch.mismatch_approval_status = decision
     dispatch.mismatch_approved_by = decision_in.approved_by or "Admin"
-    dispatch.mismatch_approved_at = datetime.now()
+    dispatch.mismatch_approved_at = datetime.now(timezone.utc)
     
     if decision == "rejected":
         dispatch.mismatch_rejection_reason = decision_in.rejection_reason or "Weight discrepancy rejected by admin. Please re-weigh materials."

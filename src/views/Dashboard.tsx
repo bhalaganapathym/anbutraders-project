@@ -56,13 +56,30 @@ type DispatchWithTimeline = Dispatch & {
   completed_at?: string | null;
 };
 
+function parseDateSafe(isoString?: string | null): Date | null {
+  if (!isoString) return null;
+  let str = String(isoString).trim();
+  // If no timezone offset is provided, assume UTC ('Z')
+  if (!str.endsWith('Z') && !str.includes('+') && !str.match(/-\d{2}:\d{2}$/)) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function LiveTimer({ start, end }: { start: string; end?: string | null }) {
   const [elapsed, setElapsed] = useState('');
 
   useEffect(() => {
     const calc = () => {
-      const startTime = new Date(start).getTime();
-      const endTime = end ? new Date(end).getTime() : Date.now();
+      const startDate = parseDateSafe(start);
+      const endDate = end ? parseDateSafe(end) : new Date();
+      if (!startDate) {
+        setElapsed('0m');
+        return;
+      }
+      const startTime = startDate.getTime();
+      const endTime = endDate ? endDate.getTime() : Date.now();
       const diffMs = endTime - startTime;
       if (diffMs < 0) {
         setElapsed('0m');
@@ -95,8 +112,8 @@ function LiveTimer({ start, end }: { start: string; end?: string | null }) {
 function formatTime(isoString?: string | null): string {
   if (!isoString) return 'Not processed';
   try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return 'Not processed';
+    const d = parseDateSafe(isoString);
+    if (!d) return 'Not processed';
     return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
   } catch {
     return 'Not processed';

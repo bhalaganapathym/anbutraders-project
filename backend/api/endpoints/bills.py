@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 
 from api.deps import get_db
 from models.all import Bill, Dispatch, Driver
@@ -37,7 +37,7 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
     
     # Update Dispatch status
     dispatch.status = "ready_for_loading"
-    dispatch.ready_for_loading_at = datetime.now()
+    dispatch.ready_for_loading_at = datetime.now(timezone.utc)
     if driver:
         dispatch.vehicle_number = driver.vehicle_number
         dispatch.driver_name = driver.name
