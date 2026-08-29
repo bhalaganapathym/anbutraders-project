@@ -12,4 +12,3 @@ python-multipart
 email-validator
 supabase
 pywebpush
-
