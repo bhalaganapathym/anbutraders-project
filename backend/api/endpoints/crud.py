@@ -337,11 +337,75 @@ def create_order(
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
         
+    # Auto-save delivery address to customer profile & recommended list
+    customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+    cust_name = customer.name if customer else "Unknown Customer"
+    
+    if customer and order.delivery_address and order.delivery_address.strip():
+        clean_addr = order.delivery_address.strip()
+        curr_addrs = list(customer.delivery_addresses or [])
+        if customer.address and customer.address.strip() and customer.address.strip() not in curr_addrs:
+            curr_addrs.insert(0, customer.address.strip())
+        if clean_addr not in curr_addrs:
+            curr_addrs.append(clean_addr)
+            customer.delivery_addresses = curr_addrs
+            if not customer.address or not customer.address.strip():
+                customer.address = clean_addr
+
+    # If this is an advance order, create a booking notification
+    if order.is_advance_order:
+        sched_date_str = order.scheduled_delivery_date.strftime("%d %b %Y") if order.scheduled_delivery_date else "Scheduled Date"
+        adv_amt = float(order.advance_paid_amount or 0)
+        notif = Notification(
+            type="advance_order_booked",
+            title=f"📦 Advance Order Booked - {new_order_no}",
+            message=f"Advance order booked for {cust_name}. Scheduled Delivery: {sched_date_str}. Advance Paid: ₹{adv_amt:,.2f}.",
+            order_id=order.id,
+            customer_name=cust_name
+        )
+        db.add(notif)
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+        
     db.commit()
     db.refresh(order)
     
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
     return order
+
+@router.get("/orders/advance-metrics")
+def get_advance_order_metrics(db: Session = Depends(get_db)):
+    from datetime import date as date_cls, timedelta, datetime
+    from sqlalchemy import cast, Date, func
+    
+    today = date_cls.today()
+    tomorrow = today + timedelta(days=1)
+    
+    adv_orders = db.query(Order).filter(
+        Order.is_advance_order == True,
+        Order.status != "completed"
+    ).all()
+    
+    today_pending = 0
+    tomorrow_orders = 0
+    total_pending = len(adv_orders)
+    total_advance_amount = 0.0
+    
+    for o in adv_orders:
+        total_advance_amount += float(o.advance_paid_amount or 0)
+        if o.scheduled_delivery_date:
+            sched_d = o.scheduled_delivery_date.date() if isinstance(o.scheduled_delivery_date, datetime) else o.scheduled_delivery_date
+            if sched_d <= today:
+                today_pending += 1
+            elif sched_d == tomorrow:
+                tomorrow_orders += 1
+                
+    return {
+        "today_pending": today_pending,
+        "tomorrow_orders": tomorrow_orders,
+        "total_pending": total_pending,
+        "total_advance_amount": total_advance_amount
+    }
 
 @router.get("/orders", response_model=List[OrderResponse])
 def get_orders(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
@@ -426,8 +490,18 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
         
+    # Auto-save delivery address to customer profile & recommended list
+    customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+    if customer and order.delivery_address and order.delivery_address.strip():
+        clean_addr = order.delivery_address.strip()
+        curr_addrs = list(customer.delivery_addresses or [])
+        if customer.address and customer.address.strip() and customer.address.strip() not in curr_addrs:
+            curr_addrs.insert(0, customer.address.strip())
+        if clean_addr not in curr_addrs:
+            curr_addrs.append(clean_addr)
+            customer.delivery_addresses = curr_addrs
+
     if old_status != "confirmed" and order.status == "confirmed":
-        customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
         customer_name = customer.name if customer else "Unknown"
         notification = Notification(
             type="order_confirmed",

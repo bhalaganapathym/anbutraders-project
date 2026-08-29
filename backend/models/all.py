@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Numeric, ForeignKey, DateTime, Boolean, text
+from sqlalchemy import Column, String, Integer, Numeric, ForeignKey, DateTime, Boolean, JSON, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from db.base_class import Base
@@ -20,6 +20,7 @@ class Customer(Base):
     name = Column(String, nullable=False)
     phone = Column(String)
     address = Column(String)
+    delivery_addresses = Column(JSON, nullable=True, default=list)
     credit_due_date = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
@@ -54,6 +55,12 @@ class Order(Base):
     status = Column(String, default="pending", nullable=False)
     delivery_address = Column(String)
     notes = Column(String)
+    is_advance_order = Column(Boolean, default=False, nullable=False)
+    scheduled_delivery_date = Column(DateTime(timezone=True), nullable=True)
+    advance_paid_amount = Column(Numeric, default=0, nullable=False)
+    advance_payment_method = Column(String, nullable=True)
+    advance_notes = Column(String, nullable=True)
+    advance_status = Column(String, default="pending", nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     confirmed_at = Column(DateTime(timezone=True), nullable=True)
     

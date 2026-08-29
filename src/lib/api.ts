@@ -52,6 +52,7 @@ export type Customer = {
   name: string;
   phone: string | null;
   address: string | null;
+  delivery_addresses?: string[] | null;
   pending_amount?: number;
   credit_due_date?: string | null;
   credit_days?: number | null;
@@ -81,6 +82,12 @@ export type Order = {
   status: 'pending' | 'confirmed';
   delivery_address: string | null;
   notes: string | null;
+  is_advance_order?: boolean;
+  scheduled_delivery_date?: string | null;
+  advance_paid_amount?: number;
+  advance_payment_method?: string | null;
+  advance_notes?: string | null;
+  advance_status?: 'pending' | 'ready_for_dispatch' | 'dispatched' | string;
   created_at: string;
   confirmed_at?: string | null;
   items?: OrderItem[];

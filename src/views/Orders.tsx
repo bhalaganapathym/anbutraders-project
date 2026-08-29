@@ -4,7 +4,7 @@ import { api, type Customer, type Order, type OrderItem, type Product } from '@/
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import {
-  Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock
+  Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock, Calendar, Sparkles
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice } from '@/lib/pricing';
@@ -87,6 +87,14 @@ const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
 
   const words = numberToWords(totalAmount);
 
+  let advanceBlock = '';
+  if (o.is_advance_order) {
+    const advPaid = Number(o.advance_paid_amount || 0);
+    const balDue = Math.max(0, totalAmount - advPaid);
+    const schedDate = o.scheduled_delivery_date ? new Date(o.scheduled_delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    advanceBlock = `─────────────────────────────\n📦 *ADVANCE BOOKING DETAILS:*\n📅 *Scheduled Delivery Date:* ${schedDate}\n💵 *Advance Paid:* ₹${advPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n🔴 *Balance Due on Delivery:* ₹${balDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+  }
+
   const text = 
 `🧾 *ANBU GROUPS — ESTIMATE*
 No.4/5 Pondy Mailam Road, T.C.Kootroad, Vanur T.K 605 111
@@ -107,7 +115,7 @@ ${itemLines}
 *Total Weight:* ${totalWeight.toFixed(2)} kg
 *Total Amount:* ₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
 *Amount in words:* ${words}
-─────────────────────────────
+${advanceBlock}─────────────────────────────
 _We declare that this invoice/estimate shows the actual price of the goods described and that all particulars are true and correct._
 
 *for ANBU GROUPS*
@@ -131,7 +139,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const [saving, setSaving] = useState(false);
   const [detailOrder, setDetailOrder] = useState<OrderWithCustomer | null>(null);
   const [detailItems, setDetailItems] = useState<OrderItemWithProduct[]>([]);
-  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'advance_today' | 'advance_tomorrow' | 'advance_all'>('pending');
 
   const [customerMode, setCustomerMode] = useState<'search' | 'new'>('search');
   const [phoneSearch, setPhoneSearch] = useState('');
@@ -201,10 +209,46 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   useRealtime('customers', load);
   useRealtime('products', load);
 
-  const filtered = orders.filter((o) =>
-    o.status === activeTab &&
-    [o.customer?.name ?? '', o.customer?.phone ?? '', o.delivery_address ?? ''].join(' ').toLowerCase().includes(query.toLowerCase())
-  );
+  // Advance Metrics
+  const todayDate = new Date();
+  const todayDateStr = todayDate.toISOString().split('T')[0];
+  const tomorrowDate = new Date(todayDate);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowDateStr = tomorrowDate.toISOString().split('T')[0];
+
+  const advanceOrders = orders.filter(o => o.is_advance_order && o.status !== 'completed');
+  
+  const todayPendingAdvance = advanceOrders.filter(o => {
+    if (!o.scheduled_delivery_date) return false;
+    const sDate = o.scheduled_delivery_date.split('T')[0];
+    return sDate <= todayDateStr;
+  });
+
+  const tomorrowAdvance = advanceOrders.filter(o => {
+    if (!o.scheduled_delivery_date) return false;
+    const sDate = o.scheduled_delivery_date.split('T')[0];
+    return sDate === tomorrowDateStr;
+  });
+
+  const totalAdvancePending = advanceOrders;
+
+  const filtered = orders.filter((o) => {
+    let matchesTab = true;
+    if (activeTab === 'pending') {
+      matchesTab = o.status === 'pending';
+    } else if (activeTab === 'confirmed') {
+      matchesTab = o.status === 'confirmed';
+    } else if (activeTab === 'advance_today') {
+      matchesTab = Boolean(o.is_advance_order && o.scheduled_delivery_date && o.scheduled_delivery_date.split('T')[0] <= todayDateStr && o.status !== 'completed');
+    } else if (activeTab === 'advance_tomorrow') {
+      matchesTab = Boolean(o.is_advance_order && o.scheduled_delivery_date && o.scheduled_delivery_date.split('T')[0] === tomorrowDateStr && o.status !== 'completed');
+    } else if (activeTab === 'advance_all') {
+      matchesTab = Boolean(o.is_advance_order && o.status !== 'completed');
+    }
+
+    const matchesQuery = [o.customer?.name ?? '', o.customer?.phone ?? '', o.delivery_address ?? '', o.order_no ?? ''].join(' ').toLowerCase().includes(query.toLowerCase());
+    return matchesTab && matchesQuery;
+  });
 
   const searchByPhone = async () => {
     if (phoneSearch.trim().length < 3) {
@@ -402,18 +446,108 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
         </button>
       </div>
 
-      <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700">
+      {/* Advance Orders Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        {/* Today Pending Advance Orders */}
+        <div 
+          onClick={() => setActiveTab('advance_today')}
+          className={`p-4 rounded-2xl border-2 transition-all cursor-pointer shadow-sm ${
+            activeTab === 'advance_today' 
+              ? 'border-amber-500 bg-amber-50/70 dark:bg-amber-950/40 ring-2 ring-amber-500/20' 
+              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-amber-400'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+              <Clock size={14} /> Today Pending Advance Orders
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+              Due Today
+            </span>
+          </div>
+          <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 mt-2">
+            {todayPendingAdvance.length}
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Scheduled to load & dispatch today</p>
+        </div>
+
+        {/* Tomorrow Orders */}
+        <div 
+          onClick={() => setActiveTab('advance_tomorrow')}
+          className={`p-4 rounded-2xl border-2 transition-all cursor-pointer shadow-sm ${
+            activeTab === 'advance_tomorrow' 
+              ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 ring-2 ring-blue-500/20' 
+              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-400'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
+              <Calendar size={14} /> Tomorrow Orders
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
+              Planning
+            </span>
+          </div>
+          <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 mt-2">
+            {tomorrowAdvance.length}
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Pre-plan trucks & stock for tomorrow</p>
+        </div>
+
+        {/* Total Advance Orders Pending */}
+        <div 
+          onClick={() => setActiveTab('advance_all')}
+          className={`p-4 rounded-2xl border-2 transition-all cursor-pointer shadow-sm ${
+            activeTab === 'advance_all' 
+              ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20' 
+              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-400'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+              <Tag size={14} /> Total Advance Orders Pending
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300">
+              All Bookings
+            </span>
+          </div>
+          <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 mt-2">
+            {totalAdvancePending.length}
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Total booked future deliveries</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3 border-b border-slate-200 dark:border-slate-700 pb-1">
         <button 
-          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'pending' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+          className={`pb-2 px-2 border-b-2 font-bold text-sm transition-colors flex items-center gap-1.5 ${activeTab === 'pending' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
           onClick={() => setActiveTab('pending')}
         >
-          {t('status_pending')}
+          {t('status_pending')} ({orders.filter(o => o.status === 'pending').length})
         </button>
         <button 
-          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'confirmed' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+          className={`pb-2 px-2 border-b-2 font-bold text-sm transition-colors flex items-center gap-1.5 ${activeTab === 'confirmed' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
           onClick={() => setActiveTab('confirmed')}
         >
-          {t('settled')}
+          {t('settled')} ({orders.filter(o => o.status === 'confirmed').length})
+        </button>
+        <button 
+          className={`pb-2 px-2 border-b-2 font-bold text-sm transition-colors flex items-center gap-1.5 ${activeTab === 'advance_all' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+          onClick={() => setActiveTab('advance_all')}
+        >
+          <Calendar size={14} /> 📦 Advance Bookings ({totalAdvancePending.length})
+        </button>
+        <button 
+          className={`pb-2 px-2 border-b-2 font-bold text-sm transition-colors flex items-center gap-1.5 ${activeTab === 'advance_today' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+          onClick={() => setActiveTab('advance_today')}
+        >
+          🟡 Due Today ({todayPendingAdvance.length})
+        </button>
+        <button 
+          className={`pb-2 px-2 border-b-2 font-bold text-sm transition-colors flex items-center gap-1.5 ${activeTab === 'advance_tomorrow' ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+          onClick={() => setActiveTab('advance_tomorrow')}
+        >
+          🔵 Tomorrow ({tomorrowAdvance.length})
         </button>
       </div>
 
@@ -526,6 +660,26 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                       </p>
                     )}
 
+                    {/* Advance Booking Pill on Mobile Card */}
+                    {o.is_advance_order && (
+                      <div className="p-2 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-1 text-xs">
+                        <div className="flex items-center justify-between text-indigo-900 dark:text-indigo-200 font-bold">
+                          <span className="flex items-center gap-1">
+                            <Calendar size={12} className="text-indigo-600" /> Scheduled:
+                          </span>
+                          <span>{o.scheduled_delivery_date ? new Date(o.scheduled_delivery_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-emerald-700 dark:text-emerald-400 font-bold">
+                            Adv: ₹{Number(o.advance_paid_amount || 0).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-rose-600 dark:text-rose-400 font-bold">
+                            Due: ₹{Math.max(0, totalEstimateAmount - Number(o.advance_paid_amount || 0)).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between text-xs pt-1 text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5">
                       <span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
                       {totalEstimateAmount > 0 && (
@@ -589,6 +743,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                   </th>
                   <th className="th">Estimate No</th>
                   <th className="th">Customer</th>
+                  <th className="th">Advance Booking</th>
                   <th className="th">Status</th>
                   <th className="th text-right">Actions</th>
                 </tr>
@@ -596,6 +751,8 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((o) => {
                   const isSelected = selectedIds.has(o.id);
+                  const totalEstimateAmount = (o.items || []).reduce((acc, it) => acc + calculateProductPrice(it.product, it.quantity || 1).totalPrice, 0);
+
                   return (
                     <tr
                       key={o.id}
@@ -620,6 +777,23 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                         </div>
                         {o.customer?.phone && (
                           <div className="text-xs text-slate-400">{o.customer.phone}</div>
+                        )}
+                        {o.delivery_address && (
+                          <div className="text-[11px] text-slate-400 truncate max-w-xs">{o.delivery_address}</div>
+                        )}
+                      </td>
+                      <td className="td">
+                        {o.is_advance_order ? (
+                          <div className="space-y-0.5">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 flex items-center gap-1 w-fit">
+                              <Calendar size={11} /> {o.scheduled_delivery_date ? new Date(o.scheduled_delivery_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Scheduled'}
+                            </span>
+                            <div className="text-[11px] font-medium text-slate-500">
+                              Adv: <strong className="text-emerald-600">₹{Number(o.advance_paid_amount || 0).toLocaleString('en-IN')}</strong> | Due: <strong className="text-rose-600">₹{Math.max(0, totalEstimateAmount - Number(o.advance_paid_amount || 0)).toLocaleString('en-IN')}</strong>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">Regular</span>
                         )}
                       </td>
                       <td className="td">

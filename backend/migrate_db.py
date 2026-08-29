@@ -69,5 +69,22 @@ def migrate():
         except Exception as e:
             print("Skipping credit columns: ", e)
 
+        try:
+            conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS delivery_addresses JSONB DEFAULT '[]'::jsonb;"))
+            print("Added delivery_addresses to customers")
+        except Exception as e:
+            print("Skipping delivery_addresses: ", e)
+
+        try:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_advance_order BOOLEAN DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS scheduled_delivery_date TIMESTAMP WITH TIME ZONE;"))
+            conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS advance_paid_amount NUMERIC DEFAULT 0;"))
+            conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS advance_payment_method VARCHAR;"))
+            conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS advance_notes VARCHAR;"))
+            conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS advance_status VARCHAR DEFAULT 'pending';"))
+            print("Added advance order fields to orders")
+        except Exception as e:
+            print("Skipping advance order fields: ", e)
+
 if __name__ == "__main__":
     migrate()

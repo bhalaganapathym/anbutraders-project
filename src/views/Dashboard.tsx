@@ -22,6 +22,8 @@ import {
   CircleDot,
   Minus,
   Sparkles,
+  Calendar,
+  Tag,
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
@@ -100,12 +102,23 @@ function formatTime(isoString?: string | null): string {
 export default function Dashboard({ onNavigate }: { onNavigate: (view: string) => void }) {
   const { t } = useTranslation();
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
+  const [advanceMetrics, setAdvanceMetrics] = useState<{
+    today_pending: number;
+    tomorrow_orders: number;
+    total_pending: number;
+    total_advance_amount: number;
+  }>({ today_pending: 0, tomorrow_orders: 0, total_pending: 0, total_advance_amount: 0 });
   const [recentDispatches, setRecentDispatches] = useState<DispatchWithTimeline[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const data = await api.get('/dashboard/stats');
+      const [data, adv] = await Promise.all([
+        api.get('/dashboard/stats'),
+        api.get('/orders/advance-metrics').catch(() => null),
+      ]);
+
+      if (adv) setAdvanceMetrics(adv);
       
       const dispatches = (data.dispatches || []) as DispatchWithTimeline[];
       setRecentDispatches(dispatches);
@@ -265,16 +278,16 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         </div>
       </section>
 
-      {/* 3. Activities Today (Dual Metrics Panel matching Wireframe) */}
+      {/* 3. Activities Today (3 Metric Cards: Dispatches, Estimates, Advance Orders) */}
       <section className="space-y-3">
         <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
           Activities Today
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           
           {/* DISPATCHES Today Card */}
           <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <div className="bg-slate-50 dark:bg-slate-800/80 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Truck size={18} className="text-emerald-600 dark:text-emerald-400" />
                 <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200">
@@ -282,8 +295,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                 </h3>
               </div>
               <div className="text-right">
-                <span className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase mr-1.5">
-                  Total Today:
+                <span className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase mr-1">
+                  Today:
                 </span>
                 <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
                   {loading ? '—' : todayStats?.dispatches.total ?? 0}
@@ -291,31 +304,31 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
               </div>
             </div>
             
-            <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800 p-4 sm:p-5">
-              <div className="px-3 text-center sm:text-left">
+            <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800 p-4">
+              <div className="text-center sm:text-left pr-2">
                 <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                   Ongoing
                 </p>
-                <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                <p className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
                   {loading ? '—' : todayStats?.dispatches.ongoing ?? 0}
                 </p>
-                <p className="text-[11px] font-medium text-slate-400 mt-0.5">Active in pipeline</p>
+                <p className="text-[10px] font-medium text-slate-400 mt-0.5">Active pipeline</p>
               </div>
-              <div className="px-3 text-center sm:text-left pl-6">
+              <div className="text-center sm:text-left pl-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                   Closed
                 </p>
-                <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                <p className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
                   {loading ? '—' : todayStats?.dispatches.closed ?? 0}
                 </p>
-                <p className="text-[11px] font-medium text-slate-400 mt-0.5">Delivered & settled</p>
+                <p className="text-[10px] font-medium text-slate-400 mt-0.5">Delivered</p>
               </div>
             </div>
           </div>
 
           {/* ESTIMATES Today Card */}
           <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <div className="bg-slate-50 dark:bg-slate-800/80 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShoppingCart size={18} className="text-violet-600 dark:text-violet-400" />
                 <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200">
@@ -323,8 +336,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                 </h3>
               </div>
               <div className="text-right">
-                <span className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase mr-1.5">
-                  Total Today:
+                <span className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase mr-1">
+                  Today:
                 </span>
                 <span className="text-base font-black text-violet-600 dark:text-violet-400">
                   {loading ? '—' : todayStats?.estimates.total ?? 0}
@@ -332,33 +345,80 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
               </div>
             </div>
 
-            <div className="grid grid-cols-3 divide-x divide-slate-100 dark:divide-slate-800 p-4 sm:p-5">
-              <div className="px-2 text-center sm:text-left">
-                <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 line-clamp-1">
-                  Pending to Start
+            <div className="grid grid-cols-3 divide-x divide-slate-100 dark:divide-slate-800 p-4">
+              <div className="text-center sm:text-left pr-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Pending
                 </p>
-                <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                <p className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
                   {loading ? '—' : todayStats?.estimates.pending_to_start ?? 0}
                 </p>
-                <p className="text-[10px] font-medium text-slate-400 mt-0.5 hidden sm:block">Awaiting dispatch</p>
               </div>
-              <div className="px-2 sm:px-3 text-center sm:text-left pl-3 sm:pl-5">
-                <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              <div className="text-center sm:text-left px-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                   Ongoing
                 </p>
-                <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                <p className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
                   {loading ? '—' : todayStats?.estimates.ongoing ?? 0}
                 </p>
-                <p className="text-[10px] font-medium text-slate-400 mt-0.5 hidden sm:block">In verification</p>
               </div>
-              <div className="px-2 sm:px-3 text-center sm:text-left pl-3 sm:pl-5">
-                <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              <div className="text-center sm:text-left pl-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                   Closed
                 </p>
-                <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                <p className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
                   {loading ? '—' : todayStats?.estimates.closed ?? 0}
                 </p>
-                <p className="text-[10px] font-medium text-slate-400 mt-0.5 hidden sm:block">Completed</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ADVANCE ORDERS Card */}
+          <div 
+            onClick={() => onNavigate('orders')}
+            className="rounded-2xl border-2 border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-slate-900 overflow-hidden shadow-sm cursor-pointer hover:border-indigo-500 transition-all"
+          >
+            <div className="bg-indigo-50/80 dark:bg-indigo-950/60 px-4 py-3 border-b border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar size={18} className="text-indigo-600 dark:text-indigo-400" />
+                <h3 className="font-black text-sm uppercase tracking-wider text-indigo-950 dark:text-indigo-200">
+                  Advance Orders
+                </h3>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase mr-1">
+                  Total:
+                </span>
+                <span className="text-base font-black text-indigo-700 dark:text-indigo-300">
+                  {loading ? '—' : advanceMetrics.total_pending}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 divide-x divide-slate-100 dark:divide-slate-800 p-4">
+              <div className="text-center sm:text-left pr-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Due Today
+                </p>
+                <p className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                  {loading ? '—' : advanceMetrics.today_pending}
+                </p>
+              </div>
+              <div className="text-center sm:text-left px-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Tomorrow
+                </p>
+                <p className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                  {loading ? '—' : advanceMetrics.tomorrow_orders}
+                </p>
+              </div>
+              <div className="text-center sm:text-left pl-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                  Booked
+                </p>
+                <p className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                  {loading ? '—' : advanceMetrics.total_pending}
+                </p>
               </div>
             </div>
           </div>

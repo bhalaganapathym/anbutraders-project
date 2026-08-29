@@ -37,6 +37,7 @@ class CustomerBase(BaseModel):
     name: str
     phone: Optional[str] = None
     address: Optional[str] = None
+    delivery_addresses: Optional[List[str]] = []
 
 class CustomerCreate(CustomerBase):
     pass
@@ -270,6 +271,12 @@ class OrderCreate(BaseModel):
     delivery_address: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = "pending"
+    is_advance_order: Optional[bool] = False
+    scheduled_delivery_date: Optional[datetime] = None
+    advance_paid_amount: Optional[float] = 0.0
+    advance_payment_method: Optional[str] = None
+    advance_notes: Optional[str] = None
+    advance_status: Optional[str] = "pending"
     items: Optional[List[OrderItemCreate]] = []
 
 class OrderResponse(BaseModel):
@@ -279,6 +286,12 @@ class OrderResponse(BaseModel):
     status: str
     delivery_address: Optional[str] = None
     notes: Optional[str] = None
+    is_advance_order: Optional[bool] = False
+    scheduled_delivery_date: Optional[datetime] = None
+    advance_paid_amount: Optional[float] = 0.0
+    advance_payment_method: Optional[str] = None
+    advance_notes: Optional[str] = None
+    advance_status: Optional[str] = "pending"
     created_at: datetime
     confirmed_at: Optional[datetime] = None
     
