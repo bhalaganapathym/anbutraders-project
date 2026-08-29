@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, type Dispatch, type Driver, type Customer } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { FileText, Download, CreditCard, IndianRupee, AlertCircle, MessageSquare, Clock, Bell, CheckCircle2, User, MapPin, Phone, Truck, Package } from 'lucide-react';
+import { FileText, Download, CreditCard, IndianRupee, AlertCircle, MessageSquare, Clock, Bell, CheckCircle2, User, MapPin, Phone, Truck, Package, Calendar } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { useRealtime } from '@/lib/useRealtime';
 import jsPDF from 'jspdf';
@@ -38,15 +38,13 @@ function WaitClock({ timestamp }: { timestamp: string | Date }) {
         setElapsed('0s');
         return;
       }
-      const diffSecs = Math.floor(diffMs / 1000);
-      const days = Math.floor(diffSecs / 86400);
-      const hours = Math.floor((diffSecs % 86400) / 3600);
-      const mins = Math.floor((diffSecs % 3600) / 60);
-      const secs = diffSecs % 60;
+      const diffMins = Math.floor(diffMs / 60000);
+      const hrs = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      const secs = Math.floor((diffMs % 60000) / 1000);
       
       let timeStr = '';
-      if (days > 0) timeStr += `${days}d `;
-      if (hours > 0 || days > 0) timeStr += `${hours}h `;
+      if (hrs > 0) timeStr += `${hrs}h `;
       timeStr += `${mins}m ${secs}s`;
       
       setElapsed(timeStr.trim());
@@ -76,6 +74,12 @@ export default function Billing() {
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
   const [paidAmount, setPaidAmount] = useState<string>('');
   const [toCollectAmount, setToCollectAmount] = useState<string>('');
+  const [creditDays, setCreditDays] = useState<number | ''>(7);
+  const [creditDueDate, setCreditDueDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split('T')[0];
+  });
   const [creatingBill, setCreatingBill] = useState(false);
   const [notifyingDispatch, setNotifyingDispatch] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -184,6 +188,26 @@ export default function Billing() {
     }
   };
 
+  const setQuickCreditDays = (days: number) => {
+    setCreditDays(days);
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    setCreditDueDate(d.toISOString().split('T')[0]);
+  };
+
+  const handleCustomCreditDateChange = (dateStr: string) => {
+    setCreditDueDate(dateStr);
+    if (dateStr) {
+      const target = new Date(dateStr);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      target.setHours(0, 0, 0, 0);
+      const diffTime = target.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setCreditDays(diffDays > 0 ? diffDays : 0);
+    }
+  };
+
   const handleCreateBill = async () => {
     if (!selectedDispatch) return;
     if (creatingBill) return;
@@ -196,6 +220,7 @@ export default function Billing() {
 
     const paidVal = parseFloat(paidAmount) || 0;
     const toCollectVal = parseFloat(toCollectAmount) || 0;
+    const isCredit = paymentMethod === 'credit' || toCollectVal > 0;
 
     try {
       await api.post('/bills', {
@@ -207,6 +232,8 @@ export default function Billing() {
         total_amount: totalAmount,
         paid_amount: paidVal,
         pending_amount: toCollectVal,
+        credit_due_date: isCredit && creditDueDate ? new Date(creditDueDate).toISOString() : null,
+        credit_days: isCredit && creditDays !== '' ? Number(creditDays) : null,
       });
 
       // Notify dispatch team automatically with customer name, phone, address
@@ -670,6 +697,64 @@ export default function Billing() {
                 </div>
               </div>
             </div>
+
+            {/* Credit Timeline & Agreed Due Date Box */}
+            {(paymentMethod === 'credit' || parseFloat(toCollectAmount) > 0) && (
+              <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/50 dark:from-slate-900 dark:to-indigo-950/40 border-2 border-indigo-200 dark:border-indigo-800 p-4 rounded-xl space-y-3 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                    <Calendar size={15} className="text-indigo-600 dark:text-indigo-400" />
+                    Credit Timeline & Promised Payment Date
+                  </span>
+                  <span className="text-xs font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/60 px-2.5 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                    {creditDays !== '' ? `${creditDays} Days Credit` : 'Custom Date'}
+                  </span>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Quick Days:</span>
+                  {[3, 7, 15, 30, 45].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setQuickCreditDays(d)}
+                      className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${
+                        creditDays === d
+                          ? 'bg-indigo-600 text-white shadow-md scale-105'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {d} Days
+                    </button>
+                  ))}
+                </div>
+
+                {/* Date Picker Input */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-xs font-black text-slate-800 dark:text-slate-200 mb-1">
+                      Promised Settlement Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={creditDueDate}
+                      onChange={(e) => handleCustomCreditDateChange(e.target.value)}
+                      className="input font-bold text-indigo-900 dark:text-indigo-200 bg-white dark:bg-slate-800"
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-white/80 dark:bg-slate-800/80 p-2.5 rounded-lg border border-indigo-100 dark:border-indigo-900 leading-relaxed">
+                      🔔 Automated alert will notify Admin & Billing team on{' '}
+                      <strong className="text-indigo-700 dark:text-indigo-400 font-black">
+                        {creditDueDate ? new Date(creditDueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                      </strong>{' '}
+                      if credit is unpaid.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Action Bar */}
             <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">

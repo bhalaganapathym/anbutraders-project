@@ -40,6 +40,9 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
         
     from models.all import Notification, Customer
     customer = db.query(Customer).filter(Customer.id == dispatch.customer_id).first()
+    if customer and bill_in.credit_due_date:
+        customer.credit_due_date = bill_in.credit_due_date
+
     cust_name = customer.name if customer else (dispatch.customer.name if dispatch.customer else "Unknown")
     cust_phone = customer.phone if customer else "N/A"
     cust_addr = dispatch.delivery_address or (customer.address if customer else "Site delivery")

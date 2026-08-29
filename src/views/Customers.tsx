@@ -18,7 +18,9 @@ import {
   MessageSquare, 
   DollarSign, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  Clock,
+  Calendar
 } from 'lucide-react';
 
 type Form = { name: string; phone: string; address: string };
@@ -30,7 +32,7 @@ export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [filterMode, setFilterMode] = useState<'all' | 'dues' | 'settled'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'dues' | 'overdue' | 'settled'>('all');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState<Form>(empty);
@@ -53,13 +55,17 @@ export default function Customers() {
   }, [load]);
 
   useRealtime('customers', load);
+  useRealtime('bills', load);
+  useRealtime('notifications', load);
 
   const duesCustomers = customers.filter(c => Number(c.pending_amount || 0) > 0);
+  const overdueCustomers = customers.filter(c => Number(c.pending_amount || 0) > 0 && c.credit_status === 'overdue');
   const settledCustomers = customers.filter(c => Number(c.pending_amount || 0) <= 0);
 
   const filtered = customers
     .filter((c) => {
       if (filterMode === 'dues') return Number(c.pending_amount || 0) > 0;
+      if (filterMode === 'overdue') return Number(c.pending_amount || 0) > 0 && c.credit_status === 'overdue';
       if (filterMode === 'settled') return Number(c.pending_amount || 0) <= 0;
       return true;
     })
@@ -125,11 +131,21 @@ export default function Customers() {
       toast('Customer phone number not available', 'error');
       return;
     }
+
+    const dueDateStr = c.credit_due_date
+      ? new Date(c.credit_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+      : null;
+
+    let timelineText = '';
+    if (dueDateStr) {
+      timelineText = `\n📅 *Agreed Payment Date:* ${dueDateStr}${c.credit_status === 'overdue' ? ` (⚠️ *${Math.abs(c.credit_days_remaining || 0)} Days Overdue*)` : ''}\n`;
+    }
+
     const msg = `🏗️ *ANBU TRADERS - Payment Reminder* 🧾
 ────────────────────────────────────────
 Dear *${c.name}*,
 Friendly reminder from Anbu Traders regarding your outstanding dues.
-
+${timelineText}
 🔴 *Outstanding Balance:* *₹${pending.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*
 
 💳 *UPI / GPay:* 9626325204
@@ -164,7 +180,7 @@ _Thank you for choosing Anbu Traders!_`;
 
       {/* Filter Tabs & Search */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFilterMode('all')}
             className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition shadow-sm ${
@@ -179,11 +195,21 @@ _Thank you for choosing Anbu Traders!_`;
             onClick={() => setFilterMode('dues')}
             className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition shadow-sm ${
               filterMode === 'dues'
-                ? 'bg-rose-600 text-white'
+                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'
             }`}
           >
             With Dues ({duesCustomers.length})
+          </button>
+          <button
+            onClick={() => setFilterMode('overdue')}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition shadow-sm ${
+              filterMode === 'overdue'
+                ? 'bg-rose-600 text-white shadow-rose-600/30'
+                : 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50'
+            }`}
+          >
+            ⚠️ Overdue ({overdueCustomers.length})
           </button>
           <button
             onClick={() => setFilterMode('settled')}
@@ -274,6 +300,39 @@ _Thank you for choosing Anbu Traders!_`;
                       ₹{pending.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
+
+                  {/* Credit Timeline Countdown Badge */}
+                  {pending > 0 && (
+                    <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                          <Clock size={12} className="text-slate-400" /> Credit Timeline:
+                        </span>
+                        {c.credit_status === 'overdue' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-sm flex items-center gap-1 animate-pulse">
+                            ⚠️ {Math.abs(c.credit_days_remaining ?? 0)} Days Overdue
+                          </span>
+                        ) : c.credit_status === 'due_today' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-sm">
+                            🟡 Due Today
+                          </span>
+                        ) : c.credit_status === 'active' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-sm">
+                            🟢 {c.credit_days_remaining} Days Left
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400">
+                            No Date Set
+                          </span>
+                        )}
+                      </div>
+                      {c.credit_due_date && (
+                        <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 text-right">
+                          Agreed Date: {new Date(c.credit_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Action Buttons: Statement & WhatsApp Reminder */}
                   <div className="grid grid-cols-2 gap-2 pt-1">

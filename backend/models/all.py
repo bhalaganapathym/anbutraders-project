@@ -20,6 +20,7 @@ class Customer(Base):
     name = Column(String, nullable=False)
     phone = Column(String)
     address = Column(String)
+    credit_due_date = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
 class Supplier(Base):
@@ -169,6 +170,9 @@ class Bill(Base):
     total_amount = Column(Numeric, default=0, nullable=False)
     paid_amount = Column(Numeric, default=0, nullable=False)
     pending_amount = Column(Numeric, default=0, nullable=False)
+    credit_due_date = Column(DateTime(timezone=True), nullable=True)
+    credit_days = Column(Integer, nullable=True)
+    notes = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
     dispatch = relationship("Dispatch", back_populates="bill")

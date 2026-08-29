@@ -53,6 +53,10 @@ export type Customer = {
   phone: string | null;
   address: string | null;
   pending_amount?: number;
+  credit_due_date?: string | null;
+  credit_days?: number | null;
+  credit_days_remaining?: number | null;
+  credit_status?: 'overdue' | 'due_today' | 'active' | 'clear' | 'dues_no_date' | string;
   created_at: string;
 };
 
@@ -117,6 +121,9 @@ export type Bill = {
   total_amount: number;
   paid_amount: number;
   pending_amount: number;
+  credit_due_date?: string | null;
+  credit_days?: number | null;
+  notes?: string | null;
   created_at: string;
   driver?: Driver | null;
 };

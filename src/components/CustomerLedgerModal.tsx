@@ -29,6 +29,8 @@ interface Transaction {
   total_amount: number;
   paid_amount: number;
   pending_amount: number;
+  credit_due_date?: string | null;
+  credit_days?: number | null;
   running_balance: number;
 }
 
@@ -38,6 +40,7 @@ interface CustomerLedgerData {
     name: string;
     phone: string | null;
     address: string | null;
+    credit_due_date?: string | null;
     pending_amount: number;
   };
   total_billed: number;
@@ -97,6 +100,15 @@ export default function CustomerLedgerModal({ customerId, onClose }: Props) {
       return;
     }
 
+    const agreedDueDate = data.customer.credit_due_date
+      ? new Date(data.customer.credit_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+      : null;
+
+    let dueDateClause = '';
+    if (agreedDueDate) {
+      dueDateClause = `\n📅 *Agreed Payment Due Date:* ${agreedDueDate}\n`;
+    }
+
     const msg = `🏗️ *ANBU TRADERS - Payment Statement & Reminder* 🧾
 ────────────────────────────────────────
 Dear *${data.customer.name}*,
@@ -105,7 +117,7 @@ Here is your current statement summary with Anbu Traders:
 📦 *Total Purchases Billed:* ₹${data.total_billed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
 ✅ *Total Payments Received:* ₹${data.total_paid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
 🔴 *Current Outstanding Dues:* *₹${data.total_balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*
-
+${dueDateClause}
 💳 *GPay / PhonePe / UPI:* 9626325204
 📞 *Office Phone:* 0413-2964204 / 9626325204
 
@@ -182,11 +194,12 @@ _Thank you for your business!_`;
 
   const handleExportCSV = () => {
     if (!data) return;
-    const headers = ['Date', 'Dispatch No', 'Payment Mode', 'Billed Amount', 'Paid Amount', 'Pending Amount', 'Running Balance'];
+    const headers = ['Date', 'Dispatch No', 'Payment Mode', 'Credit Due Date', 'Billed Amount', 'Paid Amount', 'Pending Amount', 'Running Balance'];
     const rows = data.transactions.map(t => [
       t.date ? new Date(t.date).toLocaleDateString() : '—',
       `"${t.dispatch_no}"`,
       `"${t.payment_method}"`,
+      t.credit_due_date ? new Date(t.credit_due_date).toLocaleDateString() : '—',
       t.total_amount.toFixed(2),
       t.paid_amount.toFixed(2),
       t.pending_amount.toFixed(2),
@@ -305,6 +318,7 @@ _Thank you for your business!_`;
                   <th className="p-2.5">Date</th>
                   <th className="p-2.5">Dispatch Ref</th>
                   <th className="p-2.5">Mode</th>
+                  <th className="p-2.5">Due Date</th>
                   <th className="p-2.5 text-right">Billed (₹)</th>
                   <th className="p-2.5 text-right">Paid (₹)</th>
                   <th className="p-2.5 text-right">Balance (₹)</th>
@@ -313,7 +327,7 @@ _Thank you for your business!_`;
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {data.transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-6 text-center text-slate-400">
+                    <td colSpan={7} className="p-6 text-center text-slate-400">
                       No invoices recorded for this customer yet.
                     </td>
                   </tr>
@@ -330,6 +344,16 @@ _Thank you for your business!_`;
                         <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
                           {tx.payment_method}
                         </span>
+                      </td>
+                      <td className="p-2.5 text-slate-500 whitespace-nowrap">
+                        {tx.credit_due_date ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            {new Date(tx.credit_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            {tx.credit_days ? ` (${tx.credit_days}d)` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="p-2.5 text-right font-semibold text-slate-800 dark:text-slate-200">
                         ₹{tx.total_amount.toFixed(2)}

@@ -60,5 +60,14 @@ def migrate():
         except Exception as e:
             print("Skipping driver status: ", e)
 
+        try:
+            conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS credit_due_date TIMESTAMP WITH TIME ZONE;"))
+            conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS credit_days INTEGER;"))
+            conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS notes VARCHAR;"))
+            conn.execute(text("ALTER TABLE customers ADD COLUMN IF NOT EXISTS credit_due_date TIMESTAMP WITH TIME ZONE;"))
+            print("Added credit_due_date, credit_days, notes to bills & customers")
+        except Exception as e:
+            print("Skipping credit columns: ", e)
+
 if __name__ == "__main__":
     migrate()
