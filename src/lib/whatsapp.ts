@@ -187,3 +187,100 @@ export async function sendWhatsAppMessageWithAttachment(options: {
   // 2. Open WhatsApp chat with pre-filled text
   openWhatsApp(options.phone, options.text);
 }
+
+/**
+ * Directly opens default SMS / Messaging app for target phone with pre-filled message text.
+ */
+export function openSMSMessage(phone: string, text: string): void {
+  let cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+  if (cleanPhone.length === 10) {
+    cleanPhone = '+91' + cleanPhone;
+  }
+  
+  const encodedText = encodeURIComponent(text);
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const url = `sms:${cleanPhone}${isIOS ? '&' : '?'}body=${encodedText}`;
+  
+  window.location.href = url;
+}
+
+/**
+ * Native mobile / desktop sharing sheet (SMS, WhatsApp, Messages, Email, etc.)
+ */
+export async function shareViaNative(title: string, text: string, url?: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await navigator.share({
+        title,
+        text,
+        url: url || window.location.href,
+      });
+      return true;
+    } catch (err) {
+      if ((err as any)?.name !== 'AbortError') {
+        console.warn('Native share failed:', err);
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Builds clean plain-text estimate breakdown for SMS / WhatsApp / Share
+ */
+export function buildEstimateTextMessage(order: any, customer?: any): string {
+  const custName = customer?.name || order.customer?.name || 'Customer';
+  const orderRef = order.order_no || (order.id ? order.id.substring(0, 8).toUpperCase() : 'EST-NEW');
+  const dateStr = order.created_at
+    ? new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  let totalAmount = 0;
+  let totalWeight = 0;
+  
+  const itemsText = (order.items || []).map((it: any, idx: number) => {
+    const name = it.product?.name || it.product_name || 'Item';
+    const qty = it.quantity || 1;
+    const unit = it.unit || it.product?.unit || 'nos';
+    const price = Number(it.price || 0);
+    const weight = Number(it.weight || it.product?.standard_weight || 0);
+    
+    const lineTotal = price * qty;
+    totalAmount += lineTotal;
+    if (weight > 0) {
+      totalWeight += weight * qty;
+      return `${idx + 1}. ${name}\n   ${qty} ${unit} × ${weight}kg = ${(weight * qty).toFixed(2)}kg @ ₹${price.toFixed(2)} = ₹${lineTotal.toFixed(2)}`;
+    }
+    return `${idx + 1}. ${name}\n   ${qty} ${unit} @ ₹${price.toFixed(2)} = ₹${lineTotal.toFixed(2)}`;
+  }).join('\n\n');
+
+  let advanceBlock = '';
+  if (order.is_advance_order) {
+    const advPaid = Number(order.advance_paid_amount || 0);
+    const balDue = Math.max(0, (Number(order.total_amount) || totalAmount) - advPaid);
+    const schedDate = order.scheduled_delivery_date
+      ? new Date(order.scheduled_delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '—';
+    advanceBlock = `─────────────────────────────\n📦 ADVANCE BOOKING:\n📅 Delivery Date: ${schedDate}\n💵 Paid: ₹${advPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n🔴 Balance Due: ₹${balDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+  }
+
+  return `🏗️ ANBU TRADERS — ESTIMATE 🧾
+No.4/5 Pondy Mailam Road, T.C.Kootroad, Vanur
+Ph: 0413-2964204, 9626325204
+─────────────────────────────
+Estimate: ${orderRef}
+Date: ${dateStr}
+Customer: ${custName}
+Phone: ${customer?.phone || order.customer?.phone || '—'}
+Site: ${order.delivery_address || customer?.address || '—'}
+─────────────────────────────
+ITEMS:
+
+${itemsText}
+
+─────────────────────────────
+${totalWeight > 0 ? `Total Weight: ${totalWeight.toFixed(2)} kg\n` : ''}Total Amount: ₹${(Number(order.total_amount) || totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+${advanceBlock}─────────────────────────────
+Thank you for choosing Anbu Traders!`;
+}
+

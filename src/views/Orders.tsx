@@ -68,62 +68,62 @@ function numberToWords(num: number): string {
   return `INR ${inWords(intPart)} Only`;
 }
 
-const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
-  const phone = o.customer?.phone ? o.customer.phone.replace(/[^0-9]/g, '') : '';
+import { openSMSMessage, shareViaNative, openWhatsApp } from '@/lib/whatsapp';
+import { MessageSquare, Share2 } from 'lucide-react';
+
+const generateEstimateRawText = (o: OrderWithCustomer) => {
   const dateStr = new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   
   let totalAmount = 0;
   let totalWeight = 0;
-  const itemLines = (o.items || []).map((it) => {
+  const itemLines = (o.items || []).map((it, idx) => {
     const prName = it.product?.name ?? 'Item';
     const pricing = calculateProductPrice(it.product, it.quantity || 1);
     totalAmount += pricing.totalPrice;
     totalWeight += pricing.totalWeight;
     if (pricing.isSteel) {
-      return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? 'nos'} × ${pricing.standardWeight} kg = *${pricing.totalWeight.toFixed(2)} kg*\n  Rate: ₹${pricing.ratePerKg.toFixed(2)} / kg\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      return `${idx + 1}. ${prName} - ${it.quantity} nos (${pricing.totalWeight.toFixed(2)} kg) @ ₹${pricing.ratePerKg.toFixed(2)}/kg = ₹${pricing.totalPrice.toFixed(2)}`;
     }
-    return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? ''}\n  Rate: ₹${pricing.unitPrice.toFixed(2)}\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-  }).join('\n\n');
-
-  const words = numberToWords(totalAmount);
+    return `${idx + 1}. ${prName} - ${it.quantity} ${it.unit ?? it.product?.unit ?? ''} @ ₹${pricing.unitPrice.toFixed(2)} = ₹${pricing.totalPrice.toFixed(2)}`;
+  }).join('\n');
 
   let advanceBlock = '';
   if (o.is_advance_order) {
     const advPaid = Number(o.advance_paid_amount || 0);
     const balDue = Math.max(0, totalAmount - advPaid);
     const schedDate = o.scheduled_delivery_date ? new Date(o.scheduled_delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-    advanceBlock = `─────────────────────────────\n📦 *ADVANCE BOOKING DETAILS:*\n📅 *Scheduled Delivery Date:* ${schedDate}\n💵 *Advance Paid:* ₹${advPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n🔴 *Balance Due on Delivery:* ₹${balDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+    advanceBlock = `\n📦 Advance Paid: ₹${advPaid.toFixed(2)} | Balance Due: ₹${balDue.toFixed(2)} | Delivery: ${schedDate}`;
   }
 
-  const text = 
-`🧾 *ANBU GROUPS — ESTIMATE*
-No.4/5 Pondy Mailam Road, T.C.Kootroad, Vanur T.K 605 111
-Ph: 0413-2964204, 9626325204
-─────────────────────────────
-*Estimate No:* ${o.order_no || o.id.substring(0, 8).toUpperCase()}
-*Date:* ${dateStr}
-
-*Buyer (Bill to):* ${o.customer?.name ?? 'Customer'}
-*Address:* ${o.delivery_address ?? '—'}
-*Phone:* ${o.customer?.phone ?? '—'}
-─────────────────────────────
-*ITEMS:*
-
+  return `ANBU TRADERS — ESTIMATE
+No: ${o.order_no || o.id.substring(0, 8).toUpperCase()} | Date: ${dateStr}
+Customer: ${o.customer?.name ?? 'Customer'} | Ph: ${o.customer?.phone ?? '—'}
+Site: ${o.delivery_address ?? '—'}
+---------------------------------
+ITEMS:
 ${itemLines}
-
-─────────────────────────────
-*Total Weight:* ${totalWeight.toFixed(2)} kg
-*Total Amount:* ₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-*Amount in words:* ${words}
-${advanceBlock}─────────────────────────────
-_We declare that this invoice/estimate shows the actual price of the goods described and that all particulars are true and correct._
-
-*for ANBU GROUPS*
-_Authorised Signatory_`;
-
-  const url = `https://wa.me/${phone ? (phone.length === 10 ? '91' + phone : phone) : ''}?text=${encodeURIComponent(text)}`;
-  window.open(url, '_blank');
+---------------------------------
+${totalWeight > 0 ? `Total Weight: ${totalWeight.toFixed(2)} kg\n` : ''}Total Amount: ₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}${advanceBlock}
+Thank you for choosing Anbu Traders! Ph: 0413-2964204`;
 };
+
+const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
+  const phone = o.customer?.phone ? o.customer.phone.replace(/[^0-9]/g, '') : '';
+  const text = generateEstimateRawText(o);
+  openWhatsApp(phone, text);
+};
+
+const sendEstimateSMS = (o: OrderWithCustomer) => {
+  const phone = o.customer?.phone ? o.customer.phone.replace(/[^0-9]/g, '') : '';
+  const text = generateEstimateRawText(o);
+  openSMSMessage(phone, text);
+};
+
+const sendEstimateShare = async (o: OrderWithCustomer) => {
+  const text = generateEstimateRawText(o);
+  await shareViaNative(`Estimate ${o.order_no || ''} — Anbu Traders`, text);
+};
+
 
 export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () => void; onEditOrder?: (o: OrderWithCustomer) => void } = {}) {
   const { t } = useTranslation();
@@ -689,12 +689,29 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                   </div>
 
                   {/* Touch Action Bar */}
-                  <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
                     <button
                       onClick={() => sendEstimateWhatsApp(o)}
-                      className="btn-secondary flex-1 py-1.5 px-2 text-xs text-emerald-700 font-semibold flex items-center justify-center gap-1"
+                      className="btn-secondary py-1 px-2 text-xs text-emerald-700 dark:text-emerald-400 font-semibold flex items-center justify-center gap-1"
+                      title="Send via WhatsApp"
                     >
-                      <Phone size={13} /> WhatsApp
+                      <Phone size={12} /> WA
+                    </button>
+
+                    <button
+                      onClick={() => sendEstimateSMS(o)}
+                      className="btn-secondary py-1 px-2 text-xs text-blue-700 dark:text-blue-400 font-semibold flex items-center justify-center gap-1"
+                      title="Send via SMS / Message"
+                    >
+                      <MessageSquare size={12} /> SMS
+                    </button>
+
+                    <button
+                      onClick={() => sendEstimateShare(o)}
+                      className="btn-secondary py-1 px-1.5 text-xs text-slate-700 dark:text-slate-300 flex items-center justify-center"
+                      title="Share Estimate"
+                    >
+                      <Share2 size={12} />
                     </button>
 
                     {o.status === 'pending' && (
@@ -813,7 +830,21 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                             className="btn-ghost p-1.5 text-emerald-600 hover:bg-emerald-50 flex items-center gap-1 text-xs font-semibold"
                             title="Send Estimate via WhatsApp"
                           >
-                            <Phone size={14} /> Send
+                            <Phone size={14} /> WA
+                          </button>
+                          <button
+                            onClick={() => sendEstimateSMS(o)}
+                            className="btn-ghost p-1.5 text-blue-600 hover:bg-blue-50 flex items-center gap-1 text-xs font-semibold"
+                            title="Send Estimate via SMS / Message"
+                          >
+                            <MessageSquare size={14} /> SMS
+                          </button>
+                          <button
+                            onClick={() => sendEstimateShare(o)}
+                            className="btn-ghost p-1.5 text-slate-600 hover:bg-slate-100"
+                            title="Share Estimate"
+                          >
+                            <Share2 size={14} />
                           </button>
                           {o.status === 'pending' && (
                             <button
@@ -1204,13 +1235,27 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                 ))}
               </div>
             </div>
-            <div className="pt-2 flex justify-between items-center">
-              <button
-                onClick={() => sendEstimateWhatsApp(detailOrder)}
-                className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
-              >
-                <Phone size={16} /> Send Estimate via WhatsApp
-              </button>
+            <div className="pt-2 flex flex-wrap justify-between items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => sendEstimateWhatsApp(detailOrder)}
+                  className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 text-xs sm:text-sm"
+                >
+                  <Phone size={15} /> WhatsApp
+                </button>
+                <button
+                  onClick={() => sendEstimateSMS(detailOrder)}
+                  className="btn-primary bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 text-xs sm:text-sm"
+                >
+                  <MessageSquare size={15} /> Send SMS
+                </button>
+                <button
+                  onClick={() => sendEstimateShare(detailOrder)}
+                  className="btn-secondary flex items-center gap-1.5 text-xs sm:text-sm"
+                >
+                  <Share2 size={15} /> Share
+                </button>
+              </div>
               <button onClick={() => setDetailOrder(null)} className="btn-secondary">
                 Close
               </button>
