@@ -274,3 +274,15 @@ class SystemSetting(Base):
     value = Column(String, nullable=False)
     description = Column(String, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"))
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    endpoint = Column(String, unique=True, nullable=False, index=True)
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
+    user_role = Column(String, nullable=True)  # 'admin', 'billing', 'dispatch', 'all'
+    user_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"))
+

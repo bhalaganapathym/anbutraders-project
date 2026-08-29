@@ -460,3 +460,29 @@ class SystemSettingResponse(BaseModel):
 class BulkDeleteRequest(BaseModel):
     ids: List[UUID]
 
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    keys: PushSubscriptionKeys
+    user_role: Optional[str] = "all"
+    user_id: Optional[str] = None
+
+class PushSubscriptionResponse(BaseModel):
+    id: UUID
+    endpoint: str
+    user_role: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PushTestRequest(BaseModel):
+    title: Optional[str] = "Anbu Traders Test"
+    body: Optional[str] = "Background notifications are working smoothly on your phone!"
+    url: Optional[str] = "/"
+    role: Optional[str] = "all"
+
+

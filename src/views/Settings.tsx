@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { DEFAULT_WHATSAPP_TEMPLATE, DEFAULT_COMPANY_IMAGE_URL, formatWhatsAppMessage, type WhatsAppTemplateData } from '@/lib/whatsapp';
 import { useTranslation } from '@/lib/i18n';
+import PushNotificationManager from '@/components/PushNotificationManager';
 
 export default function Settings() {
   const { t } = useTranslation();
@@ -401,6 +402,9 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {/* Mobile Background Push Notifications Section */}
+      <PushNotificationManager variant="card" />
 
       {/* Save Button */}
       <div className="flex justify-end pt-2">

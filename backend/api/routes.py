@@ -1,6 +1,6 @@
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter
-from api.endpoints import auth, billing, crud, ws, dashboard, storage, drivers, bills, settings
+from api.endpoints import auth, billing, crud, ws, dashboard, storage, drivers, bills, settings, push
 
 api_router = APIRouter()
 api_router.include_router(auth.router, tags=["auth"])
@@ -12,3 +12,5 @@ api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
 api_router.include_router(drivers.router, prefix="/drivers", tags=["drivers"])
 api_router.include_router(bills.router, prefix="/bills", tags=["bills"])
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
+api_router.include_router(push.router, prefix="/push", tags=["push"])
+

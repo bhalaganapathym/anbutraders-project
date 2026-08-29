@@ -100,5 +100,22 @@ def migrate():
         except Exception as e:
             print("Skipping dispatch draft & mismatch fields: ", e)
 
+        try:
+            conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                endpoint TEXT UNIQUE NOT NULL,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                user_role VARCHAR DEFAULT 'all',
+                user_id VARCHAR,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            """))
+            print("Added push_subscriptions table")
+        except Exception as e:
+            print("Skipping push_subscriptions: ", e)
+
 if __name__ == "__main__":
     migrate()

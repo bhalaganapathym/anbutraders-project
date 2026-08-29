@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import WeightMismatchApprovalModal from '@/components/WeightMismatchApprovalModal';
+import PushNotificationManager from '@/components/PushNotificationManager';
 
 export default function Notifications() {
   const { t } = useTranslation();
@@ -99,13 +100,13 @@ export default function Notifications() {
 
   useRealtime('notifications', load);
 
-  const markRead = async (id: string) => {
+  const markAsRead = async (id: string) => {
     try {
       const n = notifications.find(x => x.id === id);
       if (n) await api.put(`/notifications/${id}`, { ...n, read: true });
       load();
     } catch {
-      toast('Failed to mark as read', 'error');
+      toast('Failed to update notification', 'error');
     }
   };
 
@@ -116,11 +117,11 @@ export default function Notifications() {
       toast('All notifications marked as read', 'success');
       load();
     } catch {
-      toast('Failed to mark all as read', 'error');
+      toast('Failed to update notifications', 'error');
     }
   };
 
-  const remove = async (id: string) => {
+  const deleteNotification = async (id: string) => {
     try {
       await api.delete(`/notifications/${id}`);
       load();
@@ -129,13 +130,13 @@ export default function Notifications() {
     }
   };
 
-  const deleteImage = async (id: string) => {
+  const deletePhoto = async (id: string) => {
     try {
       await api.delete(`/notifications/${id}/image`);
-      toast('Image deleted from server', 'success');
+      toast('Photo deleted', 'success');
       load();
     } catch {
-      toast('Failed to delete image', 'error');
+      toast('Failed to delete photo', 'error');
     }
   };
 
@@ -158,6 +159,9 @@ export default function Notifications() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Mobile PWA Background Push Notifications Banner */}
+      <PushNotificationManager variant="banner" />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-slate-800">

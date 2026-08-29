@@ -8,6 +8,7 @@ from api.deps import get_db
 from models.all import Bill, Dispatch, Driver
 from schemas.all import BillCreate, BillResponse
 from api.endpoints.ws import manager
+from core.push import send_web_push
 
 router = APIRouter()
 
@@ -84,6 +85,14 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    background_tasks.add_task(
+        send_web_push,
+        title=notification.title,
+        body=notification.message,
+        url="/#/billing",
+        tag=f"bill-{bill.id}",
+        role="all"
+    )
     
     return bill
 
@@ -145,6 +154,14 @@ def check_today_payments(background_tasks: BackgroundTasks, db: Session = Depend
         )
         db.add(notif)
         overdue_count += 1
+        background_tasks.add_task(
+            send_web_push,
+            title=notif.title,
+            body=notif.message,
+            url="/#/billing",
+            tag=f"overdue-{b.id}",
+            role="all"
+        )
         
     if overdue_count > 0:
         db.commit()

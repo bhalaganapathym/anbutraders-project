@@ -8,15 +8,25 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       devOptions: {
-        enabled: false
+        enabled: true,
+        type: 'module'
       },
       manifest: {
         name: 'Anbu Traders',
         short_name: 'Anbu',
         description: 'Anbu Traders Inventory & Billing',
-        theme_color: '#ffffff',
+        theme_color: '#1e40af',
+        background_color: '#ffffff',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
         icons: [
           {
             src: 'pwa-192x192.png',
