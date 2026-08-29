@@ -49,6 +49,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const [itemQty, setItemQty] = useState(1);
   const [itemUnit, setItemUnit] = useState('nos');
   const [targetWeightInput, setTargetWeightInput] = useState('');
+  const [steelInputMode, setSteelInputMode] = useState<'items' | 'kg'>('items');
+  const [lineUnitModes, setLineUnitModes] = useState<Record<string, 'nos' | 'kg'>>({});
 
   // Advance Order State
   const getTomorrowDateStr = () => {
@@ -943,64 +945,89 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                     </div>
 
                     {Number(selectedProduct.standard_weight || 0) > 0 ? (
-                      /* Steel Dual Input Box: Nos ⇄ Kg Live Conversion */
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs font-extrabold text-blue-900">
-                          <span className="flex items-center gap-1">
-                            <Sparkles size={13} className="text-amber-500" /> Steel Dual-Unit Converter:
-                          </span>
-                          <span className="text-blue-600 font-semibold">
-                            Enter either <strong className="underline">Nos</strong> or <strong className="underline">Kgs</strong> (auto-syncs)
+                      /* Steel Dual Input Box: Nos ⇄ Kg Live Conversion with Select Box */
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-blue-50/80 rounded-xl border border-blue-200">
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs font-black uppercase tracking-wider text-blue-900">
+                              Order Unit Mode:
+                            </label>
+                            <select
+                              value={steelInputMode}
+                              onChange={(e) => setSteelInputMode(e.target.value as 'items' | 'kg')}
+                              className="rounded-lg border-2 border-blue-400 bg-white px-3 py-1.5 text-xs font-black text-blue-950 shadow-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                            >
+                              <option value="items">📦 Items (Nos / Pieces)</option>
+                              <option value="kg">⚖️ Weight (Kgs)</option>
+                            </select>
+                          </div>
+                          <span className="text-[11px] font-bold text-blue-700">
+                            {steelInputMode === 'items' ? 'Input count in pieces' : 'Input target weight in kg'}
                           </span>
                         </div>
                         
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="bg-white p-3 rounded-lg border border-blue-200 shadow-sm">
-                            <label className="block text-xs font-extrabold text-slate-800 mb-1">
+                        {steelInputMode === 'items' ? (
+                          <div className="bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
+                            <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
                               Quantity in Nos (Rods / Pieces)
                             </label>
                             <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleQtyChange(itemQty - 1)}
+                                className="h-10 w-10 rounded-lg border border-slate-300 bg-slate-50 flex items-center justify-center font-bold text-slate-700 hover:bg-slate-100 transition"
+                              >
+                                <Minus size={16} />
+                              </button>
                               <input
                                 type="number"
                                 min="1"
                                 value={itemQty}
                                 onChange={e => handleQtyChange(Number(e.target.value))}
-                                className="w-full rounded-md border border-slate-300 p-2 text-sm font-black text-slate-900 outline-none focus:border-blue-500"
+                                className="w-full rounded-lg border border-slate-300 p-2 text-center text-base font-black text-slate-900 outline-none focus:border-blue-500"
                               />
-                              <span className="text-xs font-bold text-slate-500">nos</span>
+                              <button
+                                type="button"
+                                onClick={() => handleQtyChange(itemQty + 1)}
+                                className="h-10 w-10 rounded-lg border border-slate-300 bg-slate-50 flex items-center justify-center font-bold text-slate-700 hover:bg-slate-100 transition"
+                              >
+                                <Plus size={16} />
+                              </button>
+                              <span className="text-xs font-black text-slate-600 px-1">nos</span>
                             </div>
-                            <p className="text-[11px] font-medium text-slate-500 mt-1">
-                              Weight: <strong>{(itemQty * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg</strong>
+                            <p className="text-xs font-bold text-slate-600 mt-2">
+                              ➔ Weight: <strong className="text-blue-700">{(itemQty * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg</strong> ({selectedProduct.standard_weight} kg/no)
                             </p>
                           </div>
-
-                          <div className="bg-white p-3 rounded-lg border border-blue-200 shadow-sm">
-                            <label className="block text-xs font-extrabold text-blue-900 mb-1 flex items-center justify-between">
+                        ) : (
+                          <div className="bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
+                            <label className="block text-xs font-extrabold text-blue-900 mb-1.5 flex items-center justify-between">
                               <span>Target Weight in Kgs</span>
-                              <span className="text-[10px] font-bold text-amber-600">Calculates Nos</span>
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Auto-converts to pieces</span>
                             </label>
                             <div className="flex items-center gap-2">
                               <input
                                 type="number"
                                 step="any"
+                                min="0.1"
                                 placeholder="e.g. 50 kg"
                                 value={targetWeightInput}
                                 onChange={e => handleTargetWeightChange(e.target.value)}
-                                className="w-full rounded-md border border-blue-300 p-2 text-sm font-black text-blue-900 outline-none focus:border-blue-500"
+                                className="w-full rounded-lg border-2 border-blue-300 p-2 text-base font-black text-blue-900 outline-none focus:border-blue-500"
                               />
-                              <span className="text-xs font-bold text-blue-700">kg</span>
+                              <span className="text-xs font-black text-blue-700 px-1">kg</span>
                             </div>
-                            <p className="text-[11px] font-bold text-blue-700 mt-1">
-                              ➔ Converts to ~{itemQty} nos ({(itemQty * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg actual)
+                            <p className="text-xs font-bold text-blue-800 mt-2">
+                              ➔ Converts to: <strong className="text-amber-600 text-sm">{itemQty} nos</strong> ({(itemQty * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg actual weight)
                             </p>
                           </div>
-                        </div>
+                        )}
 
                         {(() => {
                           const pr = calculateProductPrice(selectedProduct, itemQty);
                           return (
-                            <div className="p-2.5 bg-blue-100/60 rounded-lg text-xs font-bold text-blue-950 flex flex-wrap items-center justify-between">
-                              <span>Formula: {itemQty} nos × {pr.standardWeight} kg = {pr.totalWeight.toFixed(2)} kg @ ₹{pr.ratePerKg.toFixed(2)}/kg</span>
+                            <div className="p-3 bg-blue-100/70 rounded-xl text-xs font-bold text-blue-950 flex flex-wrap items-center justify-between gap-2 border border-blue-200">
+                              <span>Formula: {itemQty} nos × {pr.standardWeight} kg = <strong>{pr.totalWeight.toFixed(2)} kg</strong> @ ₹{pr.ratePerKg.toFixed(2)}/kg</span>
                               <span className="text-sm font-black text-blue-700">Line Total: ₹{pr.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                             </div>
                           );
@@ -1044,12 +1071,15 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                   <div className="divide-y divide-slate-100">
                     {lines.map((line, idx) => {
                       const pricing = calculateProductPrice(line.product, line.quantity);
+                      const isSteel = pricing.isSteel && pricing.standardWeight > 0;
+                      const lineMode = lineUnitModes[line.product_id] || 'nos';
+
                       return (
                         <div key={`${line.product_id}-${idx}`} className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 transition hover:bg-slate-50/50">
                           <div className="flex-1">
                             <p className="font-semibold text-slate-900">{line.product.name}</p>
                             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm font-medium text-slate-500">
-                              {pricing.isSteel ? (
+                              {isSteel ? (
                                 <>
                                   <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                                     ₹{pricing.ratePerKg.toFixed(2)} / kg
@@ -1063,7 +1093,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                 </>
                               ) : (
                                 <>
-                                  <span>₹{pricing.unitPrice} / {line.product.unit}</span>
+                                  <span>₹{pricing.unitPrice.toFixed(2)} / {line.product.unit || 'nos'}</span>
                                   {pricing.standardWeight > 0 && (
                                     <>
                                       <span className="text-slate-300">|</span>
@@ -1075,16 +1105,59 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                             </div>
                           </div>
                           
-                          <div className="flex items-center gap-6">
-                            <div className="flex items-center rounded-lg border border-slate-200 bg-white shadow-sm">
-                              <button onClick={() => updateLineQty(line.product_id, -1)} className="rounded-l-lg p-2 hover:bg-slate-100 text-slate-600 transition"><Minus size={14} /></button>
-                              <span className="w-12 text-center font-semibold text-slate-900">{line.quantity}</span>
-                              <button onClick={() => updateLineQty(line.product_id, 1)} className="rounded-r-lg p-2 hover:bg-slate-100 text-slate-600 transition"><Plus size={14} /></button>
-                            </div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            {isSteel && (
+                              <select
+                                value={lineMode}
+                                onChange={(e) => setLineUnitModes(prev => ({ ...prev, [line.product_id]: e.target.value as 'nos' | 'kg' }))}
+                                className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1.5 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-blue-500 cursor-pointer"
+                              >
+                                <option value="nos">📦 Items (nos)</option>
+                                <option value="kg">⚖️ Weight (kg)</option>
+                              </select>
+                            )}
+
+                            {isSteel && lineMode === 'kg' ? (
+                              <div className="flex items-center rounded-lg border border-blue-300 bg-white shadow-sm px-2 py-1 gap-1">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0.1"
+                                  value={pricing.totalWeight.toFixed(2)}
+                                  onChange={(e) => {
+                                    const wt = parseFloat(e.target.value);
+                                    if (!isNaN(wt) && wt > 0 && pricing.standardWeight > 0) {
+                                      const calculatedNos = Math.max(1, Math.round(wt / pricing.standardWeight));
+                                      setLines(lines.map(l => l.product_id === line.product_id ? { ...l, quantity: calculatedNos } : l));
+                                    }
+                                  }}
+                                  className="w-16 text-center font-black text-blue-900 text-sm outline-none"
+                                />
+                                <span className="text-xs font-bold text-blue-700">kg</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center rounded-lg border border-slate-200 bg-white shadow-sm">
+                                <button onClick={() => updateLineQty(line.product_id, -1)} className="rounded-l-lg p-2 hover:bg-slate-100 text-slate-600 transition"><Minus size={14} /></button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={line.quantity}
+                                  onChange={(e) => {
+                                    const q = parseInt(e.target.value, 10);
+                                    if (!isNaN(q) && q >= 1) {
+                                      setLines(lines.map(l => l.product_id === line.product_id ? { ...l, quantity: q } : l));
+                                    }
+                                  }}
+                                  className="w-12 text-center font-semibold text-slate-900 text-sm outline-none"
+                                />
+                                <button onClick={() => updateLineQty(line.product_id, 1)} className="rounded-r-lg p-2 hover:bg-slate-100 text-slate-600 transition"><Plus size={14} /></button>
+                              </div>
+                            )}
+
                             <div className="w-28 text-right">
                               <p className="font-bold text-slate-900 text-lg">₹{pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                               {pricing.isSteel && (
-                                <p className="text-[11px] text-slate-400">{pricing.totalWeight.toFixed(1)} kg @ ₹{pricing.ratePerKg}/kg</p>
+                                <p className="text-[11px] text-slate-400">{pricing.totalWeight.toFixed(2)} kg @ ₹{pricing.ratePerKg.toFixed(2)}/kg</p>
                               )}
                             </div>
                             <button onClick={() => removeLine(line.product_id)} className="text-slate-400 hover:text-red-600 transition p-2 hover:bg-red-50 rounded-lg">

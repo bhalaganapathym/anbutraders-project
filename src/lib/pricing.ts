@@ -57,36 +57,21 @@ export function calculateProductPrice(
     name.includes('sumangala') ||
     brand.includes('sumangala') ||
     brand.includes('isteel') ||
-    (stdWeight > 0 && (unit === 'nos' || unit === 'piece' || unit === 'rod' || unit === 'bundle'));
+    (stdWeight > 0 && (unit === 'nos' || unit === 'piece' || unit === 'rod' || unit === 'bundle' || unit === 'kg'));
 
   if (isSteel && stdWeight > 0) {
-    // If unit is kg directly
-    if (unit === 'kg') {
-      const ratePerKg = pPrice;
-      const totalWeight = quantity;
-      const totalPrice = quantity * ratePerKg;
-      return {
-        isSteel: true,
-        ratePerKg,
-        unitPrice: ratePerKg,
-        standardWeight: stdWeight,
-        totalWeight,
-        totalPrice,
-        unit: 'kg',
-        displayBreakdown: `${quantity} kg @ ₹${ratePerKg.toFixed(2)}/kg`
-      };
-    }
-
-    // Steel in units/pieces (rods)
-    // Determine rate per kg vs unit price
+    // Determine rate per kg vs unit price (price per single piece / rod)
     let ratePerKg = pPrice;
     let unitPrice = pPrice * stdWeight;
 
-    // If pPrice in DB was already stored as the full unit rod price (e.g. 244.63 instead of 51.5)
-    // (A typical steel rate in India is 40 - 100 ₹/kg)
-    if (pPrice > 120 && (pPrice / stdWeight >= 30 && pPrice / stdWeight <= 150)) {
-      unitPrice = pPrice;
-      ratePerKg = pPrice / stdWeight;
+    // If pPrice in DB was stored as the piece price (e.g. 280.25 for 4.75kg = 59/kg, or 525 for 10.5kg = 50/kg)
+    // Standard steel rates in India range between ~₹35 to ~₹150 / kg
+    if (pPrice > 120 && stdWeight > 0) {
+      const calculatedRate = pPrice / stdWeight;
+      if (calculatedRate >= 25 && calculatedRate <= 200) {
+        unitPrice = pPrice;
+        ratePerKg = calculatedRate;
+      }
     }
 
     const totalWeight = quantity * stdWeight;
@@ -100,7 +85,7 @@ export function calculateProductPrice(
       standardWeight: stdWeight,
       totalWeight,
       totalPrice,
-      unit,
+      unit: 'nos',
       displayBreakdown
     };
   }
