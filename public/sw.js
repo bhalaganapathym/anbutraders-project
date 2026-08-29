@@ -10,24 +10,32 @@ self.addEventListener('activate', (event) => {
 
 // Background Push Notification Listener
 self.addEventListener('push', (event) => {
-  let data = { title: 'Anbu Traders Alert', body: 'New notification', url: '/' };
+  let title = '🔔 Anbu Traders Alert';
+  let body = 'New activity update in Anbu Traders';
+  let url = '/';
+  let tag = `anbu-${Date.now()}`;
+
   if (event.data) {
     try {
-      data = event.data.json();
+      const data = event.data.json();
+      if (data.title) title = data.title;
+      if (data.body) body = data.body;
+      if (data.url) url = data.url;
+      if (data.tag) tag = data.tag;
     } catch (e) {
-      data = { title: 'Anbu Traders Alert', body: event.data.text(), url: '/' };
+      const text = event.data.text();
+      if (text) body = text;
     }
   }
 
-  const title = data.title || 'Anbu Traders';
+  const iconUrl = new URL('/pwa-192x192.png', self.location.origin).href;
   const options = {
-    body: data.body || '',
-    icon: data.icon || '/pwa-192x192.png',
-    badge: data.badge || '/pwa-192x192.png',
-    tag: data.tag || ('anbu-' + Date.now()),
-    data: {
-      url: data.url || '/'
-    },
+    body,
+    icon: iconUrl,
+    badge: iconUrl,
+    tag,
+    renotify: true,
+    data: { url },
     vibrate: [300, 100, 300, 100, 300],
     requireInteraction: true
   };
