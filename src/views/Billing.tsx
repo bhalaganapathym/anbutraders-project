@@ -33,34 +33,63 @@ function numberToWords(num: number): string {
   return `INR ${inWords(intPart)} Only`;
 }
 
-function WaitClock({ timestamp }: { timestamp: string | Date }) {
+function WaitClock({
+  timestamp,
+  endTime,
+  isCompleted = false,
+}: {
+  timestamp: string | Date;
+  endTime?: string | Date | null;
+  isCompleted?: boolean;
+}) {
   const [elapsed, setElapsed] = useState('');
 
   useEffect(() => {
     const update = () => {
-      const now = new Date().getTime();
+      if (!timestamp) {
+        setElapsed('—');
+        return;
+      }
       const start = new Date(timestamp).getTime();
-      const diffMs = now - start;
-      if (diffMs < 0) {
+      const end = endTime ? new Date(endTime).getTime() : isCompleted ? start : Date.now();
+      const diffMs = (endTime || isCompleted) ? Math.max(0, end - start) : Date.now() - start;
+      if (diffMs < 0 || isNaN(diffMs)) {
         setElapsed('0s');
         return;
       }
-      const diffMins = Math.floor(diffMs / 60000);
-      const hrs = Math.floor(diffMins / 60);
-      const mins = diffMins % 60;
-      const secs = Math.floor((diffMs % 60000) / 1000);
+      const diffSecs = Math.floor(diffMs / 1000);
+      const days = Math.floor(diffSecs / 86400);
+      const hrs = Math.floor((diffSecs % 86400) / 3600);
+      const mins = Math.floor((diffSecs % 3600) / 60);
+      const secs = diffSecs % 60;
       
       let timeStr = '';
-      if (hrs > 0) timeStr += `${hrs}h `;
-      if (mins > 0 || hrs > 0) timeStr += `${mins}m `;
-      timeStr += `${secs}s`;
+      if (days > 0) timeStr += `${days}d `;
+      if (hrs > 0 || days > 0) timeStr += `${hrs}h `;
+      if (mins > 0 || hrs > 0 || days > 0) timeStr += `${mins}m `;
+      if (!isCompleted && !endTime) {
+        timeStr += `${secs}s`;
+      } else if (!timeStr) {
+        timeStr = `${secs}s`;
+      }
       
       setElapsed(timeStr.trim());
     };
     update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [timestamp]);
+    if (!isCompleted && !endTime) {
+      const interval = setInterval(update, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [timestamp, endTime, isCompleted]);
+
+  if (isCompleted || endTime) {
+    return (
+      <div className="flex items-center gap-1.5 whitespace-nowrap text-xs font-bold text-emerald-700 dark:text-emerald-300 tabular-nums bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+        <CheckCircle2 size={13} className="text-emerald-600 dark:text-emerald-400" />
+        <span>{elapsed && elapsed !== '0s' ? `Completed in ${elapsed}` : 'Delivered & Completed'}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
@@ -662,7 +691,11 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                     </span>
                     <h3 className="font-mono font-bold text-lg mt-1 text-slate-800 dark:text-slate-100">{dispatch.dispatch_no}</h3>
                   </div>
-                  <WaitClock timestamp={dispatch.ready_for_loading_at || dispatch.created_at} />
+                  <WaitClock
+                    timestamp={dispatch.sent_to_billing_at || dispatch.created_at}
+                    endTime={dispatch.completed_at || dispatch.bill?.created_at}
+                    isCompleted={true}
+                  />
                 </div>
                 
                 <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300 py-3 border-y border-slate-100 dark:border-slate-800">

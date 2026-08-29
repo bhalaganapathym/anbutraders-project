@@ -22,15 +22,27 @@ import { calculateProductPrice, round2 } from '@/lib/pricing';
 type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string; order_no?: string } };
 type ConfirmedOrder = Order & { customer: { name: string; phone: string | null; address?: string | null } | null };
 
-function WaitClock({ timestamp }: { timestamp: string | Date }) {
+function WaitClock({
+  timestamp,
+  endTime,
+  isCompleted = false,
+}: {
+  timestamp: string | Date;
+  endTime?: string | Date | null;
+  isCompleted?: boolean;
+}) {
   const [elapsed, setElapsed] = useState('');
 
   useEffect(() => {
     const update = () => {
-      const now = new Date().getTime();
+      if (!timestamp) {
+        setElapsed('—');
+        return;
+      }
       const start = new Date(timestamp).getTime();
-      const diffMs = now - start;
-      if (diffMs < 0) {
+      const end = endTime ? new Date(endTime).getTime() : isCompleted ? start : Date.now();
+      const diffMs = (endTime || isCompleted) ? Math.max(0, end - start) : Date.now() - start;
+      if (diffMs < 0 || isNaN(diffMs)) {
         setElapsed('0s');
         return;
       }
@@ -43,14 +55,30 @@ function WaitClock({ timestamp }: { timestamp: string | Date }) {
       let timeStr = '';
       if (days > 0) timeStr += `${days}d `;
       if (hours > 0 || days > 0) timeStr += `${hours}h `;
-      timeStr += `${mins}m ${secs}s`;
+      if (mins > 0 || hours > 0 || days > 0) timeStr += `${mins}m `;
+      if (!isCompleted && !endTime) {
+        timeStr += `${secs}s`;
+      } else if (!timeStr) {
+        timeStr = `${secs}s`;
+      }
       
       setElapsed(timeStr.trim());
     };
     update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [timestamp]);
+    if (!isCompleted && !endTime) {
+      const interval = setInterval(update, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [timestamp, endTime, isCompleted]);
+
+  if (isCompleted || endTime) {
+    return (
+      <div className="flex items-center gap-1.5 whitespace-nowrap text-xs font-bold text-emerald-700 dark:text-emerald-300 tabular-nums bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+        <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" />
+        <span>{elapsed && elapsed !== '0s' ? `${elapsed}` : 'Completed'}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
@@ -655,7 +683,11 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                         </div>
                       </td>
                       <td className="td">
-                        <WaitClock timestamp={d.order?.confirmed_at || d.created_at} />
+                        <WaitClock
+                          timestamp={d.order?.confirmed_at || d.created_at}
+                          endTime={d.completed_at || d.updated_at}
+                          isCompleted={true}
+                        />
                       </td>
                       <td className="td text-right">
                         <div className="flex justify-end items-center gap-1">
