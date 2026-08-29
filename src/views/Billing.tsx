@@ -136,10 +136,20 @@ export default function Billing() {
 
   const selectedCustomer = customers.find(c => c.id === selectedDispatch?.customer_id);
 
+  const isDiscountApproved =
+    selectedDispatch?.discount_approval_status === 'approved' &&
+    Number(selectedDispatch?.discount_amount || 0) > 0;
+
   // Auto-calculate amounts when selectedDispatch or paymentMethod changes
   useEffect(() => {
     if (!selectedDispatch) return;
-    const total = round2(selectedDispatch.items?.reduce((sum, item) => sum + round2((item.price || 0) * (item.quantity || 1)), 0) || 0);
+    const isApproved = selectedDispatch.discount_approval_status === 'approved' && Number(selectedDispatch.discount_amount || 0) > 0;
+    const total = round2(
+      selectedDispatch.items?.reduce((sum, item) => {
+        const p = isApproved ? (item.price ?? (item.original_price ?? 0)) : (item.original_price ?? (item.price ?? 0));
+        return sum + round2(p * (item.quantity || 1));
+      }, 0) || 0
+    );
     
     if (paymentMethod === 'full payment done') {
       setPaidAmount(total.toFixed(2));
@@ -166,7 +176,13 @@ export default function Billing() {
 
   const handlePaidAmountChange = (val: string) => {
     setPaidAmount(val);
-    const total = round2(selectedDispatch?.items?.reduce((sum, item) => sum + round2((item.price || 0) * (item.quantity || 1)), 0) || 0);
+    const isApproved = selectedDispatch?.discount_approval_status === 'approved' && Number(selectedDispatch?.discount_amount || 0) > 0;
+    const total = round2(
+      selectedDispatch?.items?.reduce((sum, item) => {
+        const p = isApproved ? (item.price ?? (item.original_price ?? 0)) : (item.original_price ?? (item.price ?? 0));
+        return sum + round2(p * (item.quantity || 1));
+      }, 0) || 0
+    );
     const p = parseFloat(val) || 0;
     const remaining = round2(Math.max(0, total - round2(p)));
     setToCollectAmount(remaining.toFixed(2));
@@ -174,7 +190,13 @@ export default function Billing() {
 
   const handleToCollectAmountChange = (val: string) => {
     setToCollectAmount(val);
-    const total = round2(selectedDispatch?.items?.reduce((sum, item) => sum + round2((item.price || 0) * (item.quantity || 1)), 0) || 0);
+    const isApproved = selectedDispatch?.discount_approval_status === 'approved' && Number(selectedDispatch?.discount_amount || 0) > 0;
+    const total = round2(
+      selectedDispatch?.items?.reduce((sum, item) => {
+        const p = isApproved ? (item.price ?? (item.original_price ?? 0)) : (item.original_price ?? (item.price ?? 0));
+        return sum + round2(p * (item.quantity || 1));
+      }, 0) || 0
+    );
     const toCol = parseFloat(val) || 0;
     const p = round2(Math.max(0, total - round2(toCol)));
     setPaidAmount(p.toFixed(2));
@@ -452,10 +474,18 @@ export default function Billing() {
 
   if (loading) return <div className="p-6">Loading billing...</div>;
 
+  const isSelectedDispatchDiscountApproved =
+    selectedDispatch?.discount_approval_status === 'approved' &&
+    Number(selectedDispatch?.discount_amount || 0) > 0;
+
   let totalAmount = 0;
   selectedDispatch?.items?.forEach(item => {
-    totalAmount += (item.price || 0) * (item.quantity || 1);
+    const unitPrice = isSelectedDispatchDiscountApproved
+      ? (item.price || 0)
+      : (item.original_price ?? item.price ?? 0);
+    totalAmount += unitPrice * (item.quantity || 1);
   });
+  totalAmount = round2(totalAmount);
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -501,7 +531,11 @@ export default function Billing() {
       {activeTab === 'pending' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pendingBills.map(dispatch => {
-            const billTotal = dispatch.items?.reduce((s, it) => s + (it.price || 0) * (it.quantity || 1), 0) || 0;
+            const isApproved = dispatch.discount_approval_status === 'approved' && Number(dispatch.discount_amount || 0) > 0;
+            const billTotal = dispatch.items?.reduce((s, it) => {
+              const p = isApproved ? (it.price || 0) : (it.original_price ?? it.price ?? 0);
+              return s + p * (it.quantity || 1);
+            }, 0) || 0;
             return (
               <div key={dispatch.id} className="card p-5 transition hover:shadow-md border-2 border-amber-200 dark:border-amber-900/50 bg-gradient-to-br from-white to-amber-50/20 dark:from-slate-900 dark:to-amber-950/10">
                 <div className="flex justify-between items-start mb-3">
@@ -751,16 +785,24 @@ export default function Billing() {
                   </span>
                 </div>
                 
-                {/* Apply / Edit Discount Button */}
+                {/* Apply / Edit Discount Button - Clean and only shows active tag when approved */}
                 <button
                   type="button"
                   onClick={openDiscountEditor}
-                  className="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white flex items-center gap-1.5 shadow-sm shadow-amber-500/20 transition active:scale-95"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition active:scale-95 ${
+                    isDiscountApproved
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-black'
+                      : selectedDispatch.discount_approval_status === 'pending'
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white font-black'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
                 >
                   <Tag size={13} />
-                  {selectedDispatch.discount_amount && selectedDispatch.discount_amount > 0
+                  {isDiscountApproved
                     ? `Discount Active (-₹${round2(selectedDispatch.discount_amount).toFixed(2)})`
-                    : '🎁 Apply / Edit Discount'}
+                    : selectedDispatch.discount_approval_status === 'pending'
+                    ? 'Discount Pending Approval'
+                    : '+ Add Discount'}
                 </button>
               </div>
 
@@ -768,8 +810,8 @@ export default function Billing() {
               <div className="md:hidden space-y-3">
                 {selectedDispatch.items?.map((item, idx) => {
                   const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
-                  const lineTotal = (item.price || 0) * item.quantity;
-                  const itemDiscount = item.discount_amount || (item.discount_per_kg ? item.discount_per_kg * (recordedWt || item.quantity) : 0);
+                  const unitPrice = isDiscountApproved ? (item.price || 0) : (item.original_price ?? item.price ?? 0);
+                  const lineTotal = round2(unitPrice * item.quantity);
 
                   return (
                     <div 
@@ -782,9 +824,9 @@ export default function Billing() {
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
                               Item #{idx + 1}
                             </span>
-                            {itemDiscount > 0 && (
+                            {isDiscountApproved && (item.discount_amount || 0) > 0 && (
                               <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
-                                {item.discount_per_kg ? `-₹${item.discount_per_kg.toFixed(2)}/kg` : `-₹${itemDiscount.toFixed(2)}`}
+                                {item.discount_per_kg ? `-₹${item.discount_per_kg.toFixed(2)}/kg` : `-₹${item.discount_amount?.toFixed(2)}`}
                               </span>
                             )}
                           </div>
@@ -823,7 +865,7 @@ export default function Billing() {
                 })}
               </div>
 
-              {/* Desktop / Tablet View (>= 768px): High-Contrast, Ultra-Bold Table */}
+              {/* Desktop / Tablet View (>= 768px): High-Contrast, Clean Standard 4-Column Table */}
               <div className="hidden md:block border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700">
@@ -831,15 +873,14 @@ export default function Billing() {
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">Item Name</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">No. of Items</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Recorded Weight</th>
-                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Discount</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Total Price</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y-2 divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900">
                     {selectedDispatch.items?.map((item, idx) => {
                       const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
-                      const lineTotal = (item.price || 0) * item.quantity;
-                      const itemDiscount = item.discount_amount || (item.discount_per_kg ? item.discount_per_kg * (recordedWt || item.quantity) : 0);
+                      const unitPrice = isDiscountApproved ? (item.price || 0) : (item.original_price ?? item.price ?? 0);
+                      const lineTotal = round2(unitPrice * item.quantity);
 
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -853,15 +894,6 @@ export default function Billing() {
                             <span className={recordedWt ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}>
                               {recordedWt ? `${recordedWt} kg` : '—'}
                             </span>
-                          </td>
-                          <td className="px-5 py-4 text-right font-bold text-sm">
-                            {itemDiscount > 0 ? (
-                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                                {item.discount_per_kg ? `-₹${item.discount_per_kg.toFixed(2)}/kg` : `-₹${itemDiscount.toFixed(2)}`}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">—</span>
-                            )}
                           </td>
                           <td className="px-5 py-4 text-right font-black text-emerald-600 dark:text-emerald-400 text-base">
                             ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1116,16 +1148,20 @@ export default function Billing() {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedDispatch.items?.map((it, idx) => (
-                      <tr key={it.id || idx}>
-                        <td className="border border-black p-1 text-center">{idx + 1}</td>
-                        <td className="border border-black p-1 font-bold">{it.product_name}</td>
-                        <td className="border border-black p-1 text-center">{it.quantity}</td>
-                        <td className="border border-black p-1 text-right">{(it.price || 0).toFixed(2)}</td>
-                        <td className="border border-black p-1 text-center">{it.unit}</td>
-                        <td className="border border-black p-1 text-right font-bold">{((it.price || 0) * it.quantity).toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {selectedDispatch.items?.map((it, idx) => {
+                      const unitPrice = isSelectedDispatchDiscountApproved ? (it.price || 0) : (it.original_price ?? it.price ?? 0);
+                      const lineTotal = round2(unitPrice * it.quantity);
+                      return (
+                        <tr key={it.id || idx}>
+                          <td className="border border-black p-1 text-center">{idx + 1}</td>
+                          <td className="border border-black p-1 font-bold">{it.product_name}</td>
+                          <td className="border border-black p-1 text-center">{it.quantity}</td>
+                          <td className="border border-black p-1 text-right">{unitPrice.toFixed(2)}</td>
+                          <td className="border border-black p-1 text-center">{it.unit}</td>
+                          <td className="border border-black p-1 text-right font-bold">{lineTotal.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
                     <tr className="font-bold border-t border-black bg-gray-50">
                       <td colSpan={5} className="border border-black p-1 text-right">Total</td>
                       <td className="border border-black p-1 text-right">₹{totalAmount.toFixed(2)}</td>
