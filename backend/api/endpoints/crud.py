@@ -359,31 +359,54 @@ def create_order(
             if not customer.address or not customer.address.strip():
                 customer.address = clean_addr
 
-    # If this is an advance order, create a booking notification
+    # Build item summary and total estimate value for push notification
+    items_desc = []
+    total_val = 0.0
+    for itm in order_in.items:
+        prod = db.query(Product).filter(Product.id == itm.product_id).first()
+        qty = float(itm.quantity)
+        qty_str = f"{int(qty)}" if qty.is_integer() else f"{qty:.2f}"
+        if prod:
+            if prod.is_steel and prod.standard_weight and prod.price_per_kg:
+                wt = qty * float(prod.standard_weight)
+                cost = wt * float(prod.price_per_kg)
+                items_desc.append(f"{qty_str} nos {prod.name} ({wt:.1f}kg)")
+            else:
+                cost = qty * float(prod.unit_price or 0)
+                items_desc.append(f"{qty_str} {itm.unit or prod.unit} {prod.name}")
+            total_val += cost
+        else:
+            items_desc.append(f"{qty_str} items")
+
+    summary_str = ", ".join(items_desc[:3])
+    if len(items_desc) > 3:
+        summary_str += f" +{len(items_desc) - 3} more"
+
     if order.is_advance_order:
         sched_date_str = order.scheduled_delivery_date.strftime("%d %b %Y") if order.scheduled_delivery_date else "Scheduled Date"
         adv_amt = float(order.advance_paid_amount or 0)
         notif = Notification(
             type="advance_order_booked",
-            title=f"📦 Advance Order Booked - {new_order_no}",
-            message=f"Advance order booked for {cust_name}. Scheduled Delivery: {sched_date_str}. Advance Paid: ₹{adv_amt:,.2f}.",
+            title=f"📦 Advance Estimate Booked — {new_order_no}",
+            message=f"{cust_name} (₹{total_val:,.2f}): {summary_str}. Delivery: {sched_date_str}. Advance Paid: ₹{adv_amt:,.2f}.",
             order_id=order.id,
             customer_name=cust_name
         )
         db.add(notif)
-        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-        background_tasks.add_task(
-            send_web_push,
-            title=notif.title,
-            body=notif.message,
-            url="/#/orders",
-            tag="advance-order",
-            role="all"
+    else:
+        notif = Notification(
+            type="order_confirmed",
+            title=f"📋 New Estimate Created — {new_order_no}",
+            message=f"{cust_name} (₹{total_val:,.2f}): {summary_str}. Ready for dispatch / loading.",
+            order_id=order.id,
+            customer_name=cust_name
         )
+        db.add(notif)
         
     db.commit()
     db.refresh(order)
     
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
     return order
@@ -517,10 +540,32 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
 
     if old_status != "confirmed" and order.status == "confirmed":
         customer_name = customer.name if customer else "Unknown"
+        items_desc = []
+        total_val = 0.0
+        for itm in order_in.items:
+            prod = db.query(Product).filter(Product.id == itm.product_id).first()
+            qty = float(itm.quantity)
+            qty_str = f"{int(qty)}" if qty.is_integer() else f"{qty:.2f}"
+            if prod:
+                if prod.is_steel and prod.standard_weight and prod.price_per_kg:
+                    wt = qty * float(prod.standard_weight)
+                    cost = wt * float(prod.price_per_kg)
+                    items_desc.append(f"{qty_str} nos {prod.name} ({wt:.1f}kg)")
+                else:
+                    cost = qty * float(prod.unit_price or 0)
+                    items_desc.append(f"{qty_str} {itm.unit or prod.unit} {prod.name}")
+                total_val += cost
+            else:
+                items_desc.append(f"{qty_str} items")
+
+        summary_str = ", ".join(items_desc[:3])
+        if len(items_desc) > 3:
+            summary_str += f" +{len(items_desc) - 3} more"
+
         notification = Notification(
             type="order_confirmed",
-            title="New Order Confirmed",
-            message=f"Order {str(order.id)[:8]} for {customer_name} has been confirmed and is ready for dispatch.",
+            title=f"📋 Estimate Confirmed — {order.order_no or str(order.id)[:8]}",
+            message=f"{customer_name} (₹{total_val:,.2f}): {summary_str}. Confirmed & ready for loading.",
             order_id=order.id,
             customer_name=customer_name
         )

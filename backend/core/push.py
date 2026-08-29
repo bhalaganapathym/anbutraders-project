@@ -116,7 +116,9 @@ def get_role_and_url_for_notification(notif_type: str, dispatch_id: str = None, 
     """
     Maps notification types to target roles and in-app navigation routes.
     """
-    if notif_type in ["order_confirmed", "bill_generated", "weight_mismatch_decision"]:
+    if notif_type in ["order_confirmed", "estimate_created", "advance_order_booked"]:
+        return "all", "/#/orders"
+    elif notif_type in ["bill_generated", "weight_mismatch_decision"]:
         return "dispatch", "/#/dispatches"
     elif notif_type in ["dispatch_completed", "photo_uploaded", "billing_alert", "discount_decision"]:
         return "billing", "/#/billing"
