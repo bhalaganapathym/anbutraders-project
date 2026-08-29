@@ -7,16 +7,19 @@ import {
 import Modal from '@/components/Modal';
 
 export default function WeightMismatchApprovalModal({
+  open,
   isOpen,
   onClose,
   dispatch,
   onSuccess
 }: {
-  isOpen: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   dispatch: Dispatch | null;
   onSuccess: () => void;
 }) {
+  const isModalOpen = open ?? isOpen ?? false;
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -28,12 +31,14 @@ export default function WeightMismatchApprovalModal({
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  if (!isOpen || !dispatch) return null;
+  if (!isModalOpen || !dispatch) return null;
 
   const audioUrl = dispatch.mismatch_voice_note_url 
     ? (dispatch.mismatch_voice_note_url.startsWith('http') 
         ? dispatch.mismatch_voice_note_url 
-        : `http://localhost:8080${dispatch.mismatch_voice_note_url}`)
+        : dispatch.mismatch_voice_note_url.startsWith('/')
+          ? `${window.location.origin}${dispatch.mismatch_voice_note_url}`
+          : `${window.location.origin}/${dispatch.mismatch_voice_note_url}`)
     : null;
 
   const togglePlay = () => {
@@ -107,7 +112,7 @@ export default function WeightMismatchApprovalModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Weight Mismatch Approval Request" size="lg">
+    <Modal open={isOpen} onClose={onClose} title="Weight Mismatch Approval Request" size="lg">
       <div className="space-y-6">
         
         {/* Header Alert Banner */}
@@ -144,6 +149,37 @@ export default function WeightMismatchApprovalModal({
             <strong className="text-sm font-bold text-slate-800 dark:text-white font-mono">{dispatch.vehicle_number || '—'}</strong>
           </div>
         </div>
+
+        {/* Item Weights Breakdown */}
+        {dispatch.items && dispatch.items.length > 0 && (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700/70 overflow-hidden text-xs">
+            <div className="bg-slate-100/80 dark:bg-slate-800 px-3.5 py-2 font-bold text-slate-700 dark:text-slate-200 flex justify-between">
+              <span>Order Items</span>
+              <span>Quantity</span>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900/50 p-2">
+              {dispatch.items.map((it) => {
+                const itemDraft = dispatch.phase1_draft?.item_verification?.[it.id];
+                const enteredWeight = itemDraft?.weight ? `${itemDraft.weight} ${itemDraft.weightUnit || 'kg'}` : null;
+                return (
+                  <div key={it.id} className="py-2 px-2 flex items-center justify-between">
+                    <div>
+                      <strong className="text-slate-800 dark:text-white">{it.product_name}</strong>
+                      {enteredWeight && (
+                        <span className="ml-2 text-[11px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded border border-blue-200">
+                          Entered: {enteredWeight}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      {it.quantity} {it.unit || 'nos'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Voice Note Audio Player */}
         <div className="p-5 rounded-xl border-2 border-indigo-200 dark:border-indigo-900/60 bg-gradient-to-br from-indigo-50/80 to-blue-50/50 dark:from-slate-800 dark:to-indigo-950/40 shadow-sm space-y-3">

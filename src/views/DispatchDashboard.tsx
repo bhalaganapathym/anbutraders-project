@@ -260,18 +260,7 @@ export default function DispatchDashboard({
         formData.append('reason', mismatchReasonInput.trim());
       }
 
-      const res = await fetch(`http://localhost:8080/api/v1/dispatches/${detail.id}/request-mismatch-approval`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`
-        },
-        body: formData
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Failed to submit voice note');
-      }
+      await api.postForm(`/dispatches/${detail.id}/request-mismatch-approval`, formData);
 
       toast('Voice note sent to Admin for approval!', 'success');
       setVoiceModalOpen(false);

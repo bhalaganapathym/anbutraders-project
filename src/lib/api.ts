@@ -28,7 +28,23 @@ export const api = {
   get: (endpoint: string) => fetchApi(endpoint),
   post: (endpoint: string, data: any) => fetchApi(endpoint, { method: 'POST', body: JSON.stringify(data) }),
   put: (endpoint: string, data: any) => fetchApi(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
+  patch: (endpoint: string, data: any) => fetchApi(endpoint, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (endpoint: string) => fetchApi(endpoint, { method: 'DELETE' }),
+  postForm: async (endpoint: string, formData: FormData) => {
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Request failed' }));
+      throw new Error(err.detail || 'Request failed');
+    }
+    return res.json();
+  },
   upload: async (endpoint: string, file: File) => {
     // Compress image automatically before sending over network to save Supabase storage & Render memory
     const optimizedFile = await compressImage(file);

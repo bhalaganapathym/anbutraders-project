@@ -6,7 +6,9 @@ import {
   type Dispatch,
   type DispatchStatus,
 } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
+import WeightMismatchApprovalModal from '@/components/WeightMismatchApprovalModal';
 import {
   ShoppingCart,
   Truck,
@@ -24,6 +26,8 @@ import {
   Sparkles,
   Calendar,
   Tag,
+  Mic,
+  AlertTriangle,
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
@@ -101,6 +105,7 @@ function formatTime(isoString?: string | null): string {
 
 export default function Dashboard({ onNavigate }: { onNavigate: (view: string) => void }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
   const [advanceMetrics, setAdvanceMetrics] = useState<{
     today_pending: number;
@@ -110,6 +115,14 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   }>({ today_pending: 0, tomorrow_orders: 0, total_pending: 0, total_advance_amount: 0 });
   const [recentDispatches, setRecentDispatches] = useState<DispatchWithTimeline[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Weight Mismatch Approval Modal State
+  const [selectedMismatchDispatch, setSelectedMismatchDispatch] = useState<Dispatch | null>(null);
+  const [mismatchModalOpen, setMismatchModalOpen] = useState(false);
+
+  const pendingMismatchDispatches = recentDispatches.filter(
+    (d) => d.mismatch_approval_status === 'pending'
+  );
 
   const load = useCallback(async () => {
     try {
@@ -249,6 +262,78 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
           <Download size={16} /> Export Orders
         </button>
       </div>
+
+      {/* 1.5. Pending Weight Mismatch Approvals (Prominent Admin Alert Card) */}
+      {pendingMismatchDispatches.length > 0 && (
+        <section className="rounded-2xl border-2 border-amber-500/80 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 p-5 shadow-lg relative overflow-hidden animate-fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-amber-300/60 dark:border-amber-900/60">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-md animate-pulse">
+                <Mic size={22} />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-amber-950 dark:text-amber-100 flex items-center gap-2">
+                  Weight Mismatch Approval Requested
+                  <span className="badge bg-amber-600 text-white text-xs font-black px-2 py-0.5 shadow-sm">
+                    {pendingMismatchDispatches.length} PENDING
+                  </span>
+                </h2>
+                <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                  The dispatcher recorded actual weights exceeding standard tolerance. Listen to the voice note to approve.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {pendingMismatchDispatches.map((d) => (
+              <div
+                key={d.id}
+                className="rounded-xl border border-amber-300 dark:border-amber-800/80 bg-white dark:bg-slate-800 p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-black text-sm text-slate-800 dark:text-white">
+                      {d.dispatch_no}
+                    </span>
+                    <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Clock size={11} /> {d.mismatch_requested_at ? new Date(d.mismatch_requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                    <p>
+                      <strong className="text-slate-800 dark:text-white">Customer: </strong>
+                      {d.customers?.name || (d as any).customer?.name || 'Customer'}
+                    </p>
+                    <p>
+                      <strong className="text-slate-800 dark:text-white">Vehicle / Driver: </strong>
+                      {d.vehicle_number || d.driver_name || 'Fleet'}
+                    </p>
+                    {d.mismatch_reason && (
+                      <p className="text-[11px] text-indigo-900 dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 p-2 rounded-lg border border-indigo-200 dark:border-indigo-900/60 line-clamp-2">
+                        📝 "{d.mismatch_reason}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-700/60">
+                  <button
+                    onClick={() => {
+                      setSelectedMismatchDispatch(d);
+                      setMismatchModalOpen(true);
+                    }}
+                    className="w-full btn-primary py-2.5 px-3 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center justify-center gap-1.5 transition active:scale-95"
+                  >
+                    <Mic size={15} className="animate-pulse" /> Listen Voice Note & Approve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 2. Quick Access Grid (8 App-Style Rounded Cards) */}
       <section className="space-y-3">
@@ -612,6 +697,28 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                         );
                       })}
                     </div>
+
+                    {/* Mismatch Approval Banner in Timeline Card */}
+                    {d.mismatch_approval_status === 'pending' && (
+                      <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-900/60 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Mic size={16} className="text-amber-600 animate-pulse" />
+                          <div>
+                            <strong className="text-xs font-bold text-amber-950 dark:text-amber-200">Weight Mismatch Approval Pending</strong>
+                            {d.mismatch_reason && <p className="text-[11px] text-amber-800 dark:text-amber-300 italic">"{d.mismatch_reason}"</p>}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedMismatchDispatch(d);
+                            setMismatchModalOpen(true);
+                          }}
+                          className="btn-primary py-1.5 px-3 text-xs bg-indigo-600 hover:bg-indigo-700 font-bold text-white flex items-center gap-1.5 shadow"
+                        >
+                          <Mic size={13} /> Listen & Approve
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -619,6 +726,14 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
           </div>
         )}
       </section>
+
+      {/* Admin Weight Mismatch Approval Modal */}
+      <WeightMismatchApprovalModal
+        open={mismatchModalOpen}
+        onClose={() => setMismatchModalOpen(false)}
+        dispatch={selectedMismatchDispatch}
+        onSuccess={load}
+      />
     </div>
   );
 }
