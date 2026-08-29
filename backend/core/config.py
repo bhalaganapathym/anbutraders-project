@@ -18,11 +18,11 @@ class Settings(BaseSettings):
     # Web Push / VAPID Configuration
     VAPID_PUBLIC_KEY: str = os.getenv(
         "VAPID_PUBLIC_KEY",
-        "BFvykvvSXa-TvUnrnUNI7CEJT_7J2579TU7xyDc-WC1zgSUAaIXPpFPv761EwBMWqpMdisN6V1MmRwLUpoY5sAY"
+        "BNcN5DcLo7iYHm3NPxiM4EpopRXHtOXzhyU-8AUu3DoDimJ3PEY-F3FslbMzZ21uUUtbc6xtIVeyC7PpfGdbIp4"
     )
     VAPID_PRIVATE_KEY: str = os.getenv(
         "VAPID_PRIVATE_KEY",
-        "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgnDZSgRhQCZ7PdXNz\nuWEtLEgPdB+BqDHgu1T8LXh2HF6hRANCAARb8pL70l2vk71J651DSOwhCU/+ydue\n/U1O8cg3Plgtc4ElAGiFz6RT7++tRMATFqqTHYrDeldTJkcC1KaGObAG\n-----END PRIVATE KEY-----\n"
+        "N3syxR8LFfoPb3yHe3t5dAUl7wtviMTSzEC64KFVD6Q"
     )
     VAPID_CLAIM_EMAIL: str = os.getenv("VAPID_CLAIM_EMAIL", "mailto:admin@anbutraders.com")
     

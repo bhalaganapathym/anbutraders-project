@@ -69,8 +69,8 @@ def send_web_push(
             except WebPushException as ex:
                 failed_count += 1
                 logger.warning("WebPush failed for endpoint %s: %s", sub.endpoint, ex)
-                # 404 Not Found or 410 Gone means the user unsubscribed or revoked permission
-                if ex.response is not None and ex.response.status_code in [404, 410]:
+                # 400, 401, 403, 404, 410 means the subscription is expired, revoked, or key mismatched
+                if ex.response is not None and ex.response.status_code in [400, 401, 403, 404, 410]:
                     dead_subscriptions.append(sub)
             except Exception as e:
                 failed_count += 1

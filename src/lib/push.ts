@@ -91,17 +91,22 @@ export async function subscribeToPushNotifications(userRole: string = 'all', use
       throw new Error('VAPID public key not received from server');
     }
 
-    // 3. Register push with Service Worker
+    // 3. Register push with Service Worker (clearing any old stale key subscriptions first)
     const registration = await navigator.serviceWorker.ready;
-    let subscription = await registration.pushManager.getSubscription();
-
-    if (!subscription) {
-      const applicationServerKey = urlBase64ToUint8Array(public_key);
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey,
-      });
+    const existingSub = await registration.pushManager.getSubscription();
+    if (existingSub) {
+      try {
+        await existingSub.unsubscribe();
+      } catch (e) {
+        console.warn('Old subscription cleanup warning:', e);
+      }
     }
+
+    const applicationServerKey = urlBase64ToUint8Array(public_key);
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    });
 
     // 4. Send subscription keys to Backend DB
     const subJSON = subscription.toJSON();
