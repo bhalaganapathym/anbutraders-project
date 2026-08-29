@@ -3,12 +3,11 @@ import { api, type Customer, type Product, type Order } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import {
   ArrowLeft, Search, Plus, Trash2, CheckCircle2, User, Phone, MapPin, 
-  Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, MessageSquare, Share2, FileText, Mic, MicOff, Zap,
+  Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText, Mic, MicOff, Zap,
   Calendar, DollarSign, Clock, Sparkles, Navigation
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice, round2 } from '@/lib/pricing';
-import { openSMSMessage, shareViaNative, openWhatsApp } from '@/lib/whatsapp';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
 
@@ -341,47 +340,45 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     return acc + p.totalPrice;
   }, 0));
 
-  // Raw text estimate message generator for WhatsApp, SMS, Share
-  const generateRawEstimateMessage = () => {
-    let msg = `🏗️ ANBU TRADERS — ESTIMATE 🧾\n`;
+  // WhatsApp Integration
+  const generateWhatsAppMessage = () => {
+    let msg = `🏗️ *ANBU TRADERS — ESTIMATE* 🧾\n`;
     msg += `No.4/5 Pondy Mailam Road, T.C.Kootroad, Vanur T.K 605 111\n`;
     msg += `Ph: 0413-2964204, 9626325204\n`;
     msg += `─────────────────────────────\n`;
-    msg += `Estimate No: ${nextOrderId}\n`;
+    msg += `*Estimate No:* ${nextOrderId}\n`;
     if (selectedCustomer) {
-      msg += `Customer: ${selectedCustomer.name}\n`;
-      if (selectedCustomer.phone) msg += `Phone: ${selectedCustomer.phone}\n`;
+      msg += `*Customer:* ${selectedCustomer.name}\n`;
+      if (selectedCustomer.phone) msg += `*Phone:* ${selectedCustomer.phone}\n`;
     }
     if (deliveryAddress) {
-      msg += `Delivery Site: ${deliveryAddress}\n`;
+      msg += `*Delivery Site:* ${deliveryAddress}\n`;
     }
     msg += `─────────────────────────────\n`;
-    msg += `ITEMS:\n\n`;
+    msg += `*ITEMS:*\n\n`;
     lines.forEach((l, idx) => {
       const p = calculateProductPrice(l.product, l.quantity);
-      msg += `${idx + 1}. ${l.product.name}\n`;
+      msg += `${idx + 1}. *${l.product.name}*\n`;
       if (p.isSteel) {
-        msg += `   ${l.quantity} nos × ${p.standardWeight} kg = ${p.totalWeight.toFixed(2)} kg @ ₹${p.ratePerKg.toFixed(2)}/kg = ₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+        msg += `   ${l.quantity} nos × ${p.standardWeight} kg = *${p.totalWeight.toFixed(2)} kg* @ ₹${p.ratePerKg.toFixed(2)}/kg = *₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
       } else {
-        msg += `   ${l.quantity} ${l.unit || l.product.unit} × ₹${p.unitPrice.toFixed(2)} = ₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+        msg += `   ${l.quantity} ${l.unit || l.product.unit} × ₹${p.unitPrice.toFixed(2)} = *₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
       }
     });
-    msg += `─────────────────────────────\n`;
-    msg += `Total Weight: ${totalWeight.toFixed(2)} kg\n`;
-    msg += `Grand Total: ₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
     if (isAdvanceOrder) {
       const advNum = parseFloat(advancePaidAmount) || 0;
       const balNum = Math.max(0, grandTotal - advNum);
       msg += `─────────────────────────────\n`;
-      msg += `📦 ADVANCE ORDER BOOKING:\n`;
-      msg += `📅 Scheduled Delivery: ${scheduledDeliveryDate ? new Date(scheduledDeliveryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}\n`;
-      msg += `💵 Advance Paid: ₹${advNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (${advancePaymentMethod.toUpperCase()})\n`;
-      msg += `🔴 Balance Due on Delivery: ₹${balNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
-      if (advanceNotes) msg += `📝 Delivery Remarks: ${advanceNotes}\n`;
+      msg += `📦 *ADVANCE ORDER BOOKING CONFIRMED:*\n`;
+      msg += `📅 *Scheduled Delivery Date:* ${scheduledDeliveryDate ? new Date(scheduledDeliveryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}\n`;
+      msg += `💵 *Advance Paid:* ₹${advNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })} (${advancePaymentMethod.toUpperCase()})\n`;
+      msg += `🔴 *Balance Due on Delivery:* ₹${balNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+      if (advanceNotes) msg += `📝 *Delivery Remarks:* ${advanceNotes}\n`;
     }
     msg += `─────────────────────────────\n`;
-    msg += `Thank you for choosing Anbu Traders!`;
-    return msg;
+    msg += `_Thank you for choosing Anbu Traders!_`;
+    
+    return encodeURIComponent(msg);
   };
 
   const handleWhatsApp = () => {
@@ -394,28 +391,13 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       return;
     }
     const phone = selectedCustomer.phone?.replace(/\D/g, '') || '';
-    openWhatsApp(phone, generateRawEstimateMessage());
-  };
-
-  const handleSMSMessage = () => {
-    if (!selectedCustomer) {
-      toast('Please select a customer first', 'error');
+    if (!phone) {
+      toast('Customer has no phone number, opening WhatsApp without recipient', 'info');
+      window.open(`https://wa.me/?text=${generateWhatsAppMessage()}`, '_blank');
       return;
     }
-    if (lines.length === 0) {
-      toast('Please add items to send an estimate', 'error');
-      return;
-    }
-    const phone = selectedCustomer.phone?.replace(/\D/g, '') || '';
-    openSMSMessage(phone, generateRawEstimateMessage());
-  };
-
-  const handleShareMessage = async () => {
-    if (lines.length === 0) {
-      toast('Please add items to share an estimate', 'error');
-      return;
-    }
-    await shareViaNative(`Estimate ${nextOrderId} — Anbu Traders`, generateRawEstimateMessage());
+    const finalPhone = phone.length === 10 ? `91${phone}` : phone;
+    window.open(`https://wa.me/${finalPhone}?text=${generateWhatsAppMessage()}`, '_blank');
   };
 
   const handleSaveOrder = async () => {
@@ -1265,37 +1247,22 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
              <div className="text-lg font-bold text-blue-600">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           </div>
 
-          <div className="flex w-full sm:w-auto items-center flex-wrap gap-2 sm:gap-3">
+          <div className="flex w-full sm:w-auto items-center gap-3">
             <button 
+              type="button"
               onClick={handleWhatsApp}
               disabled={!selectedCustomer || lines.length === 0}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-xl border border-[#25D366]/20 bg-[#25D366]/10 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-semibold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
-              title="Send Estimate via WhatsApp"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl border border-[#25D366]/30 bg-[#25D366]/10 px-5 py-3 font-bold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
+              title="Share estimate via WhatsApp"
             >
-              <MessageCircle size={18} />
+              <MessageCircle size={20} />
               <span>WhatsApp</span>
             </button>
             <button 
-              onClick={handleSMSMessage}
-              disabled={!selectedCustomer || lines.length === 0}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm font-semibold text-blue-700 dark:text-blue-300 transition hover:bg-blue-100 disabled:opacity-50"
-              title="Send Estimate via SMS / Message"
-            >
-              <MessageSquare size={18} />
-              <span>Message / SMS</span>
-            </button>
-            <button 
-              onClick={handleShareMessage}
-              disabled={lines.length === 0}
-              className="p-2.5 sm:p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition hover:bg-slate-100 disabled:opacity-50"
-              title="Share Estimate"
-            >
-              <Share2 size={18} />
-            </button>
-            <button 
+              type="button"
               onClick={handleSaveOrder}
               disabled={saving || !selectedCustomer || lines.length === 0}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 sm:px-8 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-3 font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save Order'}
             </button>
