@@ -142,10 +142,12 @@ export type Bill = {
   driver_id: string | null;
   payment_method: string;
   total_amount: number;
+  discount_amount?: number;
   paid_amount: number;
   pending_amount: number;
   credit_due_date?: string | null;
   credit_days?: number | null;
+  is_today_payment_overdue?: boolean;
   notes?: string | null;
   created_at: string;
   driver?: Driver | null;
@@ -183,6 +185,15 @@ export type Dispatch = {
   mismatch_approved_by?: string | null;
   mismatch_approved_at?: string | null;
   mismatch_rejection_reason?: string | null;
+  discount_amount?: number;
+  discount_reason?: string | null;
+  discount_approval_status?: 'none' | 'pending' | 'approved' | 'rejected' | null;
+  discount_requested_by?: string | null;
+  discount_approved_by?: string | null;
+  discount_requested_at?: string | null;
+  discount_approved_at?: string | null;
+  discount_rejection_reason?: string | null;
+  discount_details?: any;
   created_at: string;
   
   order?: Order | null;
@@ -201,6 +212,10 @@ export type DispatchItem = {
   quantity: number;
   unit: string;
   price?: number;
+  discount_per_kg?: number;
+  discount_per_unit?: number;
+  discount_amount?: number;
+  original_price?: number | null;
 };
 
 export type Weight = {

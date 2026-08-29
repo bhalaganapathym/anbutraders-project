@@ -168,6 +168,10 @@ class DispatchItemCreate(BaseModel):
     quantity: float
     unit: str
     price: Optional[float] = 0
+    discount_per_kg: Optional[float] = 0
+    discount_per_unit: Optional[float] = 0
+    discount_amount: Optional[float] = 0
+    original_price: Optional[float] = None
 
 class DispatchItemResponse(BaseModel):
     id: UUID
@@ -177,6 +181,10 @@ class DispatchItemResponse(BaseModel):
     quantity: float
     unit: str
     price: Optional[float] = 0
+    discount_per_kg: Optional[float] = 0
+    discount_per_unit: Optional[float] = 0
+    discount_amount: Optional[float] = 0
+    original_price: Optional[float] = None
     class Config:
         from_attributes = True
 
@@ -206,6 +214,26 @@ class PhotoResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class DiscountItemInput(BaseModel):
+    item_id: UUID
+    product_name: Optional[str] = None
+    discount_type: str  # 'per_kg', 'per_unit', 'flat'
+    discount_value: float
+    discount_amount: float
+    original_price: Optional[float] = None
+    new_price: float
+
+class DiscountApprovalRequest(BaseModel):
+    items: List[DiscountItemInput]
+    total_discount: float
+    reason: Optional[str] = None
+    requested_by: Optional[str] = "Cashier"
+
+class DiscountDecisionRequest(BaseModel):
+    decision: str  # 'approved' or 'rejected'
+    approved_by: Optional[str] = "Admin"
+    rejection_reason: Optional[str] = None
+
 class DispatchCreate(BaseModel):
     dispatch_no: str
     order_id: UUID
@@ -225,6 +253,15 @@ class DispatchCreate(BaseModel):
     mismatch_approved_by: Optional[str] = None
     mismatch_approved_at: Optional[datetime] = None
     mismatch_rejection_reason: Optional[str] = None
+    discount_amount: Optional[float] = 0
+    discount_reason: Optional[str] = None
+    discount_approval_status: Optional[str] = None
+    discount_requested_by: Optional[str] = None
+    discount_approved_by: Optional[str] = None
+    discount_requested_at: Optional[datetime] = None
+    discount_approved_at: Optional[datetime] = None
+    discount_rejection_reason: Optional[str] = None
+    discount_details: Optional[Any] = None
     items: Optional[List[DispatchItemCreate]] = []
     weights: Optional[List[WeightCreate]] = []
     photos: Optional[List[PhotoCreate]] = []
@@ -257,6 +294,15 @@ class DispatchResponse(BaseModel):
     mismatch_approved_by: Optional[str] = None
     mismatch_approved_at: Optional[datetime] = None
     mismatch_rejection_reason: Optional[str] = None
+    discount_amount: Optional[float] = 0
+    discount_reason: Optional[str] = None
+    discount_approval_status: Optional[str] = None
+    discount_requested_by: Optional[str] = None
+    discount_approved_by: Optional[str] = None
+    discount_requested_at: Optional[datetime] = None
+    discount_approved_at: Optional[datetime] = None
+    discount_rejection_reason: Optional[str] = None
+    discount_details: Optional[Any] = None
     sent_to_billing_at: Optional[datetime] = None
     ready_for_loading_at: Optional[datetime] = None
     loading_at: Optional[datetime] = None
@@ -368,10 +414,12 @@ class BillCreate(BaseModel):
     driver_id: Optional[UUID] = None
     payment_method: str
     total_amount: float
+    discount_amount: Optional[float] = 0.0
     paid_amount: Optional[float] = 0.0
     pending_amount: Optional[float] = 0.0
     credit_due_date: Optional[datetime] = None
     credit_days: Optional[int] = None
+    is_today_payment_overdue: Optional[bool] = False
     notes: Optional[str] = None
 
 class BillResponse(BaseModel):
@@ -382,10 +430,12 @@ class BillResponse(BaseModel):
     driver_id: Optional[UUID] = None
     payment_method: str
     total_amount: float
+    discount_amount: float = 0.0
     paid_amount: float = 0.0
     pending_amount: float = 0.0
     credit_due_date: Optional[datetime] = None
     credit_days: Optional[int] = None
+    is_today_payment_overdue: bool = False
     notes: Optional[str] = None
     created_at: datetime
     

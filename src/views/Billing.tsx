@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, type Dispatch, type Driver, type Customer } from '@/lib/api';
+import { api, type Dispatch, type Driver, type Customer, type DispatchItem } from '@/lib/api';
 import { useToast } from '@/components/Toast';
-import { FileText, Download, CreditCard, IndianRupee, AlertCircle, MessageSquare, Clock, Bell, CheckCircle2, User, MapPin, Phone, Truck, Package, Calendar } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { FileText, Download, CreditCard, IndianRupee, AlertCircle, MessageSquare, Clock, Bell, CheckCircle2, User, MapPin, Phone, Truck, Package, Calendar, Tag, Sparkles, XCircle, ShieldCheck, HelpCircle } from 'lucide-react';
 import Modal from '@/components/Modal';
+import DiscountApprovalModal from '@/components/DiscountApprovalModal';
 import { useRealtime } from '@/lib/useRealtime';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { openWhatsApp, shareWhatsAppWithMedia, buildDispatchWhatsAppMessage, DEFAULT_COMPANY_IMAGE_URL } from '@/lib/whatsapp';
 import { useTranslation } from '@/lib/i18n';
-import { round2 } from '@/lib/pricing';
+import { round2, calculateProductPrice, calculateDiscountedProductPrice } from '@/lib/pricing';
 
 function numberToWords(num: number): string {
   if (num === 0) return 'INR Zero Only';
@@ -71,6 +73,9 @@ export default function Billing() {
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const toast = useToast();
 
+  const { user } = useAuth();
+  const isAdmin = user?.role?.toLowerCase() === 'admin' || user?.username?.toLowerCase() === 'admin';
+
   const [selectedDispatch, setSelectedDispatch] = useState<Dispatch | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
   const [paidAmount, setPaidAmount] = useState<string>('');
@@ -85,12 +90,20 @@ export default function Billing() {
   const [notifyingDispatch, setNotifyingDispatch] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  // Discount States
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  const [itemDiscounts, setItemDiscounts] = useState<Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }>>({});
+  const [discountReason, setDiscountReason] = useState('');
+  const [requestingDiscount, setRequestingDiscount] = useState(false);
+  const [discountApprovalModalOpen, setDiscountApprovalModalOpen] = useState(false);
   
   const paymentMethods = [
     'full payment done',
     'partial payment done',
     'full payment on site',
     'partial payment on site',
+    'today payment',
     'credit'
   ];
 
@@ -134,6 +147,12 @@ export default function Billing() {
     } else if (paymentMethod === 'full payment on site' || paymentMethod === 'credit') {
       setPaidAmount('0.00');
       setToCollectAmount(total.toFixed(2));
+    } else if (paymentMethod === 'today payment') {
+      setPaidAmount('0.00');
+      setToCollectAmount(total.toFixed(2));
+      const todayStr = new Date().toISOString().split('T')[0];
+      setCreditDueDate(todayStr);
+      setCreditDays(0);
     } else if (paymentMethod.includes('partial')) {
       const currentPaid = round2(paidAmount);
       if (currentPaid > 0 && currentPaid < total) {
@@ -159,6 +178,109 @@ export default function Billing() {
     const toCol = parseFloat(val) || 0;
     const p = round2(Math.max(0, total - round2(toCol)));
     setPaidAmount(p.toFixed(2));
+  };
+
+  const openDiscountEditor = () => {
+    if (!selectedDispatch) return;
+    const initialDiscounts: Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }> = {};
+    if (Array.isArray(selectedDispatch.discount_details)) {
+      selectedDispatch.discount_details.forEach((d: any) => {
+        initialDiscounts[d.item_id] = {
+          type: d.discount_type || 'per_kg',
+          value: Number(d.discount_value) || 0
+        };
+      });
+    } else {
+      (selectedDispatch.items || []).forEach(item => {
+        if (item.discount_per_kg && item.discount_per_kg > 0) {
+          initialDiscounts[item.id] = { type: 'per_kg', value: Number(item.discount_per_kg) };
+        } else if (item.discount_per_unit && item.discount_per_unit > 0) {
+          initialDiscounts[item.id] = { type: 'per_unit', value: Number(item.discount_per_unit) };
+        } else {
+          initialDiscounts[item.id] = { type: 'per_kg', value: 0 };
+        }
+      });
+    }
+    setItemDiscounts(initialDiscounts);
+    setDiscountReason(selectedDispatch.discount_reason || '');
+    setIsDiscountModalOpen(true);
+  };
+
+  const handleSaveDiscount = async (asAdminApproval: boolean = false) => {
+    if (!selectedDispatch) return;
+    setRequestingDiscount(true);
+    try {
+      const discountItemsPayload = (selectedDispatch.items || []).map(item => {
+        const disc = itemDiscounts[item.id] || { type: 'per_kg', value: 0 };
+        const val = Number(disc.value) || 0;
+        const origPrice = round2(item.original_price ?? item.price ?? 0);
+        const origTotal = round2(origPrice * item.quantity);
+        
+        let itemDiscountAmt = 0;
+        let newLinePrice = origPrice;
+
+        if (val > 0) {
+          if (disc.type === 'per_kg') {
+            const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
+            const weight = recordedWt || (item.quantity * 1);
+            itemDiscountAmt = round2(weight * val);
+            newLinePrice = round2(Math.max(0, (origTotal - itemDiscountAmt) / item.quantity));
+          } else if (disc.type === 'per_unit') {
+            itemDiscountAmt = round2(item.quantity * val);
+            newLinePrice = round2(Math.max(0, origPrice - val));
+          } else {
+            itemDiscountAmt = round2(Math.min(origTotal, val));
+            newLinePrice = round2(Math.max(0, (origTotal - itemDiscountAmt) / item.quantity));
+          }
+        }
+
+        return {
+          item_id: item.id,
+          product_name: item.product_name,
+          discount_type: disc.type,
+          discount_value: val,
+          discount_amount: itemDiscountAmt,
+          original_price: origPrice,
+          new_price: newLinePrice
+        };
+      });
+
+      const totalDiscountAmt = round2(discountItemsPayload.reduce((s, it) => s + it.discount_amount, 0));
+
+      if (totalDiscountAmt <= 0) {
+        toast('Please enter a discount value greater than 0', 'error');
+        setRequestingDiscount(false);
+        return;
+      }
+
+      // Submit request
+      const updatedDisp: any = await api.post(`/dispatches/${selectedDispatch.id}/request-discount-approval`, {
+        items: discountItemsPayload,
+        total_discount: totalDiscountAmt,
+        reason: discountReason || 'Customer requested discount',
+        requested_by: user?.username || 'Cashier'
+      });
+
+      if (asAdminApproval && isAdmin) {
+        const approvedDisp: any = await api.post(`/dispatches/${selectedDispatch.id}/discount-decision`, {
+          decision: 'approved',
+          approved_by: user?.username || 'Admin',
+          rejection_reason: null
+        });
+        setSelectedDispatch(approvedDisp);
+        toast(`Discount of ₹${totalDiscountAmt.toFixed(2)} applied and approved!`, 'success');
+      } else {
+        setSelectedDispatch(updatedDisp);
+        toast(`Discount request for ₹${totalDiscountAmt.toFixed(2)} submitted for Admin approval`, 'success');
+      }
+
+      setIsDiscountModalOpen(false);
+      loadData();
+    } catch (err: any) {
+      toast(err.message || 'Failed to submit discount', 'error');
+    } finally {
+      setRequestingDiscount(false);
+    }
   };
 
   const sendDispatchNotification = async (disp: Dispatch) => {
@@ -222,7 +344,7 @@ export default function Billing() {
 
     const paidVal = round2(parseFloat(paidAmount) || 0);
     const toCollectVal = round2(parseFloat(toCollectAmount) || 0);
-    const isCredit = paymentMethod === 'credit' || toCollectVal > 0;
+    const isCredit = paymentMethod === 'credit' || paymentMethod === 'today payment' || toCollectVal > 0;
 
     try {
       await api.post('/bills', {
@@ -232,6 +354,7 @@ export default function Billing() {
         driver_id: null,
         payment_method: paymentMethod,
         total_amount: round2(totalAmount),
+        discount_amount: round2(selectedDispatch.discount_amount || 0),
         paid_amount: round2(paidVal),
         pending_amount: round2(toCollectVal),
         credit_due_date: isCredit && creditDueDate ? new Date(creditDueDate).toISOString() : null,
@@ -530,16 +653,115 @@ export default function Billing() {
               </div>
             </div>
 
+            {/* Discount Alert & Actions Banner */}
+            {selectedDispatch.discount_approval_status === 'pending' && (
+              <div className="p-3.5 bg-amber-500/10 border-2 border-amber-400 dark:border-amber-600/60 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <Clock size={18} className="text-amber-600 animate-pulse shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-amber-900 dark:text-amber-200 text-sm">
+                      Discount Approval Pending (-₹{round2(selectedDispatch.discount_amount || 0).toFixed(2)})
+                    </span>
+                    <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
+                      Requested by {selectedDispatch.discount_requested_by || 'Cashier'} · Remarks: {selectedDispatch.discount_reason || 'Customer discount requested'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => setDiscountApprovalModalOpen(true)}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shrink-0 shadow-sm flex items-center gap-1"
+                    >
+                      <ShieldCheck size={14} /> Review & Approve
+                    </button>
+                  ) : (
+                    <span className="px-2.5 py-1 bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold rounded-lg">
+                      Waiting for Admin
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={openDiscountEditor}
+                    className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-lg hover:bg-slate-50"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {selectedDispatch.discount_approval_status === 'approved' && (
+              <div className="p-3.5 bg-emerald-500/10 border-2 border-emerald-400 dark:border-emerald-600/60 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-emerald-900 dark:text-emerald-200 text-sm">
+                      Discount of ₹{round2(selectedDispatch.discount_amount || 0).toFixed(2)} Approved & Active
+                    </span>
+                    <p className="text-emerald-700 dark:text-emerald-400 text-xs mt-0.5">
+                      Approved by {selectedDispatch.discount_approved_by || 'Admin'}. Discounted rates have updated all totals.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={openDiscountEditor}
+                  className="px-3 py-1.5 bg-emerald-600/20 text-emerald-800 dark:text-emerald-300 font-bold rounded-lg hover:bg-emerald-600/30 transition"
+                >
+                  Adjust Discount
+                </button>
+              </div>
+            )}
+
+            {selectedDispatch.discount_approval_status === 'rejected' && (
+              <div className="p-3.5 bg-rose-500/10 border-2 border-rose-400 dark:border-rose-600/60 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <XCircle size={18} className="text-rose-600 shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-rose-900 dark:text-rose-200 text-sm">
+                      Discount Request Rejected
+                    </span>
+                    <p className="text-rose-700 dark:text-rose-400 text-xs mt-0.5">
+                      {selectedDispatch.discount_rejection_reason || 'Standard catalog rates active.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={openDiscountEditor}
+                  className="px-3 py-1.5 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 transition"
+                >
+                  Re-apply Discount
+                </button>
+              </div>
+            )}
+
             {/* Order Items Section - High Contrast, Bold & Mobile-Optimized */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Package size={18} className="text-blue-600 dark:text-blue-400" />
-                  Order Items ({selectedDispatch.items?.length || 0})
-                </h3>
-                <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">
-                  Tax Inclusive
-                </span>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Package size={18} className="text-blue-600 dark:text-blue-400" />
+                    Order Items ({selectedDispatch.items?.length || 0})
+                  </h3>
+                  <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">
+                    Tax Inclusive
+                  </span>
+                </div>
+                
+                {/* Apply / Edit Discount Button */}
+                <button
+                  type="button"
+                  onClick={openDiscountEditor}
+                  className="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white flex items-center gap-1.5 shadow-sm shadow-amber-500/20 transition active:scale-95"
+                >
+                  <Tag size={13} />
+                  {selectedDispatch.discount_amount && selectedDispatch.discount_amount > 0
+                    ? `Discount Active (-₹${round2(selectedDispatch.discount_amount).toFixed(2)})`
+                    : '🎁 Apply / Edit Discount'}
+                </button>
               </div>
 
               {/* Mobile View (< 768px): Bold, Non-Scrollable Cards */}
@@ -547,6 +769,8 @@ export default function Billing() {
                 {selectedDispatch.items?.map((item, idx) => {
                   const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
                   const lineTotal = (item.price || 0) * item.quantity;
+                  const itemDiscount = item.discount_amount || (item.discount_per_kg ? item.discount_per_kg * (recordedWt || item.quantity) : 0);
+
                   return (
                     <div 
                       key={item.id || idx} 
@@ -554,9 +778,16 @@ export default function Billing() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                            Item #{idx + 1}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                              Item #{idx + 1}
+                            </span>
+                            {itemDiscount > 0 && (
+                              <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+                                {item.discount_per_kg ? `-₹${item.discount_per_kg.toFixed(2)}/kg` : `-₹${itemDiscount.toFixed(2)}`}
+                              </span>
+                            )}
+                          </div>
                           <h4 className="text-base font-black text-slate-900 dark:text-slate-100 mt-1.5 leading-snug">
                             {item.product_name}
                           </h4>
@@ -600,6 +831,7 @@ export default function Billing() {
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">Item Name</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">No. of Items</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Recorded Weight</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Discount</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Total Price</th>
                     </tr>
                   </thead>
@@ -607,6 +839,8 @@ export default function Billing() {
                     {selectedDispatch.items?.map((item, idx) => {
                       const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
                       const lineTotal = (item.price || 0) * item.quantity;
+                      const itemDiscount = item.discount_amount || (item.discount_per_kg ? item.discount_per_kg * (recordedWt || item.quantity) : 0);
+
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                           <td className="px-5 py-4 font-black text-slate-900 dark:text-slate-100 text-sm">
@@ -619,6 +853,15 @@ export default function Billing() {
                             <span className={recordedWt ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}>
                               {recordedWt ? `${recordedWt} kg` : '—'}
                             </span>
+                          </td>
+                          <td className="px-5 py-4 text-right font-bold text-sm">
+                            {itemDiscount > 0 ? (
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                {item.discount_per_kg ? `-₹${item.discount_per_kg.toFixed(2)}/kg` : `-₹${itemDiscount.toFixed(2)}`}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
                           <td className="px-5 py-4 text-right font-black text-emerald-600 dark:text-emerald-400 text-base">
                             ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -646,6 +889,20 @@ export default function Billing() {
                 ))}
               </select>
             </div>
+
+            {/* Today Payment Specific Info Banner */}
+            {paymentMethod === 'today payment' && (
+              <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-300 dark:border-amber-700 p-4 rounded-xl space-y-1.5 text-xs">
+                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-extrabold text-sm">
+                  <Clock size={16} className="text-amber-600 animate-pulse" />
+                  <span>Today Evening Payment (Pay Before 6:00 PM)</span>
+                </div>
+                <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
+                  Customer agreed to clear the full bill amount before <strong>6:00 PM today</strong>.
+                  If the bill remains unpaid after the evening cutoff, the remaining balance will automatically transfer to active <strong>Customer Credit Due</strong> and send high-priority alert notifications to Admin & Billing.
+                </p>
+              </div>
+            )}
 
             {/* Payment Details / Amount Paid & To Collect Breakdown */}
             <div className="bg-amber-50/50 dark:bg-slate-900 border border-amber-200/80 dark:border-slate-700 p-4 rounded-xl space-y-3">
@@ -918,6 +1175,256 @@ export default function Billing() {
           </div>
         )}
       </Modal>
+
+      {/* Item Discount Editor Modal */}
+      <Modal open={isDiscountModalOpen} onClose={() => setIsDiscountModalOpen(false)} title="🎁 Apply / Edit Item Discounts" size="lg">
+        {selectedDispatch && (
+          <div className="space-y-4">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs space-y-1">
+              <div className="flex items-center justify-between font-bold">
+                <span className="text-amber-900 dark:text-amber-300">
+                  {selectedDispatch.dispatch_no} — {selectedDispatch.customer?.name}
+                </span>
+                <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                  {isAdmin ? 'Admin Direct Edit & Approval' : 'Subject to Admin Approval'}
+                </span>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 text-[11px]">
+                Enter price discount per kg (e.g. 0.50 for ₹0.50 off/kg on steel), per unit, or flat reduction for each line item below.
+              </p>
+            </div>
+
+            {/* List of items with discount controls */}
+            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+              {(selectedDispatch.items || []).map((item: DispatchItem, idx: number) => {
+                const disc = itemDiscounts[item.id] || { type: 'per_kg', value: 0 };
+                const val = Number(disc.value) || 0;
+                const origPrice = round2(item.original_price ?? item.price ?? 0);
+                const origTotal = round2(origPrice * item.quantity);
+                const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
+                const weight = recordedWt || (item.quantity * 1);
+
+                let itemDiscountAmt = 0;
+                let newLinePrice = origPrice;
+
+                if (val > 0) {
+                  if (disc.type === 'per_kg') {
+                    itemDiscountAmt = round2(weight * val);
+                    newLinePrice = round2(Math.max(0, (origTotal - itemDiscountAmt) / item.quantity));
+                  } else if (disc.type === 'per_unit') {
+                    itemDiscountAmt = round2(item.quantity * val);
+                    newLinePrice = round2(Math.max(0, origPrice - val));
+                  } else {
+                    itemDiscountAmt = round2(Math.min(origTotal, val));
+                    newLinePrice = round2(Math.max(0, (origTotal - itemDiscountAmt) / item.quantity));
+                  }
+                }
+
+                const finalLineTotal = round2(Math.max(0, origTotal - itemDiscountAmt));
+
+                return (
+                  <div
+                    key={item.id || idx}
+                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 dark:text-slate-100">
+                          {item.product_name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          {item.quantity} {item.unit} {recordedWt ? `· Recorded Wt: ${recordedWt} kg` : ''} · Catalog Rate: ₹{origPrice.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Line Total</span>
+                        <p className="text-xs font-black font-mono text-slate-800 dark:text-slate-200">
+                          ₹{finalLineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 items-end">
+                      <div>
+                        <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">
+                          Discount Mode
+                        </label>
+                        <select
+                          value={disc.type}
+                          onChange={(e) =>
+                            setItemDiscounts({
+                              ...itemDiscounts,
+                              [item.id]: { ...disc, type: e.target.value as any }
+                            })
+                          }
+                          className="input py-1 text-xs font-semibold"
+                        >
+                          <option value="per_kg">₹ / kg reduction</option>
+                          <option value="per_unit">₹ / unit reduction</option>
+                          <option value="flat">₹ flat reduction</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">
+                          Discount Value ({disc.type === 'per_kg' ? '₹/kg' : disc.type === 'per_unit' ? '₹/unit' : '₹ flat'})
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={disc.value || ''}
+                            onChange={(e) =>
+                              setItemDiscounts({
+                                ...itemDiscounts,
+                                [item.id]: { ...disc, value: parseFloat(e.target.value) || 0 }
+                              })
+                            }
+                            placeholder="0.50"
+                            className="input pl-6 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200 dark:border-emerald-800 text-right">
+                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 block">
+                          Savings on Line
+                        </span>
+                        <span className="text-xs font-black font-mono text-emerald-800 dark:text-emerald-300">
+                          -₹{itemDiscountAmt.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Remarks / Reason input */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Discount Reason / Remarks:
+              </label>
+              <input
+                type="text"
+                value={discountReason}
+                onChange={(e) => setDiscountReason(e.target.value)}
+                placeholder="e.g. Regular bulk customer discount request / 50p per kg off..."
+                className="input text-xs"
+              />
+            </div>
+
+            {/* Total Discount Summary Box */}
+            {(() => {
+              let sumOriginal = 0;
+              let sumDiscount = 0;
+
+              (selectedDispatch.items || []).forEach(item => {
+                const disc = itemDiscounts[item.id] || { type: 'per_kg', value: 0 };
+                const val = Number(disc.value) || 0;
+                const origPrice = round2(item.original_price ?? item.price ?? 0);
+                const origTotal = round2(origPrice * item.quantity);
+                const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
+                const weight = recordedWt || (item.quantity * 1);
+
+                sumOriginal += origTotal;
+
+                if (val > 0) {
+                  if (disc.type === 'per_kg') {
+                    sumDiscount += round2(weight * val);
+                  } else if (disc.type === 'per_unit') {
+                    sumDiscount += round2(item.quantity * val);
+                  } else {
+                    sumDiscount += round2(Math.min(origTotal, val));
+                  }
+                }
+              });
+
+              sumOriginal = round2(sumOriginal);
+              sumDiscount = round2(sumDiscount);
+              const sumFinal = round2(Math.max(0, sumOriginal - sumDiscount));
+
+              return (
+                <div className="grid grid-cols-3 gap-2 p-3 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Original Total</span>
+                    <p className="text-xs font-bold font-mono text-slate-700 dark:text-slate-300">
+                      ₹{sumOriginal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase">Total Discount</span>
+                    <p className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
+                      -₹{sumDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-indigo-600 uppercase">Revised Bill</span>
+                    <p className="text-sm font-black font-mono text-indigo-600 dark:text-indigo-400">
+                      ₹{sumFinal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsDiscountModalOpen(false)}
+                className="btn-secondary text-xs px-4 py-2"
+                disabled={requestingDiscount}
+              >
+                Cancel
+              </button>
+
+              {isAdmin ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveDiscount(false)}
+                    disabled={requestingDiscount}
+                    className="btn-secondary text-xs px-3 py-2 font-bold"
+                  >
+                    Save as Pending
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveDiscount(true)}
+                    disabled={requestingDiscount}
+                    className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2 flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                  >
+                    <ShieldCheck size={14} /> {requestingDiscount ? 'Applying...' : 'Apply & Approve (Admin)'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleSaveDiscount(false)}
+                  disabled={requestingDiscount}
+                  className="btn-primary bg-amber-600 hover:bg-amber-700 text-white text-xs px-4 py-2 flex items-center gap-1.5 shadow-md shadow-amber-600/20"
+                >
+                  <Tag size={14} /> {requestingDiscount ? 'Submitting...' : 'Submit for Admin Approval'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Admin Discount Approval Review Modal */}
+      <DiscountApprovalModal
+        open={discountApprovalModalOpen}
+        onClose={() => setDiscountApprovalModalOpen(false)}
+        dispatch={selectedDispatch}
+        onDecisionSubmitted={() => {
+          loadData();
+          setSelectedDispatch(null);
+        }}
+      />
     </div>
   );
 }

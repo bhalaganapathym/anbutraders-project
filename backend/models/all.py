@@ -121,6 +121,18 @@ class Dispatch(Base):
     mismatch_approved_by = Column(String, nullable=True)
     mismatch_approved_at = Column(DateTime(timezone=True), nullable=True)
     mismatch_rejection_reason = Column(String, nullable=True)
+    
+    # Discount Fields & Admin Approval
+    discount_amount = Column(Numeric, default=0, nullable=False)
+    discount_reason = Column(String, nullable=True)
+    discount_approval_status = Column(String, nullable=True)  # 'none', 'pending', 'approved', 'rejected'
+    discount_requested_by = Column(String, nullable=True)
+    discount_approved_by = Column(String, nullable=True)
+    discount_requested_at = Column(DateTime(timezone=True), nullable=True)
+    discount_approved_at = Column(DateTime(timezone=True), nullable=True)
+    discount_rejection_reason = Column(String, nullable=True)
+    discount_details = Column(JSON, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     
     order = relationship("Order")
@@ -139,6 +151,10 @@ class DispatchItem(Base):
     quantity = Column(Numeric, default=1, nullable=False)
     unit = Column(String, default="piece", nullable=False)
     price = Column(Numeric, default=0, nullable=True)
+    discount_per_kg = Column(Numeric, default=0, nullable=True)
+    discount_per_unit = Column(Numeric, default=0, nullable=True)
+    discount_amount = Column(Numeric, default=0, nullable=True)
+    original_price = Column(Numeric, nullable=True)
     
     dispatch = relationship("Dispatch", back_populates="items")
 
@@ -184,10 +200,12 @@ class Bill(Base):
     driver_id = Column(UUID(as_uuid=True), ForeignKey("drivers.id", ondelete="SET NULL"), nullable=True, index=True)
     payment_method = Column(String, nullable=False)
     total_amount = Column(Numeric, default=0, nullable=False)
+    discount_amount = Column(Numeric, default=0, nullable=False)
     paid_amount = Column(Numeric, default=0, nullable=False)
     pending_amount = Column(Numeric, default=0, nullable=False)
     credit_due_date = Column(DateTime(timezone=True), nullable=True)
     credit_days = Column(Integer, nullable=True)
+    is_today_payment_overdue = Column(Boolean, default=False)
     notes = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 

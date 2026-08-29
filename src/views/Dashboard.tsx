@@ -9,6 +9,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import WeightMismatchApprovalModal from '@/components/WeightMismatchApprovalModal';
+import DiscountApprovalModal from '@/components/DiscountApprovalModal';
 import {
   ShoppingCart,
   Truck,
@@ -28,6 +29,7 @@ import {
   Tag,
   Mic,
   AlertTriangle,
+  ShieldCheck,
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
@@ -137,8 +139,16 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   const [selectedMismatchDispatch, setSelectedMismatchDispatch] = useState<Dispatch | null>(null);
   const [mismatchModalOpen, setMismatchModalOpen] = useState(false);
 
+  // Discount Approval Modal State
+  const [selectedDiscountDispatch, setSelectedDiscountDispatch] = useState<Dispatch | null>(null);
+  const [discountModalOpen, setDiscountModalOpen] = useState(false);
+
   const pendingMismatchDispatches = recentDispatches.filter(
     (d) => d.mismatch_approval_status === 'pending'
+  );
+
+  const pendingDiscountDispatches = recentDispatches.filter(
+    (d) => d.discount_approval_status === 'pending'
   );
 
   const load = useCallback(async () => {
@@ -146,6 +156,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
       const [data, adv] = await Promise.all([
         api.get('/dashboard/stats'),
         api.get('/orders/advance-metrics').catch(() => null),
+        api.post('/bills/check-today-payments').catch(() => null),
       ]);
 
       if (adv) setAdvanceMetrics(adv);
@@ -191,6 +202,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   useRealtime('dispatches', load);
   useRealtime('customers', load);
   useRealtime('orders', load);
+  useRealtime('bills', load);
   useRealtime('products', load);
 
   const quickAccessItems = [
@@ -344,6 +356,80 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                     className="w-full btn-primary py-2.5 px-3 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center justify-center gap-1.5 transition active:scale-95"
                   >
                     <Mic size={15} className="animate-pulse" /> Listen Voice Note & Approve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 1.6. Pending Discount Approvals (Prominent Admin Alert Card) */}
+      {pendingDiscountDispatches.length > 0 && (
+        <section className="rounded-2xl border-2 border-emerald-500/80 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 p-5 shadow-lg relative overflow-hidden animate-fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-emerald-300/60 dark:border-emerald-900/60">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md animate-pulse">
+                <Tag size={22} />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-emerald-950 dark:text-emerald-100 flex items-center gap-2">
+                  Item Discount Approvals Requested
+                  <span className="badge bg-emerald-600 text-white text-xs font-black px-2 py-0.5 shadow-sm">
+                    {pendingDiscountDispatches.length} PENDING
+                  </span>
+                </h2>
+                <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-0.5">
+                  Billing staff requested item rate discounts for customers. Review item breakdown and approve or reject.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {pendingDiscountDispatches.map((d) => (
+              <div
+                key={d.id}
+                className="rounded-xl border border-emerald-300 dark:border-emerald-800/80 bg-white dark:bg-slate-800 p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-black text-sm text-slate-800 dark:text-white">
+                      {d.dispatch_no}
+                    </span>
+                    <span className="text-[11px] font-black text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-full flex items-center gap-1 font-mono">
+                      -₹{(d.discount_amount || 0).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                    <p>
+                      <strong className="text-slate-800 dark:text-white">Customer: </strong>
+                      {d.customers?.name || (d as any).customer?.name || 'Customer'}
+                    </p>
+                    {d.discount_requested_by && (
+                      <p>
+                        <strong className="text-slate-800 dark:text-white">Requested by: </strong>
+                        {d.discount_requested_by}
+                      </p>
+                    )}
+                    {d.discount_reason && (
+                      <p className="text-[11px] text-emerald-900 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200 dark:border-emerald-900/60 line-clamp-2">
+                        💬 "{d.discount_reason}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-700/60">
+                  <button
+                    onClick={() => {
+                      setSelectedDiscountDispatch(d);
+                      setDiscountModalOpen(true);
+                    }}
+                    className="w-full btn-primary py-2.5 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center justify-center gap-1.5 transition active:scale-95"
+                  >
+                    <ShieldCheck size={15} /> Review & Decide Discount
                   </button>
                 </div>
               </div>
@@ -750,6 +836,14 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         onClose={() => setMismatchModalOpen(false)}
         dispatch={selectedMismatchDispatch}
         onSuccess={load}
+      />
+
+      {/* Admin Discount Approval Modal */}
+      <DiscountApprovalModal
+        open={discountModalOpen}
+        onClose={() => setDiscountModalOpen(false)}
+        dispatch={selectedDiscountDispatch}
+        onDecisionSubmitted={load}
       />
     </div>
   );

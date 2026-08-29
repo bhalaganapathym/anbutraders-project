@@ -122,3 +122,99 @@ export function calculateProductPrice(
     displayBreakdown
   };
 }
+
+export interface DiscountedPriceInfo extends ProductPriceInfo {
+  discountType: 'per_kg' | 'per_unit' | 'flat' | 'none';
+  discountValue: number;
+  discountPerKg: number;
+  discountPerUnit: number;
+  totalDiscountAmount: number;
+  discountedRatePerKg: number;
+  discountedUnitPrice: number;
+  finalTotalPrice: number;
+}
+
+export function calculateDiscountedProductPrice(
+  product: {
+    category?: string | null;
+    name?: string | null;
+    price?: number | string | null;
+    standard_weight?: number | string | null;
+    unit?: string | null;
+    brand?: string | null;
+  } | null | undefined,
+  quantity: number = 1,
+  discount?: {
+    type: 'per_kg' | 'per_unit' | 'flat';
+    value: number;
+  } | null
+): DiscountedPriceInfo {
+  const base = calculateProductPrice(product, quantity);
+  if (!discount || !discount.value || discount.value <= 0) {
+    return {
+      ...base,
+      discountType: 'none',
+      discountValue: 0,
+      discountPerKg: 0,
+      discountPerUnit: 0,
+      totalDiscountAmount: 0,
+      discountedRatePerKg: base.ratePerKg,
+      discountedUnitPrice: base.unitPrice,
+      finalTotalPrice: base.totalPrice
+    };
+  }
+
+  const val = round2(discount.value);
+  let discountPerKg = 0;
+  let discountPerUnit = 0;
+  let totalDiscountAmount = 0;
+  let discountedRatePerKg = base.ratePerKg;
+  let discountedUnitPrice = base.unitPrice;
+  let finalTotalPrice = base.totalPrice;
+
+  if (discount.type === 'per_kg') {
+    discountPerKg = val;
+    discountedRatePerKg = round2(Math.max(0, base.ratePerKg - val));
+    if (base.isSteel && base.standardWeight > 0) {
+      discountPerUnit = round2(discountPerKg * base.standardWeight);
+      discountedUnitPrice = round2(Math.max(0, base.unitPrice - discountPerUnit));
+      totalDiscountAmount = round2(base.totalWeight * discountPerKg);
+      finalTotalPrice = round2(Math.max(0, base.totalPrice - totalDiscountAmount));
+    } else {
+      totalDiscountAmount = round2(base.totalWeight * discountPerKg);
+      finalTotalPrice = round2(Math.max(0, base.totalPrice - totalDiscountAmount));
+    }
+  } else if (discount.type === 'per_unit') {
+    discountPerUnit = val;
+    discountedUnitPrice = round2(Math.max(0, base.unitPrice - val));
+    totalDiscountAmount = round2(quantity * val);
+    finalTotalPrice = round2(Math.max(0, base.totalPrice - totalDiscountAmount));
+    if (base.standardWeight > 0) {
+      discountPerKg = round2(val / base.standardWeight);
+      discountedRatePerKg = round2(Math.max(0, base.ratePerKg - discountPerKg));
+    }
+  } else if (discount.type === 'flat') {
+    totalDiscountAmount = round2(Math.min(base.totalPrice, val));
+    finalTotalPrice = round2(Math.max(0, base.totalPrice - totalDiscountAmount));
+    if (quantity > 0) {
+      discountPerUnit = round2(totalDiscountAmount / quantity);
+      discountedUnitPrice = round2(Math.max(0, base.unitPrice - discountPerUnit));
+    }
+    if (base.totalWeight > 0) {
+      discountPerKg = round2(totalDiscountAmount / base.totalWeight);
+      discountedRatePerKg = round2(Math.max(0, base.ratePerKg - discountPerKg));
+    }
+  }
+
+  return {
+    ...base,
+    discountType: discount.type,
+    discountValue: val,
+    discountPerKg,
+    discountPerUnit,
+    totalDiscountAmount,
+    discountedRatePerKg,
+    discountedUnitPrice,
+    finalTotalPrice
+  };
+}

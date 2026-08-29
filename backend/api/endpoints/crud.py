@@ -7,7 +7,12 @@ from typing import List, Optional
 from uuid import UUID
 from api.deps import get_db, get_current_active_user
 from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification, Bill, Driver
-from schemas.all import CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest, OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, DispatchDraftUpdate, WeightMismatchDecision, NotificationCreate, NotificationResponse, BulkDeleteRequest
+from schemas.all import (
+    CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest,
+    OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, DispatchDraftUpdate,
+    WeightMismatchDecision, DiscountApprovalRequest, DiscountDecisionRequest,
+    NotificationCreate, NotificationResponse, BulkDeleteRequest
+)
 from core.websocket import manager
 
 router = APIRouter()
@@ -771,6 +776,104 @@ def decide_mismatch_approval(
     db.commit()
     db.refresh(dispatch)
 
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return dispatch
+
+@router.post("/dispatches/{id}/request-discount-approval", response_model=DispatchResponse)
+def request_discount_approval(
+    id: UUID,
+    payload: DiscountApprovalRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    
+    dispatch.discount_amount = round(float(payload.total_discount or 0), 2)
+    dispatch.discount_reason = payload.reason
+    dispatch.discount_approval_status = "pending"
+    dispatch.discount_requested_by = payload.requested_by or "Cashier"
+    dispatch.discount_requested_at = datetime.now(timezone.utc)
+    dispatch.discount_rejection_reason = None
+    dispatch.discount_details = [item.model_dump(mode="json") for item in payload.items]
+    
+    customer_name = dispatch.customer.name if dispatch.customer else "Customer"
+    notif = Notification(
+        type="discount_approval_request",
+        title=f"🎁 Discount Approval Requested — {dispatch.dispatch_no}",
+        message=f"Cashier requested ₹{payload.total_discount:,.2f} discount for {customer_name} ({dispatch.dispatch_no}). Reason: {payload.reason or 'Customer requested discount'}. Admin review required.",
+        dispatch_id=dispatch.id,
+        order_id=dispatch.order_id,
+        customer_name=customer_name
+    )
+    db.add(notif)
+    db.commit()
+    db.refresh(dispatch)
+    
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return dispatch
+
+@router.post("/dispatches/{id}/discount-decision", response_model=DispatchResponse)
+def decide_discount_approval(
+    id: UUID,
+    payload: DiscountDecisionRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+
+    decision = payload.decision.lower()  # 'approved' or 'rejected'
+    dispatch.discount_approval_status = decision
+    dispatch.discount_approved_by = payload.approved_by or "Admin"
+    dispatch.discount_approved_at = datetime.now(timezone.utc)
+    
+    customer_name = dispatch.customer.name if dispatch.customer else "Customer"
+    
+    if decision == "approved":
+        dispatch.discount_rejection_reason = None
+        # Apply updated item prices to dispatch_items
+        if dispatch.discount_details and isinstance(dispatch.discount_details, list):
+            for d_item in dispatch.discount_details:
+                item_id_str = str(d_item.get("item_id"))
+                item = db.query(DispatchItem).filter(DispatchItem.id == item_id_str, DispatchItem.dispatch_id == id).first()
+                if item:
+                    if item.original_price is None:
+                        item.original_price = item.price
+                    item.price = round(float(d_item.get("new_price", item.price)), 2)
+                    if d_item.get("discount_type") == "per_kg":
+                        item.discount_per_kg = round(float(d_item.get("discount_value", 0)), 2)
+                    elif d_item.get("discount_type") == "per_unit":
+                        item.discount_per_unit = round(float(d_item.get("discount_value", 0)), 2)
+                    item.discount_amount = round(float(d_item.get("discount_amount", 0)), 2)
+        
+        notif = Notification(
+            type="discount_approved",
+            title=f"✅ Discount Approved — {dispatch.dispatch_no}",
+            message=f"Admin approved discount of ₹{float(dispatch.discount_amount or 0):,.2f} for {customer_name} ({dispatch.dispatch_no}). Ready to complete billing.",
+            dispatch_id=dispatch.id,
+            order_id=dispatch.order_id,
+            customer_name=customer_name
+        )
+    else:
+        dispatch.discount_rejection_reason = payload.rejection_reason or "Discount request rejected by admin."
+        notif = Notification(
+            type="discount_rejected",
+            title=f"❌ Discount Rejected — {dispatch.dispatch_no}",
+            message=f"Admin rejected discount request for {customer_name} ({dispatch.dispatch_no}): {dispatch.discount_rejection_reason}",
+            dispatch_id=dispatch.id,
+            order_id=dispatch.order_id,
+            customer_name=customer_name
+        )
+
+    db.add(notif)
+    db.commit()
+    db.refresh(dispatch)
+    
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
     return dispatch

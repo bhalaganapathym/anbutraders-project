@@ -32,6 +32,19 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
         bill_data["paid_amount"] = round(float(bill_data["paid_amount"]), 2)
     if bill_data.get("pending_amount") is not None:
         bill_data["pending_amount"] = round(float(bill_data["pending_amount"]), 2)
+    
+    # Carry over discount amount from dispatch if available
+    disc_amt = bill_data.get("discount_amount") or dispatch.discount_amount or 0
+    bill_data["discount_amount"] = round(float(disc_amt), 2)
+    
+    # Handle 'today payment' method: defaults due to today evening 18:00 IST (12:30 UTC)
+    if bill_in.payment_method == 'today payment':
+        if not bill_data.get("credit_due_date"):
+            now_utc = datetime.now(timezone.utc)
+            today_evening = now_utc.replace(hour=12, minute=30, second=0, microsecond=0) # 18:00 IST
+            bill_data["credit_due_date"] = today_evening
+        bill_data["credit_days"] = 0
+
     bill = Bill(**bill_data)
     db.add(bill)
     
@@ -47,8 +60,8 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
         
     from models.all import Notification, Customer
     customer = db.query(Customer).filter(Customer.id == dispatch.customer_id).first()
-    if customer and bill_in.credit_due_date:
-        customer.credit_due_date = bill_in.credit_due_date
+    if customer and bill_data.get("credit_due_date"):
+        customer.credit_due_date = bill_data["credit_due_date"]
 
     cust_name = customer.name if customer else (dispatch.customer.name if dispatch.customer else "Unknown")
     cust_phone = customer.phone if customer else "N/A"
@@ -98,3 +111,45 @@ def update_bill(id: UUID, bill_in: BillCreate, background_tasks: BackgroundTasks
     db.refresh(bill)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "bills"})
     return bill
+
+@router.post("/check-today-payments")
+def check_today_payments(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    from models.all import Notification, Customer, Dispatch
+    now_utc = datetime.now(timezone.utc)
+    
+    # Check bills with payment_method == 'today payment' that are pending and due
+    overdue_bills = db.query(Bill).filter(
+        Bill.payment_method == "today payment",
+        Bill.pending_amount > 0,
+        Bill.is_today_payment_overdue == False,
+        Bill.credit_due_date != None,
+        Bill.credit_due_date <= now_utc
+    ).all()
+
+    overdue_count = 0
+    for b in overdue_bills:
+        b.is_today_payment_overdue = True
+        cust = db.query(Customer).filter(Customer.id == b.customer_id).first()
+        cust_name = cust.name if cust else "Customer"
+        disp = db.query(Dispatch).filter(Dispatch.id == b.dispatch_id).first()
+        disp_no = disp.dispatch_no if disp else "Bill"
+        
+        # High-priority alert notification to Admin and Billing
+        notif = Notification(
+            type="today_payment_overdue",
+            title=f"⚠️ Unpaid Today Payment Alert — {disp_no}",
+            message=f"Customer {cust_name} has an unpaid balance of ₹{float(b.pending_amount):,.2f} on {disp_no} due today evening. Shifted to active Customer Credit Due ledger.",
+            dispatch_id=b.dispatch_id,
+            order_id=b.order_id,
+            customer_name=cust_name
+        )
+        db.add(notif)
+        overdue_count += 1
+        
+    if overdue_count > 0:
+        db.commit()
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "bills"})
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
+
+    return {"status": "ok", "overdue_count": overdue_count}
