@@ -10,12 +10,24 @@ export interface ProductPriceInfo {
 }
 
 /**
+ * Rounds any number to exactly 2 decimal places with precision.
+ * e.g. 52129.689999999 -> 52129.69
+ */
+export function round2(num: number | string | null | undefined): number {
+  if (num === null || num === undefined || num === '') return 0;
+  const n = Number(num);
+  if (isNaN(n) || !isFinite(n)) return 0;
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
  * Calculates accurate pricing for any product in Anbu Traders.
  * For steel products (e.g. Sumangala TMT, iSteel, Tata Steel):
  * - Total Weight = Quantity x Standard Weight (kg)
  * - Rate = Rate per kg (₹/kg)
  * - Unit Price = Standard Weight x Rate per kg
  * - Total Line Price = Total Weight x Rate per kg = Quantity x Unit Price
+ * All weights and prices are rounded to 2 decimal places.
  */
 export function calculateProductPrice(
   product: {
@@ -42,7 +54,7 @@ export function calculateProductPrice(
   }
 
   const pPrice = Number(product.price || 0);
-  const stdWeight = Number(product.standard_weight || 0);
+  const stdWeight = round2(product.standard_weight || 0);
   const unit = (product.unit || 'nos').toLowerCase();
   const cat = (product.category || '').toLowerCase();
   const name = (product.name || '').toLowerCase();
@@ -74,14 +86,16 @@ export function calculateProductPrice(
       }
     }
 
-    const totalWeight = quantity * stdWeight;
-    const totalPrice = totalWeight * ratePerKg;
-    const displayBreakdown = `${quantity} nos × ${stdWeight} kg = ${totalWeight.toFixed(2)} kg @ ₹${ratePerKg.toFixed(2)}/kg`;
+    const totalWeight = round2(quantity * stdWeight);
+    const roundedRatePerKg = round2(ratePerKg);
+    const totalPrice = round2(totalWeight * roundedRatePerKg);
+    const roundedUnitPrice = round2(unitPrice);
+    const displayBreakdown = `${quantity} nos × ${stdWeight} kg = ${totalWeight.toFixed(2)} kg @ ₹${roundedRatePerKg.toFixed(2)}/kg`;
 
     return {
       isSteel: true,
-      ratePerKg,
-      unitPrice,
+      ratePerKg: roundedRatePerKg,
+      unitPrice: roundedUnitPrice,
       standardWeight: stdWeight,
       totalWeight,
       totalPrice,
@@ -91,10 +105,10 @@ export function calculateProductPrice(
   }
 
   // Non-steel products (Cement, accessories, blocks, etc.)
-  const unitPrice = pPrice;
-  const totalWeight = stdWeight > 0 ? quantity * stdWeight : 0;
-  const totalPrice = quantity * unitPrice;
-  const ratePerKg = stdWeight > 0 ? unitPrice / stdWeight : 0;
+  const unitPrice = round2(pPrice);
+  const totalWeight = stdWeight > 0 ? round2(quantity * stdWeight) : 0;
+  const totalPrice = round2(quantity * unitPrice);
+  const ratePerKg = stdWeight > 0 ? round2(unitPrice / stdWeight) : 0;
   const displayBreakdown = `${quantity} ${unit} × ₹${unitPrice.toFixed(2)}`;
 
   return {

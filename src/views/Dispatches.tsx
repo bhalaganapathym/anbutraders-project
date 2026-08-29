@@ -16,7 +16,7 @@ import DispatchDashboard from './DispatchDashboard';
 import WeightMismatchApprovalModal from '@/components/WeightMismatchApprovalModal';
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
 import { useTranslation } from '@/lib/i18n';
-import { calculateProductPrice } from '@/lib/pricing';
+import { calculateProductPrice, round2 } from '@/lib/pricing';
 
 type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string; order_no?: string } };
 type ConfirmedOrder = Order & { customer: { name: string; phone: string | null; address?: string | null } | null };
@@ -361,8 +361,8 @@ export default function Dispatches() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredNewDeliveries.map((order) => {
               const totalItemsCount = order.items?.length || 0;
-              const estWeight = (order.items || []).reduce((acc, it) => acc + calculateProductPrice(it.product, it.quantity || 1).totalWeight, 0);
-              const totalAmt = (order.items || []).reduce((acc, it) => acc + calculateProductPrice(it.product, it.quantity || 1).totalPrice, 0);
+              const estWeight = round2((order.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalWeight), 0));
+              const totalAmt = round2((order.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
               
               return (
                 <div key={order.id} className="card p-5 border-2 border-amber-200 dark:border-amber-900/50 bg-gradient-to-br from-white to-amber-50/20 dark:from-slate-900 dark:to-amber-950/10 shadow-sm hover:shadow-md transition">

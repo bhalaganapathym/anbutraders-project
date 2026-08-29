@@ -25,7 +25,14 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
             raise HTTPException(status_code=404, detail="Driver not found")
 
     # Create bill
-    bill = Bill(**bill_in.model_dump())
+    bill_data = bill_in.model_dump()
+    if bill_data.get("total_amount") is not None:
+        bill_data["total_amount"] = round(float(bill_data["total_amount"]), 2)
+    if bill_data.get("paid_amount") is not None:
+        bill_data["paid_amount"] = round(float(bill_data["paid_amount"]), 2)
+    if bill_data.get("pending_amount") is not None:
+        bill_data["pending_amount"] = round(float(bill_data["pending_amount"]), 2)
+    bill = Bill(**bill_data)
     db.add(bill)
     
     # Update Dispatch status

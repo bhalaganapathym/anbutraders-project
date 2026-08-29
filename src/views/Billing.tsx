@@ -8,6 +8,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { openWhatsApp, shareWhatsAppWithMedia, buildDispatchWhatsAppMessage, DEFAULT_COMPANY_IMAGE_URL } from '@/lib/whatsapp';
 import { useTranslation } from '@/lib/i18n';
+import { round2 } from '@/lib/pricing';
 
 function numberToWords(num: number): string {
   if (num === 0) return 'INR Zero Only';
@@ -125,39 +126,39 @@ export default function Billing() {
   // Auto-calculate amounts when selectedDispatch or paymentMethod changes
   useEffect(() => {
     if (!selectedDispatch) return;
-    const total = selectedDispatch.items?.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0) || 0;
+    const total = round2(selectedDispatch.items?.reduce((sum, item) => sum + round2((item.price || 0) * (item.quantity || 1)), 0) || 0);
     
     if (paymentMethod === 'full payment done') {
-      setPaidAmount(String(total));
-      setToCollectAmount('0');
+      setPaidAmount(total.toFixed(2));
+      setToCollectAmount('0.00');
     } else if (paymentMethod === 'full payment on site' || paymentMethod === 'credit') {
-      setPaidAmount('0');
-      setToCollectAmount(String(total));
+      setPaidAmount('0.00');
+      setToCollectAmount(total.toFixed(2));
     } else if (paymentMethod.includes('partial')) {
-      const currentPaid = Number(paidAmount) || 0;
+      const currentPaid = round2(paidAmount);
       if (currentPaid > 0 && currentPaid < total) {
-        setToCollectAmount(String(Math.max(0, total - currentPaid)));
+        setToCollectAmount(round2(Math.max(0, total - currentPaid)).toFixed(2));
       } else {
-        setPaidAmount('0');
-        setToCollectAmount(String(total));
+        setPaidAmount('0.00');
+        setToCollectAmount(total.toFixed(2));
       }
     }
   }, [selectedDispatch, paymentMethod]);
 
   const handlePaidAmountChange = (val: string) => {
     setPaidAmount(val);
-    const total = selectedDispatch?.items?.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0) || 0;
+    const total = round2(selectedDispatch?.items?.reduce((sum, item) => sum + round2((item.price || 0) * (item.quantity || 1)), 0) || 0);
     const p = parseFloat(val) || 0;
-    const remaining = Math.max(0, total - p);
-    setToCollectAmount(String(remaining));
+    const remaining = round2(Math.max(0, total - round2(p)));
+    setToCollectAmount(remaining.toFixed(2));
   };
 
   const handleToCollectAmountChange = (val: string) => {
     setToCollectAmount(val);
-    const total = selectedDispatch?.items?.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0) || 0;
+    const total = round2(selectedDispatch?.items?.reduce((sum, item) => sum + round2((item.price || 0) * (item.quantity || 1)), 0) || 0);
     const toCol = parseFloat(val) || 0;
-    const p = Math.max(0, total - toCol);
-    setPaidAmount(String(p));
+    const p = round2(Math.max(0, total - round2(toCol)));
+    setPaidAmount(p.toFixed(2));
   };
 
   const sendDispatchNotification = async (disp: Dispatch) => {
@@ -215,11 +216,12 @@ export default function Billing() {
     
     let totalAmount = 0;
     selectedDispatch.items?.forEach(item => {
-      totalAmount += (item.price || 0) * (item.quantity || 1);
+      totalAmount += round2((item.price || 0) * (item.quantity || 1));
     });
+    totalAmount = round2(totalAmount);
 
-    const paidVal = parseFloat(paidAmount) || 0;
-    const toCollectVal = parseFloat(toCollectAmount) || 0;
+    const paidVal = round2(parseFloat(paidAmount) || 0);
+    const toCollectVal = round2(parseFloat(toCollectAmount) || 0);
     const isCredit = paymentMethod === 'credit' || toCollectVal > 0;
 
     try {
@@ -229,9 +231,9 @@ export default function Billing() {
         customer_id: selectedDispatch.customer_id,
         driver_id: null,
         payment_method: paymentMethod,
-        total_amount: totalAmount,
-        paid_amount: paidVal,
-        pending_amount: toCollectVal,
+        total_amount: round2(totalAmount),
+        paid_amount: round2(paidVal),
+        pending_amount: round2(toCollectVal),
         credit_due_date: isCredit && creditDueDate ? new Date(creditDueDate).toISOString() : null,
         credit_days: isCredit && creditDays !== '' ? Number(creditDays) : null,
       });

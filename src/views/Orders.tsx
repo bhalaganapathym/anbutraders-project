@@ -7,7 +7,7 @@ import {
   Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock, Calendar, Sparkles
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
-import { calculateProductPrice } from '@/lib/pricing';
+import { calculateProductPrice, round2 } from '@/lib/pricing';
 
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type OrderItemWithProduct = OrderItem & { product: Product | null };
@@ -599,7 +599,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
             {filtered.map((o) => {
               const isSelected = selectedIds.has(o.id);
               const itemCount = o.items?.length || 0;
-              const totalEstimateAmount = (o.items || []).reduce((acc, it) => acc + calculateProductPrice(it.product, it.quantity || 1).totalPrice, 0);
+              const totalEstimateAmount = round2((o.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
 
               return (
                 <div
@@ -751,7 +751,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((o) => {
                   const isSelected = selectedIds.has(o.id);
-                  const totalEstimateAmount = (o.items || []).reduce((acc, it) => acc + calculateProductPrice(it.product, it.quantity || 1).totalPrice, 0);
+                  const totalEstimateAmount = round2((o.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
 
                   return (
                     <tr

@@ -7,6 +7,7 @@ import {
   Mic, MicOff, Play, Pause, RotateCcw, Volume2, Clock, AlertTriangle
 } from 'lucide-react';
 import Modal from '@/components/Modal';
+import { round2 } from '@/lib/pricing';
 
 type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string; order_no?: string } };
 
@@ -366,7 +367,7 @@ export default function DispatchDashboard({
   detailItems.forEach(item => {
     const prod = products.find(p => p.id === item.product_id);
     if (prod && prod.standard_weight) {
-      estimatedTotal += prod.standard_weight * item.quantity;
+      estimatedTotal += round2(prod.standard_weight * item.quantity);
     }
     
     if (itemVerification[item.id]) {
@@ -374,16 +375,18 @@ export default function DispatchDashboard({
       if (iv.weight) {
         let wt = Number(iv.weight);
         if (iv.weightUnit === 'g') wt = wt / 1000;
-        actualTotal += wt;
+        actualTotal += round2(wt);
       }
     }
   });
 
   if (detail.status === 'completed') {
-    actualTotal = (detail.weights || []).reduce((sum, w) => sum + w.actual_weight, 0);
+    actualTotal = (detail.weights || []).reduce((sum, w) => sum + round2(w.actual_weight), 0);
   }
 
-  const weightDiff = Math.abs(estimatedTotal - actualTotal);
+  estimatedTotal = round2(estimatedTotal);
+  actualTotal = round2(actualTotal);
+  const weightDiff = round2(Math.abs(estimatedTotal - actualTotal));
   const isMismatchApproved = detail.mismatch_approval_status === 'approved';
   const isWeightWarning = detail.status === 'pending' && estimatedTotal > 0 && actualTotal > 0 && weightDiff > weightThreshold && !isMismatchApproved;
 

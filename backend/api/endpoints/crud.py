@@ -634,7 +634,10 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
     if dispatch_in.weights is not None:
         db.query(Weight).filter(Weight.dispatch_id == id).delete()
         for w in dispatch_in.weights:
-            db.add(Weight(dispatch_id=dispatch.id, **w.model_dump()))
+            w_data = w.model_dump()
+            if w_data.get("actual_weight") is not None:
+                w_data["actual_weight"] = round(float(w_data["actual_weight"]), 2)
+            db.add(Weight(dispatch_id=dispatch.id, **w_data))
 
     if dispatch_in.photos is not None:
         db.query(Photo).filter(Photo.dispatch_id == id).delete()

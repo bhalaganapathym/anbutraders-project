@@ -7,7 +7,7 @@ import {
   Calendar, DollarSign, Clock, Sparkles, Navigation
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
-import { calculateProductPrice } from '@/lib/pricing';
+import { calculateProductPrice, round2 } from '@/lib/pricing';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
 
@@ -331,14 +331,14 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   // Calculations
   const totalItems = lines.length;
   const totalQty = lines.reduce((acc, l) => acc + l.quantity, 0);
-  const estimatedWeight = lines.reduce((acc, l) => {
+  const estimatedWeight = round2(lines.reduce((acc, l) => {
     const p = calculateProductPrice(l.product, l.quantity);
     return acc + p.totalWeight;
-  }, 0);
-  const grandTotal = lines.reduce((acc, l) => {
+  }, 0));
+  const grandTotal = round2(lines.reduce((acc, l) => {
     const p = calculateProductPrice(l.product, l.quantity);
     return acc + p.totalPrice;
-  }, 0);
+  }, 0));
 
   // WhatsApp Integration
   const generateWhatsAppMessage = () => {
@@ -419,7 +419,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         status: 'pending',
         is_advance_order: isAdvanceOrder,
         scheduled_delivery_date: isAdvanceOrder && scheduledDeliveryDate ? new Date(scheduledDeliveryDate).toISOString() : null,
-        advance_paid_amount: isAdvanceOrder ? (parseFloat(advancePaidAmount) || 0) : 0,
+        advance_paid_amount: isAdvanceOrder ? round2(parseFloat(advancePaidAmount) || 0) : 0,
         advance_payment_method: isAdvanceOrder ? advancePaymentMethod : null,
         advance_notes: isAdvanceOrder ? advanceNotes : null,
         advance_status: isAdvanceOrder ? 'pending' : null,
