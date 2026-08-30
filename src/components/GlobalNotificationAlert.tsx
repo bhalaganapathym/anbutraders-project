@@ -10,8 +10,9 @@ export default function GlobalNotificationAlert() {
   const [flash, setFlash] = useState(false);
   const [latestNotif, setLatestNotif] = useState<Notification | null>(null);
   
-  // Track the most recent notification ID to avoid double-flashing
-  const lastSeenIdRef = useRef<string | null>(null);
+  // Track all known notification IDs to strictly avoid duplicate alerts
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef<boolean>(false);
 
   const checkNotifications = async () => {
     if (!user) return;
@@ -41,36 +42,41 @@ export default function GlobalNotificationAlert() {
                  t === 'credit_overdue' ||
                  t === 'billing_alert';
         }
+        if (user.role === 'driver') {
+          return t === 'bill_generated' || 
+                 t === 'ready_for_loading' || 
+                 t === 'dispatch_completed';
+        }
         // Admin receives all operational alerts
         return true;
       });
 
-      if (myNotifs.length > 0) {
-        // Sort by created_at desc
-        const sorted = myNotifs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      if (!initializedRef.current) {
+        // Initial load: Record all existing IDs so we never alert for past notifications
+        myNotifs.forEach(n => knownIdsRef.current.add(n.id));
+        initializedRef.current = true;
+        return;
+      }
+
+      // Check for genuinely new unread notifications that arrived after initialization
+      const newUnread = myNotifs.filter(n => !knownIdsRef.current.has(n.id) && !n.read);
+      
+      // Update known IDs
+      myNotifs.forEach(n => knownIdsRef.current.add(n.id));
+
+      if (newUnread.length > 0) {
+        const sorted = newUnread.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         const newest = sorted[0];
 
-        // If this is the first load, just set the id but don't flash
-        if (lastSeenIdRef.current === null) {
-          lastSeenIdRef.current = newest.id;
-          return;
-        }
+        setLatestNotif(newest);
+        setFlash(true);
+        
+        // Play distinct 3-second notification chime once
+        playNotificationChime();
 
-        // If it's a new unread notification we haven't flashed for
-        if (newest.id !== lastSeenIdRef.current && !newest.read) {
-          lastSeenIdRef.current = newest.id;
-          setLatestNotif(newest);
-          setFlash(true);
-          
-          // Play distinct 3-tone notification chime
-          playNotificationChime();
-
-          setTimeout(() => {
-            setFlash(false);
-          }, 6000);
-        }
-      } else {
-        lastSeenIdRef.current = 'none'; // so we can detect when a new one arrives
+        setTimeout(() => {
+          setFlash(false);
+        }, 5000);
       }
     } catch (e) {
       console.error('Failed to check notifications for alert', e);
@@ -81,23 +87,6 @@ export default function GlobalNotificationAlert() {
   useEffect(() => {
     initAudioOnUserInteraction();
     checkNotifications();
-
-    // Listen to background service worker chime triggers
-    const handleSwMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'PLAY_NOTIFICATION_CHIME') {
-        playNotificationChime();
-        checkNotifications();
-      }
-    };
-    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', handleSwMessage);
-    }
-
-    return () => {
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
-      }
-    };
   }, [user]);
 
   useRealtime('notifications', checkNotifications);

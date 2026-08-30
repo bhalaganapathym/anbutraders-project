@@ -79,20 +79,6 @@ def get_customers(db: Session = Depends(get_db), skip: int = 0, limit: int = 100
                 c.credit_days_remaining = diff
                 if diff < 0:
                     c.credit_status = "overdue"
-                    # Check if notification exists
-                    existing_notif = db.query(Notification).filter(
-                        Notification.type == "credit_overdue",
-                        Notification.customer_name == c.name,
-                        Notification.read == False
-                    ).first()
-                    if not existing_notif:
-                        notif = Notification(
-                            type="credit_overdue",
-                            title=f"⚠️ Credit Overdue: {c.name} (₹{c.pending_amount:,.2f})",
-                            message=f"Customer {c.name} ({c.phone or 'No phone'}) exceeded the agreed credit due date ({due_d.strftime('%d %b %Y')}) by {abs(diff)} day(s). Outstanding dues: ₹{c.pending_amount:,.2f}",
-                            customer_name=c.name
-                        )
-                        new_overdue_notifs.append(notif)
                 elif diff == 0:
                     c.credit_status = "due_today"
                 else:
@@ -110,13 +96,6 @@ def get_customers(db: Session = Depends(get_db), skip: int = 0, limit: int = 100
             c.credit_days_remaining = None
             c.credit_status = "clear"
             
-    if new_overdue_notifs:
-        db.add_all(new_overdue_notifs)
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-        
     return customers
 
 @router.get("/customers/ledger/summary")
@@ -1062,47 +1041,6 @@ def create_notification(
 
 @router.get("/notifications", response_model=List[NotificationResponse])
 def get_notifications(db: Session = Depends(get_db), skip: int = 0, limit: int = 1000):
-    from models.all import Bill, Customer
-    from sqlalchemy import func
-    from datetime import date as date_cls, datetime
-
-    # Check for overdue bills and create notifications if needed
-    today = date_cls.today()
-    unpaid_overdue = db.query(
-        Bill.customer_id,
-        func.sum(Bill.pending_amount).label("pending_sum"),
-        func.min(Bill.credit_due_date).label("earliest_due_date")
-    ).filter(Bill.pending_amount > 0, Bill.credit_due_date.isnot(None))\
-     .group_by(Bill.customer_id).all()
-
-    new_notifs = False
-    for row in unpaid_overdue:
-        if row.earliest_due_date:
-            due_d = row.earliest_due_date.date() if isinstance(row.earliest_due_date, datetime) else row.earliest_due_date
-            diff = (due_d - today).days
-            if diff < 0:
-                cust = db.query(Customer).filter(Customer.id == row.customer_id).first()
-                if cust:
-                    existing = db.query(Notification).filter(
-                        Notification.type == "credit_overdue",
-                        Notification.customer_name == cust.name,
-                        Notification.read == False
-                    ).first()
-                    if not existing:
-                        notif = Notification(
-                            type="credit_overdue",
-                            title=f"⚠️ Credit Overdue: {cust.name} (₹{float(row.pending_sum or 0):,.2f})",
-                            message=f"Customer {cust.name} ({cust.phone or 'No phone'}) exceeded the agreed credit due date ({due_d.strftime('%d %b %Y')}) by {abs(diff)} day(s). Outstanding dues: ₹{float(row.pending_sum or 0):,.2f}",
-                            customer_name=cust.name
-                        )
-                        db.add(notif)
-                        new_notifs = True
-    if new_notifs:
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-
     return db.query(Notification).order_by(Notification.created_at.desc()).offset(skip).limit(limit).all()
 
 @router.put("/notifications/{id}", response_model=NotificationResponse)
