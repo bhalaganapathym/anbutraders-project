@@ -445,13 +445,15 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                     >
                       <Play size={16} /> Start Verification & Dispatch
                     </button>
-                    <button
-                      onClick={() => removeNewOrder(order)}
-                      className="btn-ghost p-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
-                      title="Delete / Cancel Estimate"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {user?.role === 'admin' && (
+                      <button
+                        onClick={() => removeNewOrder(order)}
+                        className="btn-ghost p-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
+                        title="Delete / Cancel Estimate"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -485,12 +487,14 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                 >
                   <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                     <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelect(d.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                      />
+                      {user?.role === 'admin' && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(d.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        />
+                      )}
                       <div>
                         <button
                           onClick={() => setDetail(d)}
@@ -533,7 +537,11 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                         <span className="font-semibold">{d.vehicle_number || 'Vehicle not set'}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <WaitClock timestamp={d.order?.confirmed_at || d.created_at} />
+                        <WaitClock
+                          timestamp={d.order?.confirmed_at || d.created_at}
+                          endTime={d.completed_at || d.updated_at}
+                          isCompleted={d.status === 'completed'}
+                        />
                       </div>
                     </div>
 
@@ -577,13 +585,15 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       </button>
                     )}
 
-                    <button
-                      onClick={() => removeDispatch(d)}
-                      className="btn-ghost p-2 text-rose-500 hover:bg-rose-50 rounded-lg"
-                      title="Delete Dispatch"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {user?.role === 'admin' && (
+                      <button
+                        onClick={() => removeDispatch(d)}
+                        className="btn-ghost p-2 text-rose-500 hover:bg-rose-50 rounded-lg"
+                        title="Delete Dispatch"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -595,14 +605,16 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
             <table className="w-full">
               <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/75">
                 <tr>
-                  <th className="th w-10">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.size === filteredDispatches.length && filteredDispatches.length > 0}
-                      onChange={() => toggleSelectAll(filteredDispatches)}
-                      className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                    />
-                  </th>
+                  {user?.role === 'admin' && (
+                    <th className="th w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === filteredDispatches.length && filteredDispatches.length > 0}
+                        onChange={() => toggleSelectAll(filteredDispatches)}
+                        className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                      />
+                    </th>
+                  )}
                   <th className="th">Dispatch No</th>
                   <th className="th">Customer</th>
                   <th className="th">Vehicle / Driver</th>
@@ -619,14 +631,16 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       key={d.id}
                       className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition ${isSelected ? 'bg-amber-50/30' : ''}`}
                     >
-                      <td className="td">
-                        <input
-                           type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelect(d.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                        />
-                      </td>
+                      {user?.role === 'admin' && (
+                        <td className="td">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelect(d.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                          />
+                        </td>
+                      )}
                       <td className="td">
                         <button onClick={() => setDetail(d)} className="font-semibold text-slate-800 dark:text-slate-100 hover:underline">
                           {d.dispatch_no}
@@ -661,7 +675,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                         <WaitClock
                           timestamp={d.order?.confirmed_at || d.created_at}
                           endTime={d.completed_at || d.updated_at}
-                          isCompleted={true}
+                          isCompleted={d.status === 'completed'}
                         />
                       </td>
                       <td className="td text-right">
@@ -687,9 +701,11 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                           <button onClick={() => setDetail(d)} className="btn-ghost p-1.5 text-blue-600 hover:bg-blue-50" title="Verify / View">
                             <Package size={15} />
                           </button>
-                          <button onClick={() => removeDispatch(d)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" title="Delete">
-                            <Trash2 size={15} />
-                          </button>
+                          {user?.role === 'admin' && (
+                            <button onClick={() => removeDispatch(d)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" title="Delete">
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -700,7 +716,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
           </div>
 
           {/* Floating Bulk Action Bar */}
-          {selectedIds.size > 0 && (
+          {user?.role === 'admin' && selectedIds.size > 0 && (
             <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in border border-slate-700">
               <span className="text-xs font-semibold">
                 {selectedIds.size} {selectedIds.size === 1 ? 'dispatch' : 'dispatches'} selected

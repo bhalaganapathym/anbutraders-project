@@ -972,7 +972,18 @@ def decide_discount_approval(
     return dispatch
 
 @router.delete("/dispatches/{id}")
-def delete_dispatch(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def delete_dispatch(
+    id: UUID, 
+    background_tasks: BackgroundTasks, 
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    if (current_user.role or "").lower() == "dispatch":
+        raise HTTPException(
+            status_code=403, 
+            detail="Dispatch staff are not permitted to delete dispatches. Admin authorization required."
+        )
+
     dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
     if dispatch:
         order_id = dispatch.order_id
@@ -994,7 +1005,18 @@ def delete_dispatch(id: UUID, background_tasks: BackgroundTasks, db: Session = D
     return {"status": "ok"}
 
 @router.post("/dispatches/bulk-delete")
-def bulk_delete_dispatches(payload: BulkDeleteRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def bulk_delete_dispatches(
+    payload: BulkDeleteRequest, 
+    background_tasks: BackgroundTasks, 
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    if (current_user.role or "").lower() == "dispatch":
+        raise HTTPException(
+            status_code=403, 
+            detail="Dispatch staff are not permitted to delete dispatches. Admin authorization required."
+        )
+
     if not payload.ids:
         return {"status": "ok", "deleted": 0}
         
