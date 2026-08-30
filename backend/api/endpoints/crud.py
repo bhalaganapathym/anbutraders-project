@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
@@ -792,6 +793,42 @@ async def request_mismatch_approval(
         role="admin"
     )
     return dispatch
+
+@router.get("/dispatches/{id}/voice-note")
+def get_dispatch_voice_note(id: UUID, db: Session = Depends(get_db)):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    
+    path = dispatch.mismatch_voice_note_path
+    if not path or not os.path.exists(path):
+        if dispatch.mismatch_voice_note_url:
+            clean_rel = dispatch.mismatch_voice_note_url.lstrip("/")
+            if os.path.exists(clean_rel):
+                path = os.path.abspath(clean_rel)
+    
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Voice note audio not found")
+    
+    media_type = "audio/webm"
+    if path.endswith(".mp4") or path.endswith(".m4a"):
+        media_type = "audio/mp4"
+    elif path.endswith(".ogg") or path.endswith(".oga"):
+        media_type = "audio/ogg"
+    elif path.endswith(".mp3"):
+        media_type = "audio/mpeg"
+    elif path.endswith(".wav"):
+        media_type = "audio/wav"
+
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
 
 @router.post("/dispatches/{id}/mismatch-decision", response_model=DispatchResponse)
 def decide_mismatch_approval(

@@ -192,7 +192,15 @@ export default function DispatchDashboard({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
       
-      const mediaRecorder = new MediaRecorder(stream);
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+        else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+        else if (MediaRecorder.isTypeSupported('audio/ogg')) mimeType = 'audio/ogg';
+        else mimeType = '';
+      }
+      
+      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       
       mediaRecorder.ondataavailable = (e) => {
@@ -202,8 +210,8 @@ export default function DispatchDashboard({
       };
 
       mediaRecorder.onstop = () => {
-        const mimeType = mediaRecorder.mimeType || 'audio/webm';
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        const finalType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: finalType });
         setAudioBlob(blob);
         const url = URL.createObjectURL(blob);
         setAudioPreviewUrl(url);
@@ -224,7 +232,7 @@ export default function DispatchDashboard({
         });
       }, 1000);
     } catch (e) {
-      toast('Microphone access denied. Please allow microphone permissions.', 'error');
+      toast('Microphone access denied. Please allow microphone permissions in your browser.', 'error');
     }
   };
 
@@ -255,7 +263,8 @@ export default function DispatchDashboard({
     try {
       const formData = new FormData();
       if (audioBlob) {
-        formData.append('audio_file', audioBlob, `voice_note_${detail.id}.webm`);
+        const ext = audioBlob.type.includes('mp4') ? 'mp4' : audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
+        formData.append('audio_file', audioBlob, `voice_note_${detail.id}.${ext}`);
       }
       if (mismatchReasonInput.trim()) {
         formData.append('reason', mismatchReasonInput.trim());
@@ -607,22 +616,24 @@ export default function DispatchDashboard({
               const requiresWeight = prod?.standard_weight ? prod.standard_weight > 0 : false;
               const isVerificationDone = detail.status !== 'pending';
 
-              // Steel item weight mismatch check
-              const catLower = (prod?.category || '').toLowerCase();
-              const isSteel = catLower.includes('steel') || catLower.includes('tmt');
-              let isSteelMismatch = false;
-              let expectedWt = 0;
+              // Weight verification calculations & tolerance check
+              const hasWeight = iv.weight !== undefined && iv.weight !== null && iv.weight.toString().trim() !== '';
+              const expectedWt = (prod?.standard_weight || 0) * (item.quantity || 1);
+              const tolerance = prod?.weight_tolerance != null ? Number(prod.weight_tolerance) : weightThreshold;
+              
+              let actualWt = 0;
               let itemDiff = 0;
-              let tolerance = weightThreshold;
+              let isSteelMismatch = false;
+              let isWeightCorrect = false;
 
-              if (requiresWeight && !isVerificationDone && iv.weight) {
-                let actualWt = Number(iv.weight);
+              if (requiresWeight && hasWeight && !isNaN(Number(iv.weight)) && Number(iv.weight) > 0) {
+                actualWt = Number(iv.weight);
                 if (iv.weightUnit === 'g') actualWt = actualWt / 1000;
-                expectedWt = (prod?.standard_weight || 0) * item.quantity;
-                tolerance = prod?.weight_tolerance != null ? Number(prod.weight_tolerance) : weightThreshold;
                 itemDiff = Math.abs(expectedWt - actualWt);
                 if (itemDiff > tolerance) {
                   isSteelMismatch = true;
+                } else {
+                  isWeightCorrect = true;
                 }
               }
 
@@ -631,10 +642,12 @@ export default function DispatchDashboard({
                   key={item.id} 
                   className={`grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border transition ${
                     isSteelMismatch 
-                      ? 'border-2 border-rose-400 bg-rose-50/30 dark:bg-rose-950/20' 
-                      : iv.verified 
-                        ? 'bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/50' 
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700/50'
+                      ? 'border-2 border-rose-500 bg-rose-50/40 dark:bg-rose-950/30' 
+                      : isWeightCorrect
+                        ? 'border-2 border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20'
+                        : iv.verified 
+                          ? 'bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/50' 
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700/50'
                   }`}
                 >
                   
@@ -649,22 +662,40 @@ export default function DispatchDashboard({
 
                   {/* Middle: Weight (4 cols) */}
                   <div className="lg:col-span-4 flex flex-col justify-center border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
-                    <p className="text-sm font-medium text-slate-500 mb-2">Weight Verification</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Weight Verification</p>
                     {requiresWeight ? (
                       !isVerificationDone ? (
                         <div>
                           <div className="flex gap-2 items-center">
-                            {/* Localized Shake Alert on weight box every 4s during mismatch */}
-                            <div className={isSteelMismatch ? 'animate-shake-periodic' : ''}>
+                            {/* Localized Shake & Vibration Alert on weight box during mismatch */}
+                            <div className={isSteelMismatch ? 'animate-shake animate-shake-periodic' : ''}>
                               <input 
                                 type="number" 
+                                step="any"
                                 value={iv.weight} 
-                                onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weight: e.target.value}}))}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setItemVerification(prev => ({
+                                    ...prev, 
+                                    [item.id]: {...prev[item.id], weight: val}
+                                  }));
+                                  if (val && requiresWeight && Number(val) > 0) {
+                                    let wt = Number(val);
+                                    if (iv.weightUnit === 'g') wt = wt / 1000;
+                                    if (Math.abs(expectedWt - wt) > tolerance) {
+                                      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                                        try { navigator.vibrate([150, 50, 150]); } catch {}
+                                      }
+                                    }
+                                  }
+                                }}
                                 disabled={iv.verified}
-                                className={`input w-28 text-center font-bold transition-all ${
+                                className={`input w-28 text-center text-base font-black transition-all rounded-xl ${
                                   isSteelMismatch 
-                                    ? 'border-2 border-rose-500 text-rose-700 bg-rose-50 ring-2 ring-rose-300 dark:ring-rose-900 shadow-sm' 
-                                    : 'focus:ring-2 focus:ring-blue-400'
+                                    ? 'bg-red-600 dark:bg-red-600 border-2 border-red-700 text-white placeholder-white/70 shadow-lg shadow-red-600/30' 
+                                    : isWeightCorrect
+                                      ? 'bg-emerald-600 dark:bg-emerald-600 border-2 border-emerald-700 text-white placeholder-white/70 shadow-lg shadow-emerald-600/30'
+                                      : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-400'
                                 }`}
                                 placeholder="0.0" 
                               />
@@ -673,20 +704,32 @@ export default function DispatchDashboard({
                               value={iv.weightUnit} 
                               onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], weightUnit: e.target.value as 'kg'|'g'}}))}
                               disabled={iv.verified}
-                              className="input w-20 px-2"
+                              className="input w-20 px-2 font-bold"
                             >
                               <option value="kg">kg</option>
                               <option value="g">g</option>
                             </select>
-                            {!iv.verified && iv.weight && !isSteelMismatch && (
-                              <div className="text-emerald-600 flex items-center gap-1 text-sm ml-2 font-medium">
-                                <CheckCircle2 size={14} /> Recorded
+                            {isWeightCorrect && (
+                              <div className="text-emerald-600 flex items-center gap-1 text-xs font-black ml-1">
+                                <CheckCircle2 size={16} /> Verified
                               </div>
                             )}
                           </div>
-                          {isSteelMismatch && (
-                            <p className="text-[11px] text-rose-600 font-bold mt-1.5 flex items-center gap-1">
-                              <AlertCircle size={12} /> Expected: ~{expectedWt.toFixed(1)}kg (Diff: {itemDiff.toFixed(1)}kg &gt; {tolerance}kg tol)
+                          
+                          {/* Expected & Entered Weight Feedback */}
+                          {isSteelMismatch ? (
+                            <div className="text-[11px] text-rose-600 dark:text-rose-400 font-extrabold mt-1.5 flex items-center gap-1">
+                              <AlertCircle size={13} className="shrink-0 animate-bounce" />
+                              <span>Expected: ~{expectedWt.toFixed(1)}kg (Diff: {itemDiff.toFixed(1)}kg &gt; {tolerance}kg tol)</span>
+                            </div>
+                          ) : isWeightCorrect ? (
+                            <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-extrabold mt-1.5 flex items-center gap-1">
+                              <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                              <span>Expected: ~{expectedWt.toFixed(1)}kg (Match ✓)</span>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-1">
+                              Expected standard: ~{expectedWt.toFixed(1)}kg (±{tolerance}kg tol)
                             </p>
                           )}
                         </div>
