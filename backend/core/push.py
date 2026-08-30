@@ -47,6 +47,13 @@ def send_web_push(
             logger.info("No active push subscriptions found for role: %s", role)
             return {"sent": 0, "failed": 0, "total": 0}
 
+        # Deduplicate subscriptions by unique endpoint
+        unique_subscriptions = {}
+        for sub in subscriptions:
+            if sub.endpoint and sub.endpoint not in unique_subscriptions:
+                unique_subscriptions[sub.endpoint] = sub
+        subscriptions_to_send = list(unique_subscriptions.values())
+
         payload = json.dumps({
             "title": title,
             "body": body,
@@ -62,7 +69,7 @@ def send_web_push(
         failed_count = 0
         dead_subscriptions = []
 
-        for sub in subscriptions:
+        for sub in subscriptions_to_send:
             try:
                 subscription_info = {
                     "endpoint": sub.endpoint,

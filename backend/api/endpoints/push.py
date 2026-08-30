@@ -61,16 +61,6 @@ def subscribe_push(
             db.refresh(new_sub)
             target_sub = new_sub
 
-        # Send an immediate confirmation push notification
-        background_tasks.add_task(
-            send_web_push,
-            title="🔔 Anbu Traders Notifications Active",
-            body="You will now receive alerts for dispatches, bills, credit dues, and approvals even when outside the app!",
-            url="/#/notifications",
-            tag="welcome-push",
-            role=sub_in.user_role
-        )
-
         return target_sub
     except Exception as e:
         logger.error("Failed to register push subscription: %s", e)

@@ -38,7 +38,7 @@ self.addEventListener('push', (event) => {
     silent: false,
     sound: '/alert-tone.mp3',
     data: { url },
-    vibrate: [400, 150, 400, 150, 400, 150, 400, 150, 400, 150, 400],
+    vibrate: [350, 150, 350, 150, 350, 150, 350, 150, 350],
     requireInteraction: true
   };
 

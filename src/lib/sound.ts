@@ -1,9 +1,10 @@
 // Audio Chime & Loud High-Tone Alert Utility (Anbu Traders)
-// Plays a high-pitched, piercing 4-second dual-pulse alert tone (1400Hz / 1750Hz)
+// Plays a high-pitched, piercing 3-second dual-pulse alert tone (1400Hz / 1750Hz)
 // Designed specifically to be clearly audible in busy shop and warehouse environments.
 
 let audioCtx: AudioContext | null = null;
 let cachedAudioElem: HTMLAudioElement | null = null;
+let lastPlayTimestamp = 0;
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -20,11 +21,18 @@ function getAudioContext(): AudioContext | null {
 }
 
 /**
- * Plays a loud, piercing 4-second high alert tone.
- * Repeats dual-tone high frequency bursts (1400Hz & 1750Hz) for 4.0 seconds.
+ * Plays a loud, piercing 3-second high alert tone.
+ * Protected with a 4.5-second debounce cooldown to eliminate duplicate alarms.
  */
 export function playNotificationChime() {
-  // 1. Try HTML5 Audio playback for direct hardware volume
+  const currentTimeMs = Date.now();
+  // Prevent double-sounding when multiple events (WebSocket + Push + PostMessage) fire simultaneously
+  if (currentTimeMs - lastPlayTimestamp < 4500) {
+    return;
+  }
+  lastPlayTimestamp = currentTimeMs;
+
+  // 1. HTML5 Audio element playback for direct hardware volume
   try {
     if (typeof window !== 'undefined') {
       if (!cachedAudioElem) {
@@ -35,7 +43,7 @@ export function playNotificationChime() {
       const p = cachedAudioElem.play();
       if (p && typeof p.catch === 'function') {
         p.catch(() => {
-          // Autoplay policy prevented Audio element; fallback to Web Audio API
+          // Autoplay policy prevented Audio element; Web Audio synthesizer below will execute
         });
       }
     }
@@ -43,25 +51,25 @@ export function playNotificationChime() {
     // Non-critical
   }
 
-  // 2. High-intensity Web Audio synthesizer (4.0 seconds duration, high frequencies 1400Hz & 1750Hz)
+  // 2. High-intensity Web Audio synthesizer (exact 3.0 seconds duration, 1400Hz & 1750Hz)
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
-    const totalDuration = 4.0;
-    const pulseCycle = 0.65; // Each cycle: Tone 1 (0.2s), gap (0.05s), Tone 2 (0.2s), gap (0.2s)
+    const totalDuration = 3.0;
+    const pulseCycle = 0.60; // 5 cycles across 3.0 seconds
     const numCycles = Math.ceil(totalDuration / pulseCycle);
 
     for (let c = 0; c < numCycles; c++) {
       const cycleStart = now + c * pulseCycle;
       if (cycleStart >= now + totalDuration) break;
 
-      // Pulse 1: 1400 Hz (High alert piercing tone)
-      createBeep(ctx, 1400, cycleStart, 0.20, 0.85);
+      // Pulse 1: 1400 Hz
+      createBeep(ctx, 1400, cycleStart, 0.18, 0.85);
 
-      // Pulse 2: 1750 Hz (Higher alert tone for contrast)
-      createBeep(ctx, 1750, cycleStart + 0.25, 0.20, 0.90);
+      // Pulse 2: 1750 Hz
+      createBeep(ctx, 1750, cycleStart + 0.22, 0.18, 0.90);
     }
   } catch (err) {
     console.warn('Alert tone playback notice:', err);
@@ -74,14 +82,12 @@ function createBeep(ctx: AudioContext, freq: number, start: number, duration: nu
     const oscHarmonic = ctx.createOscillator();
     const gainNode = ctx.createGain();
 
-    // Dual waveform: Sine fundamental + Sawtooth harmonic for loud piercing presence
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, start);
 
     oscHarmonic.type = 'triangle';
     oscHarmonic.frequency.setValueAtTime(freq * 2, start);
 
-    // Envelope with fast attack and sustained peak
     gainNode.gain.setValueAtTime(0.001, start);
     gainNode.gain.linearRampToValueAtTime(peakGain, start + 0.02);
     gainNode.gain.setValueAtTime(peakGain, start + duration - 0.03);
