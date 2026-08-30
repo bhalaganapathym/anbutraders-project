@@ -367,13 +367,16 @@ def create_order(
         qty = float(itm.quantity)
         qty_str = f"{int(qty)}" if qty.is_integer() else f"{qty:.2f}"
         if prod:
-            if prod.is_steel and prod.standard_weight and prod.price_per_kg:
-                wt = qty * float(prod.standard_weight)
-                cost = wt * float(prod.price_per_kg)
+            is_steel_cat = (prod.category or '').lower() == 'steel'
+            std_wt = float(prod.standard_weight or 0)
+            item_price = float(prod.price or 0)
+            if is_steel_cat and std_wt > 0:
+                wt = qty * std_wt
+                cost = wt * item_price
                 items_desc.append(f"{qty_str} nos {prod.name} ({wt:.1f}kg)")
             else:
-                cost = qty * float(prod.unit_price or 0)
-                items_desc.append(f"{qty_str} {itm.unit or prod.unit} {prod.name}")
+                cost = qty * item_price
+                items_desc.append(f"{qty_str} {itm.unit or prod.unit or 'nos'} {prod.name}")
             total_val += cost
         else:
             items_desc.append(f"{qty_str} items")
@@ -547,13 +550,16 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
             qty = float(itm.quantity)
             qty_str = f"{int(qty)}" if qty.is_integer() else f"{qty:.2f}"
             if prod:
-                if prod.is_steel and prod.standard_weight and prod.price_per_kg:
-                    wt = qty * float(prod.standard_weight)
-                    cost = wt * float(prod.price_per_kg)
+                is_steel_cat = (prod.category or '').lower() == 'steel'
+                std_wt = float(prod.standard_weight or 0)
+                item_price = float(prod.price or 0)
+                if is_steel_cat and std_wt > 0:
+                    wt = qty * std_wt
+                    cost = wt * item_price
                     items_desc.append(f"{qty_str} nos {prod.name} ({wt:.1f}kg)")
                 else:
-                    cost = qty * float(prod.unit_price or 0)
-                    items_desc.append(f"{qty_str} {itm.unit or prod.unit} {prod.name}")
+                    cost = qty * item_price
+                    items_desc.append(f"{qty_str} {itm.unit or prod.unit or 'nos'} {prod.name}")
                 total_val += cost
             else:
                 items_desc.append(f"{qty_str} items")
