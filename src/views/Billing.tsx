@@ -523,61 +523,6 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Billing Top Quick Access Bar */}
-      <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-2 flex items-center gap-1.5 shrink-0">
-          <Sparkles size={14} className="text-amber-500" /> Quick Access:
-        </span>
-        
-        {/* 1. New Estimate */}
-        <button
-          type="button"
-          onClick={() => onNavigate?.('new_order')}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/60 transition shadow-sm active:scale-95"
-        >
-          <PlusCircle size={14} className="text-amber-600 dark:text-amber-400" />
-          <span>New Estimate</span>
-        </button>
-
-        {/* 2. Estimates */}
-        <button
-          type="button"
-          onClick={() => onNavigate?.('orders')}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/60 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-900/60 transition shadow-sm active:scale-95"
-        >
-          <ShoppingCart size={14} className="text-violet-600 dark:text-violet-400" />
-          <span>Estimates</span>
-        </button>
-
-        {/* 3. Price List */}
-        <button
-          type="button"
-          onClick={() => onNavigate?.('pricelist')}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition shadow-sm active:scale-95"
-        >
-          <Tags size={14} className="text-slate-600 dark:text-slate-400" />
-          <span>Price List</span>
-        </button>
-
-        {/* 4. Billing (Current Active) */}
-        <div
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-600/20 border border-blue-500"
-        >
-          <Receipt size={14} />
-          <span>Billing (Current)</span>
-        </div>
-
-        {/* 5. Reconciliation */}
-        <button
-          type="button"
-          onClick={() => onNavigate?.('reconciliation')}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-900/60 transition shadow-sm active:scale-95"
-        >
-          <DollarSign size={14} className="text-purple-600 dark:text-purple-400" />
-          <span>Reconciliation</span>
-        </button>
-      </div>
-
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('billing_title')}</h1>

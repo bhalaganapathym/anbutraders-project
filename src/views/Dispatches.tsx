@@ -285,31 +285,6 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
 
   return (
     <div className="space-y-6">
-      {/* Dispatch Top Quick Access Bar */}
-      <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-2 flex items-center gap-1.5 shrink-0">
-          <Sparkles size={14} className="text-amber-500" /> Quick Access:
-        </span>
-        
-        {/* 1. Dispatches (Current Active) */}
-        <div
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-md shadow-emerald-600/20 border border-emerald-500"
-        >
-          <Truck size={14} />
-          <span>Dispatches (Current)</span>
-        </div>
-
-        {/* 2. Delivery / POD */}
-        <button
-          type="button"
-          onClick={() => onNavigate?.('delivery')}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 transition shadow-sm active:scale-95"
-        >
-          <MapPin size={14} className="text-rose-600 dark:text-rose-400" />
-          <span>Delivery / POD</span>
-        </button>
-      </div>
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('dispatches')}</h1>

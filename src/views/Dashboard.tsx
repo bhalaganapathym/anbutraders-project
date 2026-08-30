@@ -161,8 +161,25 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
 
       if (adv) setAdvanceMetrics(adv);
       
-      const dispatches = (data.dispatches || []) as DispatchWithTimeline[];
-      setRecentDispatches(dispatches);
+      const rawDispatches = (data.dispatches || []) as DispatchWithTimeline[];
+      const todayStr = new Date().toDateString();
+      
+      // Filter: Keep pending dispatches OR dispatches completed today. Auto-clears completed dispatches after day ends.
+      const validDispatches = rawDispatches.filter(d => {
+        if (d.status !== 'completed') return true;
+        const dDate = new Date(d.completed_at || d.created_at).toDateString();
+        return dDate === todayStr;
+      });
+
+      // Sort: Pending on TOP, completed at BOTTOM
+      const sortedDispatches = validDispatches.sort((a, b) => {
+        const aPending = a.status !== 'completed' ? 0 : 1;
+        const bPending = b.status !== 'completed' ? 0 : 1;
+        if (aPending !== bPending) return aPending - bPending;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      setRecentDispatches(sortedDispatches);
 
       if (data.today_stats) {
         setTodayStats(data.today_stats);

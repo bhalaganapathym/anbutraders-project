@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_, case
 from datetime import datetime, date, time, timezone
 from api.deps import get_db, get_current_active_user
 from models.all import Customer, Product, Order, Dispatch, User
@@ -28,9 +28,9 @@ def get_dashboard_stats(
     # Today's Dispatches
     today_dispatches_count = db.query(func.count(Dispatch.id)).filter(Dispatch.created_at >= today_start).scalar() or 0
     ongoing_dispatches = db.query(func.count(Dispatch.id)).filter(Dispatch.status != 'completed').scalar() or 0
-    closed_dispatches = db.query(func.count(Dispatch.id)).filter(Dispatch.status == 'completed').scalar() or 0
+    closed_dispatches = db.query(func.count(Dispatch.id)).filter(Dispatch.status == 'completed', Dispatch.created_at >= today_start).scalar() or 0
 
-    # Fetch dispatches with customer and order data for timeline cards
+    # Fetch dispatches: Pending on TOP, today's completed at BOTTOM, past days' completed cleared
     dispatches = db.query(
         Dispatch.id,
         Dispatch.dispatch_no,
@@ -51,8 +51,18 @@ def get_dashboard_stats(
         Order.order_no.label("order_no")
     ).outerjoin(Customer, Dispatch.customer_id == Customer.id)\
      .outerjoin(Order, Dispatch.order_id == Order.id)\
-     .order_by(Dispatch.created_at.desc())\
-     .limit(20).all()
+     .filter(
+         or_(
+             Dispatch.status != 'completed',
+             Dispatch.completed_at >= today_start,
+             Dispatch.created_at >= today_start
+         )
+     )\
+     .order_by(
+         case((Dispatch.status != 'completed', 0), else_=1),
+         Dispatch.created_at.desc()
+     )\
+     .limit(50).all()
 
     dispatch_list = []
     for d in dispatches:
