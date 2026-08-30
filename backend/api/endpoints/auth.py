@@ -23,11 +23,12 @@ def login_access_token(
     ).first()
     
     if not user:
-        if identifier in ["billing", "dispatch", "admin"]:
+        if identifier in ["billing", "dispatch", "admin", "driver"]:
+            default_pwd = "dispatch123" if identifier == "dispatch" else "driver123" if identifier == "driver" else "password123"
             user = User(
                 username=identifier,
                 email=f"{identifier}@anbutraders.com",
-                hashed_password=security.get_password_hash("password123"),
+                hashed_password=security.get_password_hash(default_pwd),
                 role=identifier,
                 is_active=True,
                 secret_question="What is your favorite color?",
@@ -45,8 +46,10 @@ def login_access_token(
     user_role = (user.role or "").lower()
     user_name = (user.username or "").lower()
 
-    # Billing and Dispatch roles do not require a password to enter
-    if user_role not in ["billing", "dispatch"] and user_name not in ["billing", "dispatch"]:
+    # Driver role does not require password. Dispatch, Admin and Billing require password
+    if user_role == "driver" or user_name == "driver":
+        pass
+    else:
         if not form_data.password or not security.verify_password(form_data.password, user.hashed_password):
             raise HTTPException(status_code=400, detail="Incorrect password")
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

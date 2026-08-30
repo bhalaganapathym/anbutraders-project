@@ -93,16 +93,10 @@ function AppContent() {
                  t === 'mismatch_rejected' ||
                  t === 'weight_mismatch_decision';
         }
-        if (user.role === 'billing' || user.role === 'cashier') {
-          return t === 'dispatch_sent_to_billing' ||
-                 t === 'ready_for_billing' ||
-                 t === 'dispatch_completed' || 
-                 t === 'vehicle_dispatched' ||
-                 t === 'discount_approved' ||
-                 t === 'discount_rejected' ||
-                 t === 'today_payment_overdue' ||
-                 t === 'credit_overdue' ||
-                 t === 'billing_alert';
+        if (user.role === 'driver') {
+          return t === 'bill_generated' || 
+                 t === 'ready_for_loading' || 
+                 t === 'dispatch_completed';
         }
         return true;
       });
@@ -135,12 +129,15 @@ function AppContent() {
       if (user.role === 'dispatch') {
         return ['dashboard', 'dispatches', 'delivery', 'products', 'notifications'].includes(item.id);
       }
+      if (user.role === 'driver') {
+        return ['delivery', 'notifications'].includes(item.id);
+      }
       return false;
     });
 
     return allowed.map(cfg => ({
       id: cfg.id,
-      label: t(cfg.labelKey),
+      label: cfg.id === 'delivery' && user.role === 'driver' ? 'இன்றைய டெலிவரி (POD)' : t(cfg.labelKey),
       icon: cfg.icon,
     }));
   }, [user, t]);
@@ -154,7 +151,8 @@ function AppContent() {
     return <Login />;
   }
 
-  const activeView = view === 'new_order' ? 'new_order' : (navItems.find((n) => n.id === view)?.id || navItems[0]?.id || 'dashboard');
+  const defaultViewForRole = user.role === 'driver' ? 'delivery' : 'dashboard';
+  const activeView = view === 'new_order' ? 'new_order' : (navItems.find((n) => n.id === view)?.id || navItems[0]?.id || defaultViewForRole);
 
   const navigate = (v: string) => {
     setView(v);
@@ -169,6 +167,7 @@ function AppContent() {
     if (user.role === 'admin') return t('role_admin');
     if (user.role === 'billing') return t('role_billing');
     if (user.role === 'dispatch') return t('role_dispatch');
+    if (user.role === 'driver') return 'ஓட்டுநர் (Driver)';
     return user.role;
   };
 

@@ -20,10 +20,8 @@ import {
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
-import { useTranslation } from '@/lib/i18n';
 
 export default function DriverDelivery() {
-  const { t } = useTranslation();
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [selectedDriverId, setSelectedDriverId] = useState<string>('all');
@@ -51,7 +49,7 @@ export default function DriverDelivery() {
       setDispatches(dispData);
       setDrivers(driverData);
     } catch {
-      toast('Failed to load delivery assignments', 'error');
+      toast('டெலிவரி பணிகளை ஏற்றுவதில் பிழை ஏற்பட்டது', 'error');
     } finally {
       setLoading(false);
     }
@@ -98,7 +96,7 @@ export default function DriverDelivery() {
     const total = d.bill?.total_amount ?? (d.items?.reduce((s, it) => s + (it.price || 0) * (it.quantity || 1), 0) || 0);
     const paid = d.bill?.paid_amount ?? 0;
     const balance = d.bill?.pending_amount ?? Math.max(0, total - paid);
-    setCollectedAmount(String(balance));
+    setCollectedAmount(balance > 0 ? balance.toString() : '0');
   };
 
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,7 +114,6 @@ export default function DriverDelivery() {
   const handleCompleteDelivery = async () => {
     if (!completingDispatch) return;
     setSubmitting(true);
-
     try {
       let photoUrl = completingDispatch.vehicle_leave_photo_url || null;
 
@@ -131,8 +128,8 @@ export default function DriverDelivery() {
 
       const notesSummary = [
         completingDispatch.notes || '',
-        `POD: Delivered to site. Payment collected: ₹${collectedAmount} via ${paymentMode.toUpperCase()}.`,
-        receiverNotes ? `Notes: ${receiverNotes}` : ''
+        `POD: தளத்தில் பொருட்கள் இறக்கப்பட்டது. வசூலித்த தொகை: ₹${collectedAmount} (${paymentMode.toUpperCase()}).`,
+        receiverNotes ? `குறிப்பு: ${receiverNotes}` : ''
       ].filter(Boolean).join(' | ');
 
       await api.put(`/dispatches/${completingDispatch.id}`, {
@@ -142,97 +139,99 @@ export default function DriverDelivery() {
         notes: notesSummary,
       });
 
-      toast(`Delivery for ${completingDispatch.dispatch_no} completed! Driver is now Free.`, 'success');
+      toast(`டெலிவரி (${completingDispatch.dispatch_no}) வெற்றிகரமாக முடிந்தது! ஓட்டுநர் தயார் நிலைக்கு மாற்றப்பட்டார்.`, 'success');
       setCompletingDispatch(null);
       loadData();
     } catch (err: any) {
-      toast(err?.message || 'Failed to complete delivery', 'error');
+      toast(err?.message || 'டெலிவரி முடிப்பதில் பிழை ஏற்பட்டது', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) return <div className="p-6">Loading delivery tasks...</div>;
+  if (loading) return <div className="p-6 font-bold text-center">டெலிவரி பணிகள் ஏற்றப்படுகின்றன...</div>;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-16 lg:pb-8">
-      {/* Header */}
+    <div className="space-y-6 max-w-5xl mx-auto pb-16 lg:pb-8 font-sans">
+      {/* தலைப்பு (Header) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <Truck size={26} className="text-amber-600" />
-            {t('delivery_pod')}
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
+            <Truck size={30} className="text-amber-600 animate-pulse" />
+            ஓட்டுநர் டெலிவரி மற்றும் ரசீது தளம்
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {t('driver_portal_title')}
+          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mt-1">
+            அன்பு டிரேடர்ஸ் — நேரடி வாகன டெலிவரி மற்றும் கட்டண வசூல் மேலாண்மை
           </p>
         </div>
       </div>
 
-      {/* Driver Filter & Search Bar */}
-      <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 border border-slate-200 dark:border-slate-800">
+      {/* ஓட்டுநர் தேர்வு மற்றும் தேடல் (Driver Filter & Search Bar) */}
+      <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 gap-3.5 border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
         <div>
-          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-            <User size={14} /> {t('drivers')}
+          <label className="block text-xs font-extrabold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <User size={15} className="text-amber-600" /> ஓட்டுநர் தேர்வு (Driver)
           </label>
           <select
             value={selectedDriverId}
             onChange={(e) => setSelectedDriverId(e.target.value)}
-            className="input text-sm font-semibold"
+            className="input text-sm font-bold bg-slate-50 dark:bg-slate-800"
           >
-            <option value="all">🚚 {t('all')} {t('drivers')}</option>
+            <option value="all">🚚 அனைத்து ஓட்டுநர்கள் (All Drivers)</option>
             {drivers.map((drv) => (
               <option key={drv.id} value={drv.id}>
-                {drv.name} ({drv.phone_number}) — {drv.status === 'engaged' ? '🟡 On Delivery' : '🟢 Free'}
+                {drv.name} ({drv.phone_number}) — {drv.status === 'engaged' ? '🟡 பணியில் உள்ளார்' : '🟢 தயார் நிலை'}
               </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-            <Search size={14} /> {t('search')}
+          <label className="block text-xs font-extrabold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+            <Search size={15} className="text-amber-600" /> தேடல் (Search)
           </label>
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('search')}
-            className="input text-sm"
+            placeholder="டெலிவரி எண், வாடிக்கையாளர் பெயர், வாகனம்..."
+            className="input text-sm font-semibold bg-slate-50 dark:bg-slate-800"
           />
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-4 border-b border-slate-200 dark:border-slate-700">
+      {/* பிரிவுகள் (Tabs) */}
+      <div className="flex gap-4 border-b-2 border-slate-200 dark:border-slate-700">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`pb-2.5 px-2 font-bold text-sm border-b-2 transition flex items-center gap-2 ${
+          className={`pb-3 px-3 font-extrabold text-sm sm:text-base border-b-4 transition flex items-center gap-2 ${
             activeTab === 'pending'
-              ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+              ? 'border-amber-600 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20 rounded-t-lg'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
           }`}
         >
-          <Truck size={16} /> {t('pending_deliveries')} ({dispatches.filter((d) => d.status !== 'completed').length})
+          <Truck size={18} /> இன்றைய டெலிவரி பணிகள் ({dispatches.filter((d) => d.status !== 'completed').length})
         </button>
         <button
           onClick={() => setActiveTab('completed')}
-          className={`pb-2.5 px-2 font-bold text-sm border-b-2 transition flex items-center gap-2 ${
+          className={`pb-3 px-3 font-extrabold text-sm sm:text-base border-b-4 transition flex items-center gap-2 ${
             activeTab === 'completed'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-t-lg'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
           }`}
         >
-          <CheckCircle2 size={16} /> {t('completed_deliveries')} ({dispatches.filter((d) => d.status === 'completed').length})
+          <CheckCircle2 size={18} /> முடிக்கப்பட்டவை ({dispatches.filter((d) => d.status === 'completed').length})
         </button>
       </div>
 
-      {/* Deliveries List */}
+      {/* டெலிவரி கார்டுகள் பட்டியல் (Deliveries List) */}
       {filtered.length === 0 ? (
         <div className="card p-12 text-center text-slate-500 space-y-2">
-          <Truck size={36} className="mx-auto text-slate-300 dark:text-slate-600" />
-          <p className="font-semibold text-base">No {activeTab} deliveries found.</p>
-          <p className="text-xs text-slate-400">All assigned truck deliveries will appear here in real time.</p>
+          <Truck size={40} className="mx-auto text-slate-300 dark:text-slate-600" />
+          <p className="font-bold text-base text-slate-700 dark:text-slate-300">
+            {activeTab === 'pending' ? 'தற்போது நிலுவையில் டெலிவரிகள் இல்லை.' : 'இன்று முடிக்கப்பட்ட டெலிவரிகள் இல்லை.'}
+          </p>
+          <p className="text-xs text-slate-400">வாகனத்தில் ஏற்றப்படும் அனைத்து ஆர்டர்களும் உடனுக்குடன் இங்கு காண்பிக்கப்படும்.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -246,103 +245,101 @@ export default function DriverDelivery() {
             return (
               <div
                 key={d.id}
-                className="card p-5 border border-slate-200 dark:border-slate-800 space-y-4 hover:shadow-md transition"
+                className="card p-5 border-2 border-slate-200 dark:border-slate-800 space-y-4 hover:shadow-md transition bg-white dark:bg-slate-900 rounded-2xl"
               >
-                {/* Top header */}
+                {/* மேல் பகுதி (Header) */}
                 <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                   <div>
-                    <span className="text-xs font-mono font-bold bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-md">
+                    <span className="text-xs font-mono font-black bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-2.5 py-1 rounded-md shadow-sm">
                       {d.dispatch_no}
                     </span>
-                    <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 mt-1">
-                      {d.customer?.name || 'Customer'}
+                    <h3 className="font-black text-lg text-slate-900 dark:text-slate-100 mt-1.5">
+                      {d.customer?.name || 'வாடிக்கையாளர்'}
                     </h3>
                   </div>
 
                   <div className="text-right">
                     <span
-                      className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase ${
+                      className={`text-xs font-extrabold px-3 py-1 rounded-full uppercase shadow-sm ${
                         d.status === 'completed'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
-                          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 animate-pulse'
                       }`}
                     >
-                      {d.status.replace(/_/g, ' ')}
+                      {d.status === 'completed' ? 'டெலிவரி முடிந்தது' : d.status === 'ready_for_loading' ? 'ஏற்றுமதிக்கு தயார்' : 'வழியில் உள்ளது'}
                     </span>
                   </div>
                 </div>
 
-                {/* Driver & Vehicle Tag */}
-                <div className="bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg text-xs space-y-1 text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold flex items-center gap-1.5">
-                      <Truck size={14} className="text-amber-600" />
-                      Vehicle: <span className="font-mono">{d.vehicle_number || '—'}</span>
-                    </span>
-                    <span className="font-medium text-slate-500">
-                      Driver: {d.driver_name || 'Unassigned'}
-                    </span>
-                  </div>
+                {/* வாகனம் மற்றும் ஓட்டுநர் விவரம் (Driver & Vehicle Tag) */}
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-slate-900 dark:text-slate-100 font-extrabold">
+                    <Truck size={16} className="text-amber-600" />
+                    வாகனம்: <span className="font-mono text-sm bg-white dark:bg-slate-900 px-2 py-0.5 rounded border">{d.vehicle_number || 'குறிப்பிடப்படவில்லை'}</span>
+                  </span>
+                  <span className="text-slate-600 dark:text-slate-300">
+                    ஓட்டுநர்: {d.driver_name || 'நியமிக்கப்படவில்லை'}
+                  </span>
                 </div>
 
-                {/* Balance Amount to Collect Callout */}
-                <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-900 dark:to-slate-900 border-2 border-amber-300/80 dark:border-amber-700/60 p-3 rounded-xl flex items-center justify-between shadow-sm">
+                {/* தளத்தில் வசூலிக்க வேண்டிய தொகை (Cash to Collect on Site Callout) */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-900 dark:to-amber-950/30 border-2 border-amber-300 dark:border-amber-700/80 p-3.5 rounded-2xl flex items-center justify-between shadow-sm">
                   <div>
-                    <p className="text-[11px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wide">
-                      Cash to Collect on Site
+                    <p className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                      <IndianRupee size={14} /> தளத்தில் வசூலிக்க வேண்டிய தொகை
                     </p>
-                    <p className="text-xs text-slate-500">
-                      Total: ₹{total.toFixed(2)} | Paid: ₹{paid.toFixed(2)}
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                      மொத்தம்: ₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })} | செலுத்தியது: ₹{paid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="text-xl font-black text-rose-600 dark:text-rose-400">
+                    <span className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">
                       ₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
 
-                {/* Delivery Address & Quick Navigation */}
+                {/* தள முகவரி மற்றும் கூகுள் மேப்ஸ் (Delivery Address & Quick Navigation) */}
                 {deliveryAddress && (
-                  <div className="space-y-1.5 text-xs">
-                    <p className="text-slate-500 font-medium flex items-center gap-1">
-                      <MapPin size={14} className="text-slate-400 shrink-0" />
-                      {deliveryAddress}
+                  <div className="space-y-1.5 text-xs bg-blue-50/40 dark:bg-slate-800/40 p-3 rounded-xl border border-blue-100 dark:border-slate-700">
+                    <p className="text-slate-700 dark:text-slate-200 font-bold flex items-start gap-1.5">
+                      <MapPin size={16} className="text-rose-500 shrink-0 mt-0.5" />
+                      <span>{deliveryAddress}</span>
                     </p>
                     <a
                       href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                      className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-extrabold text-xs pl-5 hover:underline"
                     >
-                      <ExternalLink size={12} /> Open in Google Maps
+                      <ExternalLink size={13} /> 🗺️ கூகுள் மேப்ஸில் வழியைப் பார்க்க (Google Maps)
                     </a>
                   </div>
                 )}
 
-                {/* Items preview */}
-                <div className="text-xs text-slate-600 dark:text-slate-400 bg-white/50 dark:bg-slate-900/30 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
-                  <p className="font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <Package size={13} /> Goods Loaded ({d.items?.length || 0} item types):
+                {/* ஏற்றிய பொருட்கள் பட்டியல் (Items preview) */}
+                <div className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-700">
+                  <p className="font-extrabold text-slate-900 dark:text-slate-100 mb-1.5 flex items-center gap-1.5">
+                    <Package size={15} className="text-amber-600" /> ஏற்றிய பொருட்கள் ({d.items?.length || 0} வகைகள்):
                   </p>
-                  <ul className="list-disc list-inside space-y-0.5">
+                  <ul className="list-disc list-inside space-y-1 font-medium">
                     {d.items?.map((it, i) => (
                       <li key={it.id || i} className="truncate">
-                        <span className="font-semibold">{it.quantity} {it.unit || 'nos'}</span> {it.product_name}
+                        <strong className="text-slate-900 dark:text-slate-100">{it.quantity} {it.unit || 'எண்ணிக்கை'}</strong> — {it.product_name}
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                {/* 1-Tap Action Buttons */}
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2">
+                {/* நேரடி செயல் பொத்தான்கள் (1-Tap Action Buttons) */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2.5">
                   {customerPhone && (
                     <>
                       <a
                         href={`tel:${customerPhone}`}
-                        className="btn-secondary py-2 px-3 text-xs flex-1 flex items-center justify-center gap-1.5 font-bold"
+                        className="btn-secondary py-2.5 px-3 text-xs flex-1 flex items-center justify-center gap-1.5 font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-200"
                       >
-                        <Phone size={14} className="text-emerald-600" /> Call ({customerPhone})
+                        <Phone size={15} className="text-emerald-600" /> அழைக்க ({customerPhone})
                       </a>
 
                       <button
@@ -350,10 +347,10 @@ export default function DriverDelivery() {
                           const msg = buildDispatchWhatsAppMessage(d, undefined, d.customer, d.bill);
                           openWhatsApp(customerPhone, msg);
                         }}
-                        className="btn-secondary py-2 px-3 text-xs flex items-center justify-center gap-1.5 text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 font-semibold"
-                        title="Send WhatsApp Alert"
+                        className="btn-secondary py-2.5 px-3 text-xs flex items-center justify-center gap-1.5 text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100 font-extrabold"
+                        title="வாட்ஸ்அப்பில் தகவல் அனுப்ப"
                       >
-                        <MessageSquare size={14} /> WhatsApp
+                        <MessageSquare size={15} /> வாட்ஸ்அப்
                       </button>
                     </>
                   )}
@@ -361,9 +358,9 @@ export default function DriverDelivery() {
                   {d.status !== 'completed' && (
                     <button
                       onClick={() => openPODModal(d)}
-                      className="btn-primary py-2 px-4 text-xs font-bold flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                      className="btn-primary py-2.5 px-4 text-xs font-black flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md rounded-xl"
                     >
-                      <Camera size={14} /> Complete & POD
+                      <Camera size={16} /> 📸 டெலிவரி முடிந்தது (POD)
                     </button>
                   )}
                 </div>
@@ -373,58 +370,58 @@ export default function DriverDelivery() {
         </div>
       )}
 
-      {/* PROOF OF DELIVERY (POD) MODAL */}
+      {/* டெலிவரி நிறைவு மற்றும் ரசீது உறுதிப்படுத்தல் (PROOF OF DELIVERY MODAL) */}
       <Modal
         open={!!completingDispatch}
         onClose={() => setCompletingDispatch(null)}
-        title={`Proof of Delivery - ${completingDispatch?.dispatch_no}`}
+        title={`டெலிவரி நிறைவு மற்றும் ரசீது — ${completingDispatch?.dispatch_no}`}
         size="md"
       >
         {completingDispatch && (
-          <div className="space-y-4">
-            <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg text-xs space-y-1 border border-slate-200 dark:border-slate-700">
-              <p><span className="font-bold text-slate-800 dark:text-slate-200">Customer:</span> {completingDispatch.customer?.name}</p>
-              <p><span className="font-bold text-slate-800 dark:text-slate-200">Address:</span> {completingDispatch.delivery_address || completingDispatch.customer?.address || 'Site Delivery'}</p>
-              <p><span className="font-bold text-slate-800 dark:text-slate-200">Assigned Driver:</span> {completingDispatch.driver_name || 'Driver'}</p>
+          <div className="space-y-4 font-sans">
+            <div className="bg-slate-50 dark:bg-slate-900 p-3.5 rounded-xl text-xs space-y-1.5 border border-slate-200 dark:border-slate-700">
+              <p><strong className="text-slate-900 dark:text-slate-100">வாடிக்கையாளர்:</strong> {completingDispatch.customer?.name}</p>
+              <p><strong className="text-slate-900 dark:text-slate-100">முகவரி:</strong> {completingDispatch.delivery_address || completingDispatch.customer?.address || 'தள டெலிவரி'}</p>
+              <p><strong className="text-slate-900 dark:text-slate-100">ஓட்டுநர்:</strong> {completingDispatch.driver_name || 'ஓட்டுநர்'}</p>
             </div>
 
-            {/* Payment Collection Confirmation */}
-            <div className="bg-amber-50 dark:bg-slate-900 border border-amber-200 dark:border-slate-700 p-3.5 rounded-xl space-y-3">
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                <IndianRupee size={14} className="text-amber-600" /> Amount Collected from Customer (₹)
+            {/* வசூலித்த தொகை (Payment Collection Confirmation) */}
+            <div className="bg-amber-50 dark:bg-slate-900 border-2 border-amber-300 dark:border-amber-800/60 p-4 rounded-2xl space-y-3 shadow-sm">
+              <label className="block text-xs font-black text-amber-950 dark:text-amber-200 flex items-center gap-1.5 uppercase tracking-wide">
+                <IndianRupee size={16} className="text-amber-600" /> வாடிக்கையாளரிடம் வசூலித்த தொகை (₹)
               </label>
               <div className="relative">
-                <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <IndianRupee size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="number"
                   value={collectedAmount}
                   onChange={(e) => setCollectedAmount(e.target.value)}
-                  className="input pl-8 text-base font-extrabold text-emerald-700 dark:text-emerald-400"
+                  className="input pl-9 text-lg font-black text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800"
                   placeholder="0.00"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Payment Received Mode
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  கட்டணம் செலுத்திய முறை (Payment Mode)
                 </label>
                 <select
                   value={paymentMode}
                   onChange={(e) => setPaymentMode(e.target.value)}
-                  className="input text-xs font-semibold"
+                  className="input text-xs font-bold bg-white dark:bg-slate-800"
                 >
-                  <option value="cash">💵 Cash Payment on Site</option>
-                  <option value="gpay_upi">📱 GPay / PhonePe / UPI on Site</option>
-                  <option value="office_paid">🏢 Already Paid to Office</option>
-                  <option value="credit">📒 Customer Account / Credit</option>
+                  <option value="cash">💵 ரொக்கப் பணம் (Cash on Site)</option>
+                  <option value="gpay_upi">📱 கூகுள் பே / ஃபோன்பே / UPI</option>
+                  <option value="office_paid">🏢 அலுவலகத்தில் ஏற்கனவே செலுத்தப்பட்டது</option>
+                  <option value="credit">📒 வாடிக்கையாளர் கடன் கணக்கு (Credit)</option>
                 </select>
               </div>
             </div>
 
-            {/* Photo Capture */}
+            {/* தள டெலிவரி புகைப்படம் (Photo Capture) */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1">
-                <Camera size={14} /> Site Delivery Photo / Unloaded Materials
+              <label className="block text-xs font-black text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1.5">
+                <Camera size={16} className="text-amber-600" /> தளத்தில் இறக்கப்பட்ட பொருட்களின் புகைப்படம் (POD Photo)
               </label>
 
               <input
@@ -437,58 +434,58 @@ export default function DriverDelivery() {
               />
 
               {podPhotoPreview ? (
-                <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 h-44 bg-slate-900 flex items-center justify-center">
+                <div className="relative rounded-xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 h-48 bg-slate-900 flex items-center justify-center shadow">
                   <img src={podPhotoPreview} alt="POD Preview" className="h-full w-full object-contain" />
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 backdrop-blur"
+                    className="absolute bottom-3 right-3 bg-black/80 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur shadow"
                   >
-                    <Camera size={13} /> Retake
+                    <Camera size={14} /> மீண்டும் புகைப்படம் எடுக்க
                   </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-32 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-500 hover:border-amber-500 hover:text-amber-600 transition bg-slate-50 dark:bg-slate-900/50"
+                  className="w-full h-36 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:border-amber-500 hover:text-amber-600 transition bg-slate-50 dark:bg-slate-800/40 p-4"
                 >
-                  <Camera size={26} />
-                  <span className="text-xs font-semibold">Tap to Take Delivery Photo with Phone Camera</span>
+                  <Camera size={32} className="text-amber-600 animate-bounce" />
+                  <span className="text-xs font-extrabold text-center">மொபைல் கேமராவில் புகைப்படம் எடுக்க இங்கே தொடவும் (Tap to Take Photo)</span>
                 </button>
               )}
             </div>
 
-            {/* Receiver Notes */}
+            {/* பெறுநர் பெயர் / குறிப்புகள் (Receiver Notes) */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Receiver Name / Delivery Notes (Optional)
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                பொருளைப் பெற்றவர் பெயர் / குறிப்புகள் (விருப்பத்தேர்வு)
               </label>
               <input
                 type="text"
                 value={receiverNotes}
                 onChange={(e) => setReceiverNotes(e.target.value)}
-                placeholder="e.g. Received by Site Supervisor Murugan"
-                className="input text-xs"
+                placeholder="எ.கா. தள மேற்பார்வையாளர் முருகன் பெற்றுக்கொண்டார்"
+                className="input text-xs font-semibold"
               />
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+            {/* செயல் பொத்தான்கள் (Actions) */}
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => setCompletingDispatch(null)}
-                className="btn-secondary"
+                className="btn-secondary font-bold text-xs"
               >
-                Cancel
+                ரத்து செய் (Cancel)
               </button>
               <button
                 type="button"
                 onClick={handleCompleteDelivery}
                 disabled={submitting}
-                className="btn-primary bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 font-bold"
+                className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 font-black text-xs sm:text-sm py-2.5 px-4 shadow-md rounded-xl"
               >
-                <CheckCircle2 size={16} /> {submitting ? 'Submitting POD...' : 'Confirm Delivery & Free Driver'}
+                <CheckCircle2 size={18} /> {submitting ? 'பதிவேற்றப்படுகிறது...' : '✅ டெலிவரியை உறுதிப்படுத்து'}
               </button>
             </div>
           </div>

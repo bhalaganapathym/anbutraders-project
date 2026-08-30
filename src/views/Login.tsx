@@ -65,7 +65,7 @@ export default function Login() {
       toast('Please enter username', 'error');
       return;
     }
-    if (username.toLowerCase() !== 'billing' && username.toLowerCase() !== 'dispatch' && !password) {
+    if (username.toLowerCase() !== 'driver' && !password) {
       toast('Please enter password', 'error');
       return;
     }
@@ -75,7 +75,7 @@ export default function Login() {
       const API_URL = import.meta.env.VITE_API_URL || '/api';
       const formData = new URLSearchParams();
       formData.append('username', username);
-      formData.append('password', password || '');
+      formData.append('password', password || 'nopassword');
       
       const res = await fetch(`${API_URL}/login/access-token`, {
         method: 'POST',
@@ -194,17 +194,17 @@ export default function Login() {
           </button>
 
           <div className="pt-4 border-t border-white/10 dark:border-slate-700/50">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center uppercase tracking-wider mb-3">Quick Login (No Password Required)</p>
-            <div className="grid grid-cols-1 gap-3">
-              <button
-                type="button"
-                onClick={() => quickRoleLogin('dispatch')}
-                disabled={loading}
-                className="btn-secondary w-full py-2.5"
-              >
-                Dispatch Team
-              </button>
-            </div>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 text-center uppercase tracking-wider mb-2.5">
+              ஓட்டுநர் நேரடி உள்நுழைவு (Driver Login)
+            </p>
+            <button
+              type="button"
+              onClick={() => quickRoleLogin('driver')}
+              disabled={loading}
+              className="w-full py-3 px-4 rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 font-extrabold text-sm flex items-center justify-center gap-2 shadow-sm transition"
+            >
+              🚚 ஓட்டுநர் நேரடி உள்நுழைவு (No Password)
+            </button>
           </div>
         </form>
       </div>
