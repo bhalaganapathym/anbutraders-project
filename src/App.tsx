@@ -83,8 +83,27 @@ function AppContent() {
       if (!user) return;
       const data = await api.get('/notifications');
       const applicable = data.filter((n: any) => {
-        if (user.role === 'dispatch') return n.type === 'order_confirmed' || n.type === 'bill_generated';
-        if (user.role === 'billing') return n.type === 'dispatch_completed' || n.type === 'photo_uploaded' || n.type === 'billing_alert' || n.type === 'credit_overdue';
+        const t = (n.type || '').toLowerCase();
+        if (user.role === 'dispatch') {
+          return t === 'order_confirmed' || 
+                 t === 'advance_order_booked' || 
+                 t === 'bill_generated' || 
+                 t === 'ready_for_loading' ||
+                 t === 'mismatch_approved' || 
+                 t === 'mismatch_rejected' ||
+                 t === 'weight_mismatch_decision';
+        }
+        if (user.role === 'billing' || user.role === 'cashier') {
+          return t === 'dispatch_sent_to_billing' ||
+                 t === 'ready_for_billing' ||
+                 t === 'dispatch_completed' || 
+                 t === 'vehicle_dispatched' ||
+                 t === 'discount_approved' ||
+                 t === 'discount_rejected' ||
+                 t === 'today_payment_overdue' ||
+                 t === 'credit_overdue' ||
+                 t === 'billing_alert';
+        }
         return true;
       });
       setUnreadCount(applicable.filter((n: any) => !n.read).length);
@@ -92,7 +111,15 @@ function AppContent() {
   };
 
   useEffect(() => {
-    if (user) fetchUnread();
+    if (user) {
+      fetchUnread();
+      // Auto-sync background push subscription if permission already granted
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        import('@/lib/push').then(({ subscribeToPushNotifications }) => {
+          subscribeToPushNotifications(user.role || 'all', user.id).catch(() => {});
+        });
+      }
+    }
   }, [user]);
 
   useRealtime('notifications', fetchUnread);

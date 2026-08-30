@@ -76,6 +76,7 @@ def send_web_push(
                     data=payload,
                     vapid_private_key=settings.VAPID_PRIVATE_KEY,
                     vapid_claims={"sub": settings.VAPID_CLAIM_EMAIL},
+                    headers={"Urgency": "high", "Topic": "alert"},
                     ttl=86400  # 24 hours delivery TTL
                 )
                 sent_count += 1
