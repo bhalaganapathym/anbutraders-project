@@ -85,15 +85,7 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-    background_tasks.add_task(
-        send_web_push,
-        title=notification.title,
-        body=notification.message,
-        url="/#/billing",
-        tag=f"bill-{bill.id}",
-        role="all"
-    )
-    
+    # Note: Web push is automatically dispatched via after_insert hook with role="dispatch" and url="/#/dispatches"
     return bill
 
 @router.get("", response_model=List[BillResponse])

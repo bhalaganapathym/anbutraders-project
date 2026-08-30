@@ -25,11 +25,21 @@ def send_web_push(
     try:
         query = db.query(PushSubscription)
         if role and role != "all":
-            # Match role or subscriptions set to 'all' or NULL
+            # Match role hierarchy: Admin always receives dispatch/billing alerts
+            if role in ["dispatch", "billing", "cashier"]:
+                allowed_roles = [role, "admin", "all"]
+                if role == "billing":
+                    allowed_roles.append("cashier")
+                elif role == "cashier":
+                    allowed_roles.append("billing")
+            elif role == "admin":
+                allowed_roles = ["admin", "all"]
+            else:
+                allowed_roles = [role, "admin", "all"]
+
             query = query.filter(
-                (PushSubscription.user_role == role) | 
-                (PushSubscription.user_role == "all") | 
-                (PushSubscription.user_role.is_(None))
+                PushSubscription.user_role.in_(allowed_roles) | 
+                PushSubscription.user_role.is_(None)
             )
         
         subscriptions = query.all()
@@ -44,6 +54,7 @@ def send_web_push(
             "tag": tag,
             "icon": "/pwa-192x192.png",
             "badge": "/pwa-192x192.png",
+            "sound": "/alert-tone.mp3",
             "timestamp": int(1000 * datetime.now(timezone.utc).timestamp())
         })
 
@@ -116,18 +127,50 @@ def get_role_and_url_for_notification(notif_type: str, dispatch_id: str = None, 
     """
     Maps notification types to target roles and in-app navigation routes.
     """
-    if notif_type in ["order_confirmed", "estimate_created", "advance_order_booked"]:
+    t = (notif_type or "").lower()
+    
+    # 1. Estimates & Orders
+    if t in ["order_confirmed", "estimate_created", "advance_order_booked"]:
         return "all", "/#/orders"
-    elif notif_type in ["bill_generated", "weight_mismatch_decision"]:
-        return "dispatch", "/#/dispatches"
-    elif notif_type in ["dispatch_completed", "photo_uploaded", "billing_alert", "discount_decision"]:
+    elif t in ["advance_order_due"]:
+        return "all", "/#/orders"
+        
+    # 2. Phase 1 Dispatch -> Billing
+    elif t in ["dispatch_sent_to_billing", "ready_for_billing"]:
         return "billing", "/#/billing"
-    elif notif_type in ["discount_approval_request", "weight_mismatch_request"]:
+        
+    # 3. Weight Mismatch Requests -> Admin
+    elif t in ["weight_mismatch_approval", "weight_mismatch_request"]:
         return "admin", "/#/dashboard"
-    elif notif_type in ["today_payment_overdue", "credit_overdue"]:
-        return "all", "/#/billing"
-    elif notif_type in ["advance_order_due"]:
-        return "all", "/#/orders"
+        
+    # 4. Weight Mismatch Decision -> Dispatch
+    elif t in ["mismatch_approved", "mismatch_rejected", "weight_mismatch_decision"]:
+        return "dispatch", "/#/dispatches"
+        
+    # 5. Discount Approval Request -> Admin
+    elif t in ["discount_approval_request", "discount_request"]:
+        return "admin", "/#/dashboard"
+        
+    # 6. Discount Decision -> Billing
+    elif t in ["discount_approved", "discount_rejected", "discount_decision"]:
+        return "billing", "/#/billing"
+        
+    # 7. Bill Generated & Settle -> Dispatch (Ready for Loading)
+    elif t in ["bill_generated", "ready_for_loading"]:
+        return "dispatch", "/#/dispatches"
+        
+    # 8. Phase 2 Dispatch Completed -> Billing / Admin
+    elif t in ["dispatch_completed", "vehicle_dispatched"]:
+        return "billing", "/#/billing"
+        
+    # 9. Driver Delivery / POD -> All
+    elif t in ["delivery_completed", "pod_collected", "photo_uploaded"]:
+        return "all", "/#/dispatches"
+        
+    # 10. Financial / Credit Overdue -> Billing & Admin
+    elif t in ["today_payment_overdue", "credit_overdue", "billing_alert"]:
+        return "billing", "/#/billing"
+        
     return "all", "/#/notifications"
 
 # Automatic Push Trigger: Listen to all Notification insertions in database

@@ -34,10 +34,19 @@ self.addEventListener('push', (event: PushEvent) => {
     badge: iconUrl,
     tag,
     renotify: true,
+    silent: false,
+    sound: '/alert-tone.mp3',
     data: { url },
     vibrate: [300, 100, 300, 100, 300],
     requireInteraction: true
   };
+
+  // Broadcast to open browser windows to play foreground chime tone
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    for (const client of clients) {
+      client.postMessage({ type: 'PLAY_NOTIFICATION_CHIME', title, body });
+    }
+  });
 
   event.waitUntil(self.registration.showNotification(title, options));
 });

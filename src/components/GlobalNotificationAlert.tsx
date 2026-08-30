@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api, type Notification } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { playNotificationChime, initAudioOnUserInteraction } from '@/lib/sound';
 import { Bell } from 'lucide-react';
 
 export default function GlobalNotificationAlert() {
@@ -19,8 +20,28 @@ export default function GlobalNotificationAlert() {
       const notifs = data as Notification[];
       
       const myNotifs = notifs.filter(n => {
-        if (user.role === 'dispatch') return n.type === 'order_confirmed' || n.type === 'bill_generated';
-        if (user.role === 'billing') return n.type === 'dispatch_completed' || n.type === 'photo_uploaded' || n.type === 'billing_alert' || n.type === 'credit_overdue';
+        const t = (n.type || '').toLowerCase();
+        if (user.role === 'dispatch') {
+          return t === 'order_confirmed' || 
+                 t === 'advance_order_booked' || 
+                 t === 'bill_generated' || 
+                 t === 'ready_for_loading' ||
+                 t === 'mismatch_approved' || 
+                 t === 'mismatch_rejected' ||
+                 t === 'weight_mismatch_decision';
+        }
+        if (user.role === 'billing' || user.role === 'cashier') {
+          return t === 'dispatch_sent_to_billing' ||
+                 t === 'ready_for_billing' ||
+                 t === 'dispatch_completed' || 
+                 t === 'vehicle_dispatched' ||
+                 t === 'discount_approved' ||
+                 t === 'discount_rejected' ||
+                 t === 'today_payment_overdue' ||
+                 t === 'credit_overdue' ||
+                 t === 'billing_alert';
+        }
+        // Admin receives all operational alerts
         return true;
       });
 
@@ -41,28 +62,8 @@ export default function GlobalNotificationAlert() {
           setLatestNotif(newest);
           setFlash(true);
           
-          // Play a sharp 3-pulse repeating beep sound for 6 seconds
-          try {
-            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const now = audioCtx.currentTime;
-            for (let i = 0; i < 6; i++) {
-              const cycleStart = now + i * 1.0;
-              [0, 0.25, 0.5].forEach((offset) => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(1200, cycleStart + offset);
-                gain.gain.setValueAtTime(0.3, cycleStart + offset);
-                gain.gain.exponentialRampToValueAtTime(0.01, cycleStart + offset + 0.18);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(cycleStart + offset);
-                osc.stop(cycleStart + offset + 0.18);
-              });
-            }
-          } catch (e) {
-            // ignore audio error
-          }
+          // Play distinct 3-tone notification chime
+          playNotificationChime();
 
           setTimeout(() => {
             setFlash(false);
@@ -76,9 +77,27 @@ export default function GlobalNotificationAlert() {
     }
   };
 
-  // Initial load
+  // Initial load and user interaction audio unlock
   useEffect(() => {
+    initAudioOnUserInteraction();
     checkNotifications();
+
+    // Listen to background service worker chime triggers
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'PLAY_NOTIFICATION_CHIME') {
+        playNotificationChime();
+        checkNotifications();
+      }
+    };
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    return () => {
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+    };
   }, [user]);
 
   useRealtime('notifications', checkNotifications);

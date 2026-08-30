@@ -664,8 +664,20 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
             setattr(dispatch, key, value)
             
     if old_status != dispatch.status:
+        customer = db.query(Customer).filter(Customer.id == dispatch.customer_id).first()
+        customer_name = customer.name if customer else (dispatch.customer.name if dispatch.customer else "Customer")
+
         if dispatch.status == "sent_to_billing":
             dispatch.sent_to_billing_at = datetime.now(timezone.utc)
+            notif = Notification(
+                type="dispatch_sent_to_billing",
+                title=f"🧾 Ready for Billing — {dispatch.dispatch_no}",
+                message=f"Dispatch {dispatch.dispatch_no} for {customer_name} verified. Driver: {dispatch.driver_name or 'N/A'}. Ready for billing.",
+                dispatch_id=dispatch.id,
+                order_id=dispatch.order_id,
+                customer_name=customer_name
+            )
+            db.add(notif)
         elif dispatch_in.status == "completed":
             dispatch.completed_at = datetime.now(timezone.utc)
             # Clean up temporary voice note file if any exists to free server storage
@@ -689,6 +701,16 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
                 driver = db.query(Driver).filter(Driver.phone_number == dispatch.driver_mobile).first()
                 if driver:
                     driver.status = "free"
+
+            notif = Notification(
+                type="dispatch_completed",
+                title=f"🚚 Vehicle Dispatched — {dispatch.dispatch_no}",
+                message=f"Dispatch {dispatch.dispatch_no} for {customer_name} loaded and dispatched on vehicle {dispatch.vehicle_number or 'N/A'}.",
+                dispatch_id=dispatch.id,
+                order_id=dispatch.order_id,
+                customer_name=customer_name
+            )
+            db.add(notif)
 
     if dispatch_in.items:
         db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
