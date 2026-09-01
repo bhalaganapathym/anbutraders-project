@@ -215,7 +215,18 @@ def create_product(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    product = Product(**product_in.model_dump())
+    data = product_in.model_dump()
+    if data.get("name"):
+        data["name"] = data["name"].strip().upper()
+    if data.get("brand"):
+        data["brand"] = data["brand"].strip().upper()
+    if data.get("category"):
+        data["category"] = data["category"].strip().upper()
+    if data.get("size"):
+        data["size"] = data["size"].strip().upper()
+    if data.get("unit"):
+        data["unit"] = data["unit"].strip().upper()
+    product = Product(**data)
     db.add(product)
     db.commit()
     db.refresh(product)
@@ -228,7 +239,20 @@ def bulk_create_products(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    products = [Product(**p.model_dump()) for p in products_in]
+    products = []
+    for p in products_in:
+        data = p.model_dump()
+        if data.get("name"):
+            data["name"] = data["name"].strip().upper()
+        if data.get("brand"):
+            data["brand"] = data["brand"].strip().upper()
+        if data.get("category"):
+            data["category"] = data["category"].strip().upper()
+        if data.get("size"):
+            data["size"] = data["size"].strip().upper()
+        if data.get("unit"):
+            data["unit"] = data["unit"].strip().upper()
+        products.append(Product(**data))
     db.add_all(products)
     db.commit()
     for product in products:
@@ -274,7 +298,18 @@ def update_product(id: UUID, product_in: ProductCreate, background_tasks: Backgr
     product = db.query(Product).filter(Product.id == id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    for key, value in product_in.model_dump().items():
+    data = product_in.model_dump()
+    if data.get("name"):
+        data["name"] = data["name"].strip().upper()
+    if data.get("brand"):
+        data["brand"] = data["brand"].strip().upper()
+    if data.get("category"):
+        data["category"] = data["category"].strip().upper()
+    if data.get("size"):
+        data["size"] = data["size"].strip().upper()
+    if data.get("unit"):
+        data["unit"] = data["unit"].strip().upper()
+    for key, value in data.items():
         setattr(product, key, value)
     db.commit()
     db.refresh(product)

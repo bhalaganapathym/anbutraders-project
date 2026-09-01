@@ -497,55 +497,14 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         </section>
       )}
 
-      {/* 2. Activities Today (3 Metric Cards: Dispatches, Estimates, Advance Orders) */}
+      {/* 2. Activities Today (3 Metric Cards: 1. Estimates, 2. Dispatches, 3. Advance Orders) */}
       <section className="space-y-3">
         <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
           Activities Today
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           
-          {/* DISPATCHES Today Card */}
-          <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Truck size={18} className="text-emerald-600 dark:text-emerald-400" />
-                <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                  Dispatches
-                </h3>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase mr-1">
-                  Today:
-                </span>
-                <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
-                  {loading ? '—' : todayStats?.dispatches.total ?? 0}
-                </span>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800 p-4">
-              <div className="text-center sm:text-left pr-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  Ongoing
-                </p>
-                <p className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
-                  {loading ? '—' : todayStats?.dispatches.ongoing ?? 0}
-                </p>
-                <p className="text-[10px] font-medium text-slate-400 mt-0.5">Active pipeline</p>
-              </div>
-              <div className="text-center sm:text-left pl-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                  Closed
-                </p>
-                <p className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
-                  {loading ? '—' : todayStats?.dispatches.closed ?? 0}
-                </p>
-                <p className="text-[10px] font-medium text-slate-400 mt-0.5">Delivered</p>
-              </div>
-            </div>
-          </div>
-
-          {/* ESTIMATES Today Card */}
+          {/* 1. ESTIMATES Today Card */}
           <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
             <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -592,7 +551,48 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
             </div>
           </div>
 
-          {/* ADVANCE ORDERS Card */}
+          {/* 2. DISPATCHES Today Card */}
+          <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+            <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Truck size={18} className="text-emerald-600 dark:text-emerald-400" />
+                <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  Dispatches
+                </h3>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-extrabold text-slate-500 dark:text-slate-400 uppercase mr-1">
+                  Today:
+                </span>
+                <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                  {loading ? '—' : todayStats?.dispatches.total ?? 0}
+                </span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800 p-4">
+              <div className="text-center sm:text-left pr-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Ongoing
+                </p>
+                <p className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                  {loading ? '—' : todayStats?.dispatches.ongoing ?? 0}
+                </p>
+                <p className="text-[10px] font-medium text-slate-400 mt-0.5">Active pipeline</p>
+              </div>
+              <div className="text-center sm:text-left pl-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  Closed
+                </p>
+                <p className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
+                  {loading ? '—' : todayStats?.dispatches.closed ?? 0}
+                </p>
+                <p className="text-[10px] font-medium text-slate-400 mt-0.5">Delivered</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. ADVANCE ORDERS Card */}
           <div 
             onClick={() => onNavigate('orders')}
             className="rounded-2xl border-2 border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-slate-900 overflow-hidden shadow-sm cursor-pointer hover:border-indigo-500 transition-all"
@@ -641,29 +641,28 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
               </div>
             </div>
           </div>
-
         </div>
       </section>
 
       {/* 3. Quick Access Grid (8 App-Style Rounded Cards - Placed Below Activities Today) */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
-          <Sparkles size={18} className="text-amber-500" />
+          <Sparkles size={16} className="text-amber-500" />
           <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
             Quick Access
           </h2>
         </div>
-        <div className={getGridColsClass(quickAccessItems.length)}>
-          {quickAccessItems.map((item) => (
+        
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
+          {quickAccessTools.map((item) => (
             <button
               key={item.name}
+              type="button"
               onClick={() => onNavigate(item.view)}
-              className={`group flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all text-center ${item.border}`}
+              className="group flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all duration-200 active:scale-95 text-center"
             >
-              <div
-                className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-md transition-transform group-hover:scale-110 mb-2.5 ${item.color}`}
-              >
-                <item.icon size={24} />
+              <div className={`p-2.5 sm:p-3 rounded-2xl ${item.color} mb-2 shadow-md transition-transform group-hover:scale-110`}>
+                <item.icon size={20} className="sm:w-6 sm:h-6" />
               </div>
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-1">
                 {item.name}
@@ -739,6 +738,24 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                 const deliveredActive = d.status === 'ready_for_loading';
                 const deliveredTime = d.completed_at ? formatTime(d.completed_at) : 'Not processed';
 
+                // Calculate duration between consecutive completed steps for connecting line bubbles
+                const getStepDiff = (start?: string | null, end?: string | null) => {
+                  if (!start || !end) return null;
+                  const diff = new Date(end).getTime() - new Date(start).getTime();
+                  if (diff <= 0 || isNaN(diff)) return null;
+                  const mins = Math.floor(diff / 60000);
+                  const secs = Math.floor((diff % 60000) / 1000);
+                  if (mins === 0) return `${secs}s`;
+                  return `${mins}m`;
+                };
+
+                const segDurations = [
+                  getStepDiff(d.order?.created_at || d.created_at, d.sent_to_billing_at),
+                  getStepDiff(d.sent_to_billing_at, d.ready_for_loading_at),
+                  getStepDiff(d.ready_for_loading_at, d.loading_at || d.completed_at),
+                  getStepDiff(d.loading_at, d.completed_at)
+                ];
+
                 const steps = [
                   {
                     name: 'Estimated',
@@ -777,22 +794,23 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                     key={d.id}
                     className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm hover:shadow-md transition space-y-4 sm:space-y-6"
                   >
-                    {/* Top Row: DispatchID, Customer Name, Live Timer */}
+                    {/* Top Row matching Handwritten Sketch: [DSP-0005] on left | Centered Customer Name | Pending & Timer on right */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <span className="font-mono text-xs sm:text-sm font-black bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-3 py-1 rounded-xl shadow-sm tracking-wider">
                           {d.dispatch_no}
                         </span>
-                        <div>
-                          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">
-                            {d.customers?.name || 'Customer'}
-                          </h3>
-                          {d.vehicle_number && (
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                              🚚 {d.vehicle_number} {d.driver_name ? `(${d.driver_name})` : ''}
-                            </p>
-                          )}
-                        </div>
+                      </div>
+
+                      <div className="flex-1 text-center min-w-[160px]">
+                        <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide">
+                          {d.customers?.name || 'Customer'}
+                        </h3>
+                        {d.vehicle_number && (
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                            🚚 {d.vehicle_number} {d.driver_name ? `(${d.driver_name})` : ''}
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -801,14 +819,27 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                       </div>
                     </div>
 
-                    {/* Horizontal 5-Step Stepper Timeline (Responsive) */}
-                    <div className="pt-1">
+                    {/* Horizontal 5-Step Stepper Timeline with Segment Duration Badges (Sketch Design) */}
+                    <div className="pt-2">
                       <div className="relative flex items-start justify-between">
                         
-                        {/* Background Connecting Line */}
-                        <div className="absolute top-4 left-4 right-4 h-1 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0" />
+                        {/* Background Connecting Lines with Step Duration Badges */}
+                        <div className="absolute top-4 left-6 right-6 h-0.5 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0">
+                          {/* 4 Segment Duration Bubbles between 5 nodes */}
+                          <div className="w-full h-full flex justify-between items-center px-6">
+                            {segDurations.map((dur, i) => (
+                              <div key={i} className="flex-1 flex justify-center -translate-y-0.5">
+                                {dur ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm z-10">
+                                    {dur}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
 
-                        {steps.map((step, sIdx) => {
+                        {steps.map((step) => {
                           return (
                             <div
                               key={step.name}

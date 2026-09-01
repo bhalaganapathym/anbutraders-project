@@ -96,7 +96,7 @@ const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
   }
 
   const text = 
-`🧾 *ANBU GROUPS — ESTIMATE*
+`🧾 *ANBU TRADERS — ESTIMATE*
 No.4/5 Pondy Mailam Road, T.C.Kootroad, Vanur T.K 605 111
 Ph: 0413-2964204, 9626325204
 ─────────────────────────────
@@ -118,7 +118,7 @@ ${itemLines}
 ${advanceBlock}─────────────────────────────
 _We declare that this invoice/estimate shows the actual price of the goods described and that all particulars are true and correct._
 
-*for ANBU GROUPS*
+*for ANBU TRADERS*
 _Authorised Signatory_`;
 
   const url = `https://wa.me/${phone ? (phone.length === 10 ? '91' + phone : phone) : ''}?text=${encodeURIComponent(text)}`;

@@ -575,11 +575,15 @@ export default function DispatchDashboard({
         {/* Top Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-4 shadow-sm hover:shadow-md transition">
-            <div className="flex items-center gap-2 text-slate-500 mb-2">
+            <div className="flex items-center gap-2 text-slate-500 mb-1.5">
               <User size={16} /> <span className="text-sm font-medium">Customer Name</span>
             </div>
             <p className="font-bold text-lg text-slate-800 dark:text-white truncate" title={detail.customer?.name || 'Unknown'}>
               {detail.customer?.name || 'Unknown'}
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-start gap-1 font-medium" title={detail.delivery_address || (detail.customer as any)?.address || ''}>
+              <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
+              <span className="line-clamp-2">{detail.delivery_address || (detail.customer as any)?.address || 'Site delivery address not specified'}</span>
             </p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/50 p-4 shadow-sm hover:shadow-md transition">

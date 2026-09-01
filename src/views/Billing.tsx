@@ -123,6 +123,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const [creatingBill, setCreatingBill] = useState(false);
   const [notifyingDispatch, setNotifyingDispatch] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [unloadingCharge, setUnloadingCharge] = useState<string>('');
+  const [deliveryCharge, setDeliveryCharge] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
 
   // Discount States
@@ -396,7 +398,9 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     selectedDispatch.items?.forEach(item => {
       totalAmount += round2((item.price || 0) * (item.quantity || 1));
     });
-    totalAmount = round2(totalAmount);
+    const uChargeVal = parseFloat(unloadingCharge) || 0;
+    const dChargeVal = parseFloat(deliveryCharge) || 0;
+    totalAmount = round2(totalAmount + uChargeVal + dChargeVal);
 
     const paidVal = round2(parseFloat(paidAmount) || 0);
     const toCollectVal = round2(parseFloat(toCollectAmount) || 0);
@@ -520,6 +524,9 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     totalAmount += unitPrice * (item.quantity || 1);
   });
   totalAmount = round2(totalAmount);
+  const uCharge = parseFloat(unloadingCharge) || 0;
+  const dCharge = parseFloat(deliveryCharge) || 0;
+  const grandTotalAmount = round2(totalAmount + uCharge + dCharge);
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -975,6 +982,39 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
             )}
 
             {/* Payment Details / Amount Paid & To Collect Breakdown */}
+            {/* Optional Charges: Unloading & Delivery Charge */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-850 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Unloading Charge (₹) <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="number"
+                  value={unloadingCharge}
+                  onChange={(e) => setUnloadingCharge(e.target.value)}
+                  placeholder="e.g. 150.00"
+                  min="0"
+                  step="any"
+                  className="input text-xs font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Delivery Charge (₹) <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="number"
+                  value={deliveryCharge}
+                  onChange={(e) => setDeliveryCharge(e.target.value)}
+                  placeholder="e.g. 300.00"
+                  min="0"
+                  step="any"
+                  className="input text-xs font-semibold"
+                />
+              </div>
+            </div>
+
+            {/* Payment & Collection Breakdown Box */}
             <div className="bg-amber-50/50 dark:bg-slate-900 border border-amber-200/80 dark:border-slate-700 p-4 rounded-xl space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
@@ -982,7 +1022,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   Payment & Collection Breakdown
                 </span>
                 <span className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                  Total Bill: ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  Total Bill: ₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
 
@@ -1141,48 +1181,56 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
               </div>
             </div>
 
-            {/* Hidden Printable Bill Element matching Anbu Groups photo */}
+            {/* Hidden Printable Bill Element matching Anbu Traders official image */}
             <div className="fixed top-[-9999px] left-[-9999px]">
-              <div ref={printRef} className="w-[794px] bg-white text-black p-8 text-xs font-sans border border-black space-y-4">
-                <div className="flex justify-between items-start border-b border-black pb-2">
-                  <div>
-                    <h1 className="text-xl font-extrabold tracking-wide">ANBU GROUPS</h1>
-                    <p className="text-[11px]">No.4/5 Pondy Mailam Road T.C Kootroad</p>
-                    <p className="text-[11px]">Vanur T.K 605 111 | Ph: 0413-2964204, 9626325204</p>
-                    <p className="text-[11px]">State Name : Tamil Nadu, Code : 33</p>
+              <div ref={printRef} className="w-[794px] bg-white text-black p-8 text-xs font-sans border-2 border-black space-y-4">
+                <div className="flex justify-between items-start border-b-2 border-black pb-3">
+                  <div className="flex items-center gap-3.5">
+                    <img
+                      src="/pwa-192x192.png"
+                      alt="Anbu Traders Logo"
+                      className="h-16 w-16 object-contain rounded-lg border border-black/20 p-0.5"
+                      crossOrigin="anonymous"
+                    />
+                    <div>
+                      <h1 className="text-2xl font-black tracking-wide text-black uppercase">ANBU TRADERS</h1>
+                      <p className="text-[11px] font-semibold text-gray-800">No.4/5 Pondy Mailam Road T.C Kootroad</p>
+                      <p className="text-[11px] font-semibold text-gray-800">Vanur T.K 605 111 | Ph: 0413-2964204, 9626325204</p>
+                      <p className="text-[11px] font-semibold text-gray-800">State Name : Tamil Nadu, Code : 33</p>
+                    </div>
                   </div>
                   <div className="text-right">
-                    <h2 className="text-lg font-bold border border-black px-2 py-0.5 inline-block">ESTIMATE</h2>
-                    <p className="text-[10px] italic mt-1">(TRIPLICATE FOR SUPPLIER)</p>
-                    <p className="text-[11px] mt-2"><strong>Invoice No:</strong> {selectedDispatch.dispatch_no}</p>
-                    <p className="text-[11px]"><strong>Date:</strong> {new Date().toLocaleDateString('en-IN')}</p>
+                    <h2 className="text-lg font-black border-2 border-black px-3 py-0.5 inline-block uppercase">ESTIMATE</h2>
+                    <p className="text-[10px] italic mt-1 text-gray-700">(TRIPLICATE FOR SUPPLIER)</p>
+                    <p className="text-[11px] mt-2 font-bold"><strong>Invoice No:</strong> {selectedDispatch.dispatch_no}</p>
+                    <p className="text-[11px] font-bold"><strong>Date:</strong> {new Date().toLocaleDateString('en-IN')}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 border-b border-black pb-3 text-[11px]">
-                  <div>
-                    <p className="font-bold border-b border-gray-300 pb-1 mb-1">Consignee (Ship to)</p>
-                    <p className="font-bold text-sm">{selectedDispatch.customer?.name}</p>
-                    <p>{selectedDispatch.delivery_address || selectedDispatch.customer?.address}</p>
-                    <p>Ph: {selectedDispatch.customer?.phone}</p>
+                <div className="grid grid-cols-2 gap-4 border-b-2 border-black pb-3 text-[11px]">
+                  <div className="pr-2 border-r border-gray-400">
+                    <p className="font-bold uppercase tracking-wider text-[10px] border-b border-gray-300 pb-1 mb-1 text-gray-700">Consignee (Ship to)</p>
+                    <p className="font-extrabold text-sm text-black">{selectedDispatch.customer?.name}</p>
+                    <p className="font-semibold">{selectedDispatch.delivery_address || selectedDispatch.customer?.address || 'Site Delivery'}</p>
+                    <p className="font-semibold">Ph: {selectedDispatch.customer?.phone || '—'}</p>
                   </div>
-                  <div>
-                    <p className="font-bold border-b border-gray-300 pb-1 mb-1">Buyer (Bill to)</p>
-                    <p className="font-bold text-sm">{selectedDispatch.customer?.name}</p>
-                    <p>{selectedDispatch.customer?.address || selectedDispatch.delivery_address}</p>
-                    <p>Ph: {selectedDispatch.customer?.phone}</p>
+                  <div className="pl-2">
+                    <p className="font-bold uppercase tracking-wider text-[10px] border-b border-gray-300 pb-1 mb-1 text-gray-700">Buyer (Bill to)</p>
+                    <p className="font-extrabold text-sm text-black">{selectedDispatch.customer?.name}</p>
+                    <p className="font-semibold">{selectedDispatch.customer?.address || selectedDispatch.delivery_address || 'Billing Address'}</p>
+                    <p className="font-semibold">Ph: {selectedDispatch.customer?.phone || '—'}</p>
                   </div>
                 </div>
 
-                <table className="w-full border-collapse border border-black text-[11px]">
+                <table className="w-full border-collapse border-2 border-black text-[11px]">
                   <thead>
-                    <tr className="bg-gray-100 border-b border-black">
-                      <th className="border border-black p-1 text-center">SI</th>
-                      <th className="border border-black p-1 text-left">Description of Goods</th>
-                      <th className="border border-black p-1 text-center">Nos / Quantity</th>
-                      <th className="border border-black p-1 text-right">Rate</th>
-                      <th className="border border-black p-1 text-center">per</th>
-                      <th className="border border-black p-1 text-right">Amount (₹)</th>
+                    <tr className="bg-gray-100 border-b-2 border-black font-extrabold">
+                      <th className="border border-black p-1.5 text-center w-10">SI</th>
+                      <th className="border border-black p-1.5 text-left">Description of Goods</th>
+                      <th className="border border-black p-1.5 text-center w-28">Nos / Quantity</th>
+                      <th className="border border-black p-1.5 text-right w-20">Rate</th>
+                      <th className="border border-black p-1.5 text-center w-16">per</th>
+                      <th className="border border-black p-1.5 text-right w-28">Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1191,57 +1239,79 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                       const lineTotal = round2(unitPrice * it.quantity);
                       return (
                         <tr key={it.id || idx}>
-                          <td className="border border-black p-1 text-center">{idx + 1}</td>
-                          <td className="border border-black p-1 font-bold">{it.product_name}</td>
-                          <td className="border border-black p-1 text-center">{it.quantity}</td>
-                          <td className="border border-black p-1 text-right">{unitPrice.toFixed(2)}</td>
-                          <td className="border border-black p-1 text-center">{it.unit}</td>
-                          <td className="border border-black p-1 text-right font-bold">{lineTotal.toFixed(2)}</td>
+                          <td className="border border-black p-1.5 text-center font-medium">{idx + 1}</td>
+                          <td className="border border-black p-1.5 font-bold uppercase">{it.product_name}</td>
+                          <td className="border border-black p-1.5 text-center font-semibold">{it.quantity}</td>
+                          <td className="border border-black p-1.5 text-right font-medium">{unitPrice.toFixed(2)}</td>
+                          <td className="border border-black p-1.5 text-center uppercase font-medium">{it.unit}</td>
+                          <td className="border border-black p-1.5 text-right font-black">{lineTotal.toFixed(2)}</td>
                         </tr>
                       );
                     })}
-                    <tr className="font-bold border-t border-black bg-gray-50">
-                      <td colSpan={5} className="border border-black p-1 text-right">Total</td>
-                      <td className="border border-black p-1 text-right">₹{totalAmount.toFixed(2)}</td>
+                    {/* Unloading Charge Row */}
+                    <tr className="bg-slate-50/50">
+                      <td className="border border-black p-1.5 text-center font-medium">—</td>
+                      <td className="border border-black p-1.5 font-bold uppercase text-slate-800">Unloading Charge</td>
+                      <td className="border border-black p-1.5 text-center text-gray-400">—</td>
+                      <td className="border border-black p-1.5 text-right text-gray-400">—</td>
+                      <td className="border border-black p-1.5 text-center text-gray-400">—</td>
+                      <td className="border border-black p-1.5 text-right font-black">
+                        {uCharge > 0 ? uCharge.toFixed(2) : ''}
+                      </td>
+                    </tr>
+                    {/* Delivery Charge Row */}
+                    <tr className="bg-slate-50/50">
+                      <td className="border border-black p-1.5 text-center font-medium">—</td>
+                      <td className="border border-black p-1.5 font-bold uppercase text-slate-800">Delivery Charge</td>
+                      <td className="border border-black p-1.5 text-center text-gray-400">—</td>
+                      <td className="border border-black p-1.5 text-right text-gray-400">—</td>
+                      <td className="border border-black p-1.5 text-center text-gray-400">—</td>
+                      <td className="border border-black p-1.5 text-right font-black">
+                        {dCharge > 0 ? dCharge.toFixed(2) : ''}
+                      </td>
+                    </tr>
+                    <tr className="font-extrabold border-t-2 border-black bg-gray-100">
+                      <td colSpan={5} className="border border-black p-2 text-right uppercase text-xs">Total</td>
+                      <td className="border border-black p-2 text-right text-sm font-black">₹{grandTotalAmount.toFixed(2)}</td>
                     </tr>
                   </tbody>
                 </table>
 
-                <div className="space-y-1 pt-1 text-[11px]">
-                  <p><strong>Amount Chargeable (in words):</strong> {numberToWords(totalAmount)}</p>
+                <div className="space-y-1.5 pt-1 text-[11px]">
+                  <p className="font-semibold"><strong>Amount Chargeable (in words):</strong> {numberToWords(grandTotalAmount)}</p>
 
-                  <div className="grid grid-cols-3 gap-2 border border-black p-2 my-2 bg-gray-50 text-[11px]">
+                  <div className="grid grid-cols-3 gap-2 border-2 border-black p-2.5 my-2 bg-gray-50 text-[11px]">
                     <div>
-                      <p className="text-[10px] text-gray-600">Total Invoice Amount</p>
-                      <p className="font-bold text-sm">₹{totalAmount.toFixed(2)}</p>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Total Invoice Amount</p>
+                      <p className="font-black text-sm text-black">₹{grandTotalAmount.toFixed(2)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-600">Amount Paid / Received</p>
-                      <p className="font-bold text-sm text-green-800">₹{(parseFloat(paidAmount) || 0).toFixed(2)}</p>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Amount Paid / Received</p>
+                      <p className="font-black text-sm text-emerald-800">₹{(parseFloat(paidAmount) || 0).toFixed(2)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-600">Balance to Collect on Site</p>
-                      <p className="font-bold text-sm text-red-800">₹{(parseFloat(toCollectAmount) || 0).toFixed(2)}</p>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Balance to Collect on Site</p>
+                      <p className="font-black text-sm text-rose-800">₹{(parseFloat(toCollectAmount) || 0).toFixed(2)}</p>
                     </div>
                   </div>
 
-                  <p className="text-amber-800 font-bold"><strong>Customer Prior Pending Dues:</strong> ₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
+                  <p className="text-amber-900 font-bold"><strong>Customer Prior Pending Dues:</strong> ₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
                   <p><strong>Payment Mode:</strong> {paymentMethod.toUpperCase()}</p>
                   {selectedDispatch.vehicle_number && (
                     <p><strong>Transport:</strong> Vehicle {selectedDispatch.vehicle_number} {selectedDispatch.driver_name ? `(${selectedDispatch.driver_name})` : ''}</p>
                   )}
                 </div>
 
-                <div className="border-t border-black pt-4 flex justify-between items-end text-[10px]">
+                <div className="border-t-2 border-black pt-4 flex justify-between items-end text-[10px]">
                   <div>
-                    <p>Declaration:</p>
-                    <p className="italic">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</p>
-                    <p className="mt-2 font-bold">This is a Computer Generated Invoice</p>
+                    <p className="font-bold">Declaration:</p>
+                    <p className="italic text-gray-700">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</p>
+                    <p className="mt-2 font-black text-black">This is a Computer Generated Invoice</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-xs">for ANBU GROUPS</p>
+                    <p className="font-black text-xs uppercase">for ANBU TRADERS</p>
                     <div className="h-10"></div>
-                    <p className="font-bold">Authorised Signatory</p>
+                    <p className="font-bold border-t border-black pt-0.5">Authorised Signatory</p>
                   </div>
                 </div>
               </div>

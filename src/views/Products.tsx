@@ -143,13 +143,13 @@ export default function Products() {
           if (!cols[nameIdx]) continue;
           
           productsToUpload.push({
-            name: cols[nameIdx],
-            category: (catIdx !== -1 && cols[catIdx]) ? cols[catIdx] : 'Other',
-            unit: (unitIdx !== -1 && cols[unitIdx]) ? cols[unitIdx] : 'piece',
+            name: cols[nameIdx].toUpperCase(),
+            category: (catIdx !== -1 && cols[catIdx]) ? cols[catIdx].toUpperCase() : 'OTHER',
+            unit: (unitIdx !== -1 && cols[unitIdx]) ? cols[unitIdx].toUpperCase() : 'PIECE',
             price: (priceIdx !== -1 && !isNaN(Number(cols[priceIdx]))) ? Number(cols[priceIdx]) : 0,
             stock_qty: (qtyIdx !== -1 && !isNaN(Number(cols[qtyIdx]))) ? Number(cols[qtyIdx]) : 0,
-            brand: (brandIdx !== -1 && cols[brandIdx]) ? cols[brandIdx] : null,
-            size: (sizeIdx !== -1 && cols[sizeIdx]) ? cols[sizeIdx] : null,
+            brand: (brandIdx !== -1 && cols[brandIdx]) ? cols[brandIdx].toUpperCase() : null,
+            size: (sizeIdx !== -1 && cols[sizeIdx]) ? cols[sizeIdx].toUpperCase() : null,
             standard_weight: (weightIdx !== -1 && !isNaN(Number(cols[weightIdx]))) ? Number(cols[weightIdx]) : 0,
             weight_tolerance: (tolIdx !== -1 && !isNaN(Number(cols[tolIdx]))) ? Number(cols[tolIdx]) : null,
           });
@@ -195,14 +195,14 @@ export default function Products() {
     const pPrice = Number(p.price ?? 0);
     const pStdWeight = Number(p.standard_weight ?? 0);
     setForm({
-      name: p.name,
-      category: p.category,
-      unit: p.unit,
+      name: p.name.toUpperCase(),
+      category: p.category.toUpperCase(),
+      unit: p.unit.toUpperCase(),
       price: String(pPrice),
       rate_per_kg: pStdWeight > 0 ? (pPrice / pStdWeight).toFixed(2) : '0',
       stock_qty: String(p.stock_qty ?? 0),
-      brand: p.brand ?? '',
-      size: p.size ?? '',
+      brand: (p.brand ?? '').toUpperCase(),
+      size: (p.size ?? '').toUpperCase(),
       standard_weight: String(pStdWeight),
       weight_tolerance: p.weight_tolerance != null ? String(p.weight_tolerance) : '',
     });
@@ -237,13 +237,13 @@ export default function Products() {
     }
     setSaving(true);
     const payload = {
-      name: form.name.trim(),
-      category: form.category,
-      unit: form.unit.trim() || 'piece',
+      name: form.name.trim().toUpperCase(),
+      category: form.category.trim().toUpperCase(),
+      unit: (form.unit.trim() || 'piece').toUpperCase(),
       price: parseFloat(form.price) || 0,
       stock_qty: parseFloat(form.stock_qty) || 0,
-      brand: form.brand.trim() || null,
-      size: form.size.trim() || null,
+      brand: form.brand.trim() ? form.brand.trim().toUpperCase() : null,
+      size: form.size.trim() ? form.size.trim().toUpperCase() : null,
       standard_weight: parseFloat(form.standard_weight) || 0,
       weight_tolerance: form.weight_tolerance !== '' ? parseFloat(form.weight_tolerance) : null,
     };
@@ -420,12 +420,12 @@ export default function Products() {
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Product' : 'Add Product'} size="md">
         <div className="space-y-4">
           <div>
-            <label className="label">Name *</label>
+            <label className="label">Name * (SAVED IN UPPERCASE)</label>
             <input
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="input font-semibold"
-              placeholder="e.g. TMT Steel Bar 12mm"
+              onChange={(e) => setForm({ ...form, name: e.target.value.toUpperCase() })}
+              className="input font-semibold uppercase"
+              placeholder="e.g. TMT STEEL BAR 12MM"
               autoFocus
             />
           </div>
@@ -434,11 +434,11 @@ export default function Products() {
               <label className="label">Category</label>
               <select
                 value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="input"
+                onChange={(e) => setForm({ ...form, category: e.target.value.toUpperCase() })}
+                className="input uppercase font-medium"
               >
                 {categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c.toUpperCase()}>{c.toUpperCase()}</option>
                 ))}
               </select>
             </div>
@@ -446,9 +446,9 @@ export default function Products() {
               <label className="label">Unit</label>
               <input
                 value={form.unit}
-                onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                className="input"
-                placeholder="piece, kg, bag..."
+                onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase() })}
+                className="input uppercase"
+                placeholder="PIECE, KG, BAG..."
               />
             </div>
           </div>
@@ -457,26 +457,26 @@ export default function Products() {
               <label className="label">Brand</label>
               <input
                 value={form.brand}
-                onChange={(e) => setForm({ ...form, brand: e.target.value })}
-                className="input"
-                placeholder="e.g. Tata Steel"
+                onChange={(e) => setForm({ ...form, brand: e.target.value.toUpperCase() })}
+                className="input uppercase"
+                placeholder="e.g. TATA STEEL"
                 list="brand-list"
               />
               <datalist id="brand-list">
-                {knownBrands.map((b) => <option key={b} value={b} />)}
+                {knownBrands.map((b) => <option key={b} value={b.toUpperCase()} />)}
               </datalist>
             </div>
             <div>
               <label className="label">Size</label>
               <input
                 value={form.size}
-                onChange={(e) => setForm({ ...form, size: e.target.value })}
-                className="input"
-                placeholder="e.g. 12mm"
+                onChange={(e) => setForm({ ...form, size: e.target.value.toUpperCase() })}
+                className="input uppercase"
+                placeholder="e.g. 12MM"
                 list="size-list"
               />
               <datalist id="size-list">
-                {knownSizes.map((s) => <option key={s} value={s} />)}
+                {knownSizes.map((s) => <option key={s} value={s.toUpperCase()} />)}
               </datalist>
             </div>
           </div>
