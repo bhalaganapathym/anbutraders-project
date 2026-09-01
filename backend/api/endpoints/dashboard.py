@@ -59,7 +59,14 @@ def get_dashboard_stats(
          )
      )\
      .order_by(
-         case((Dispatch.status != 'completed', 0), else_=1),
+         case(
+             (Dispatch.status == 'pending', 1),
+             (Dispatch.status == 'sent_to_billing', 2),
+             (Dispatch.status == 'ready_for_loading', 3),
+             (Dispatch.status == 'loading', 4),
+             (Dispatch.status == 'completed', 5),
+             else_=6
+         ),
          Dispatch.created_at.desc()
      )\
      .limit(50).all()

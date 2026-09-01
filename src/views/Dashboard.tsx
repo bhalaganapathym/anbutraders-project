@@ -156,14 +156,14 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   );
 
   const quickAccessTools = [
-    { name: t('nav_estimates') || 'Estimates', view: 'orders', icon: ShoppingCart, color: 'bg-violet-500 text-white' },
-    { name: t('nav_dispatches') || 'Dispatches', view: 'dispatches', icon: Truck, color: 'bg-emerald-500 text-white' },
-    { name: t('nav_billing') || 'Billing', view: 'billing', icon: Receipt, color: 'bg-blue-500 text-white' },
-    { name: t('nav_customers') || 'Customers', view: 'customers', icon: Users, color: 'bg-amber-500 text-white' },
-    { name: t('nav_pricelist') || 'Products', view: 'pricelist', icon: Package, color: 'bg-indigo-500 text-white' },
-    { name: t('nav_drivers') || 'Drivers', view: 'drivers', icon: HardHat, color: 'bg-teal-500 text-white' },
-    { name: t('nav_reports') || 'Reports', view: 'reports', icon: BarChart3, color: 'bg-rose-500 text-white' },
-    { name: t('nav_settings') || 'Settings', view: 'settings', icon: Settings, color: 'bg-slate-600 text-white' },
+    { name: t('estimate') || 'Estimate', view: 'orders', icon: ShoppingCart, color: 'bg-violet-500 text-white' },
+    { name: t('dispatches') || 'Dispatches', view: 'dispatches', icon: Truck, color: 'bg-emerald-500 text-white' },
+    { name: t('billing') || 'Billing', view: 'billing', icon: Receipt, color: 'bg-blue-500 text-white' },
+    { name: t('customers') || 'Customers', view: 'customers', icon: Users, color: 'bg-amber-500 text-white' },
+    { name: t('price_list') || 'Price List', view: 'pricelist', icon: Package, color: 'bg-indigo-500 text-white' },
+    { name: t('drivers') || 'Drivers', view: 'drivers', icon: HardHat, color: 'bg-teal-500 text-white' },
+    { name: t('reconciliation') || 'Daily Settlement', view: 'reconciliation', icon: DollarSign, color: 'bg-rose-500 text-white' },
+    { name: t('settings') || 'Settings', view: 'settings', icon: Settings, color: 'bg-slate-600 text-white' },
   ];
 
   const load = useCallback(async () => {
@@ -186,11 +186,20 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         return dDate === todayStr;
       });
 
-      // Sort: Pending on TOP, completed at BOTTOM
+      // Helper to determine stage completion score (1 = pending phase 1, 5 = delivered)
+      const getProgressScore = (disp: DispatchWithTimeline): number => {
+        if (disp.status === 'completed' || disp.completed_at) return 5;
+        if (disp.loading_at) return 4;
+        if (disp.ready_for_loading_at || disp.status === 'ready_for_loading') return 3;
+        if (disp.sent_to_billing_at || disp.status === 'sent_to_billing') return 2;
+        return 1; // Pending Phase 1 (least completed)
+      };
+
+      // Sort: Least completed first (1 -> 2 -> 3 -> 4 -> 5), and within same stage, newest first
       const sortedDispatches = validDispatches.sort((a, b) => {
-        const aPending = a.status !== 'completed' ? 0 : 1;
-        const bPending = b.status !== 'completed' ? 0 : 1;
-        if (aPending !== bPending) return aPending - bPending;
+        const scoreA = getProgressScore(a);
+        const scoreB = getProgressScore(b);
+        if (scoreA !== scoreB) return scoreA - scoreB;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
@@ -834,74 +843,88 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                       </div>
                     </div>
 
-                    {/* Horizontal 5-Step Stepper Timeline with Segment Duration Badges (Sketch Design) */}
-                    <div className="pt-2">
-                      <div className="relative flex items-start justify-between">
-                        
-                        {/* Background Connecting Lines with Step Duration Badges */}
-                        <div className="absolute top-4 left-6 right-6 h-0.5 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0">
-                          {/* 4 Segment Duration Bubbles between 5 nodes */}
-                          <div className="w-full h-full flex justify-between items-center px-6">
-                            {segDurations.map((dur, i) => (
-                              <div key={i} className="flex-1 flex justify-center -translate-y-0.5">
-                                {dur ? (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm z-10">
-                                    {dur}
-                                  </span>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                    {/* Horizontal 5-Step Stepper Timeline with Colored Connector Lines & Elevated Duration Badges */}
+                    <div className="pt-3 pb-1">
+                      <div className="flex items-center justify-between w-full">
+                        {steps.map((step, sIdx) => {
+                          const isLast = sIdx === steps.length - 1;
+                          const dur = segDurations[sIdx];
+                          const nextStep = steps[sIdx + 1];
+                          const segDone = nextStep?.done;
+                          const segActive = nextStep?.active;
 
-                        {steps.map((step) => {
                           return (
-                            <div
-                              key={step.name}
-                              className="relative z-10 flex flex-col items-center flex-1 text-center"
-                            >
-                              {/* Step Node Icon */}
-                              <div
-                                className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border-2 transition-all shadow-sm ${
-                                  step.done
-                                    ? 'bg-emerald-500 border-emerald-600 text-white'
-                                    : step.active
-                                    ? 'bg-blue-600 border-blue-700 text-white animate-pulse'
-                                    : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400'
-                                }`}
-                              >
-                                {step.done ? (
-                                  <CheckCircle2 size={18} className="stroke-[2.5]" />
-                                ) : step.active ? (
-                                  <CircleDot size={18} className="animate-spin" />
-                                ) : (
-                                  <Minus size={14} className="stroke-[2.5]" />
-                                )}
+                            <div key={step.name} className="flex-1 flex items-center last:flex-none">
+                              {/* Step Node Column */}
+                              <div className="flex flex-col items-center relative z-10 min-w-[68px] sm:min-w-[85px] text-center">
+                                {/* Step Node Icon */}
+                                <div
+                                  className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border-2 transition-all shadow-sm ${
+                                    step.done
+                                      ? 'bg-emerald-500 border-emerald-600 text-white shadow-emerald-100 dark:shadow-emerald-950'
+                                      : step.active
+                                      ? 'bg-blue-600 border-blue-700 text-white animate-pulse shadow-blue-100'
+                                      : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400'
+                                  }`}
+                                >
+                                  {step.done ? (
+                                    <CheckCircle2 size={20} className="stroke-[2.5]" />
+                                  ) : step.active ? (
+                                    <CircleDot size={20} className="animate-spin" />
+                                  ) : (
+                                    <Minus size={16} className="stroke-[2.5]" />
+                                  )}
+                                </div>
+
+                                {/* Step Label */}
+                                <p
+                                  className={`text-[11px] sm:text-xs font-black mt-2 leading-tight ${
+                                    step.done || step.active
+                                      ? 'text-slate-900 dark:text-slate-100'
+                                      : 'text-slate-400 dark:text-slate-500'
+                                  }`}
+                                >
+                                  {step.name}
+                                </p>
+
+                                {/* Step Timestamp */}
+                                <p
+                                  className={`text-[10px] sm:text-[11px] font-bold mt-0.5 ${
+                                    step.done
+                                      ? 'text-emerald-700 dark:text-emerald-400 font-extrabold'
+                                      : step.active
+                                      ? 'text-blue-600 dark:text-blue-400 font-extrabold'
+                                      : 'text-slate-400 dark:text-slate-600'
+                                  }`}
+                                >
+                                  {step.time}
+                                </p>
                               </div>
 
-                              {/* Step Label */}
-                              <p
-                                className={`text-[11px] sm:text-xs font-extrabold mt-2 leading-tight ${
-                                  step.done || step.active
-                                    ? 'text-slate-900 dark:text-slate-100'
-                                    : 'text-slate-400 dark:text-slate-500'
-                                }`}
-                              >
-                                {step.name}
-                              </p>
+                              {/* Connector Line to Next Step with Duration Badge ABOVE the Line */}
+                              {!isLast && (
+                                <div className="flex-1 flex flex-col items-center justify-center -mt-9 px-1 min-w-[28px]">
+                                  {/* Duration Badge Floating ABOVE the Line */}
+                                  <div className="h-5 flex items-center justify-center mb-1">
+                                    {dur ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm whitespace-nowrap">
+                                        ⏱ {dur}
+                                      </span>
+                                    ) : null}
+                                  </div>
 
-                              {/* Step Timestamp */}
-                              <p
-                                className={`text-[10px] sm:text-[11px] font-bold mt-0.5 ${
-                                  step.done
-                                    ? 'text-emerald-700 dark:text-emerald-400'
-                                    : step.active
-                                    ? 'text-blue-600 dark:text-blue-400 font-extrabold'
-                                    : 'text-slate-400 dark:text-slate-600'
-                                }`}
-                              >
-                                {step.time}
-                              </p>
+                                  {/* Connecting Line Segment Filled based on completion */}
+                                  <div
+                                    className={`w-full h-1.5 rounded-full transition-all duration-300 ${
+                                      segDone
+                                        ? 'bg-emerald-500 shadow-sm shadow-emerald-200 dark:shadow-emerald-950'
+                                        : segActive
+                                        ? 'bg-blue-500 animate-pulse'
+                                        : 'bg-slate-200 dark:bg-slate-800'
+                                    }`}
+                                  />
+                                </div>
+                              )}
                             </div>
                           );
                         })}
