@@ -30,6 +30,10 @@ import {
   Mic,
   AlertTriangle,
   ShieldCheck,
+  Package,
+  HardHat,
+  BarChart3,
+  Settings,
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
@@ -150,6 +154,17 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   const pendingDiscountDispatches = recentDispatches.filter(
     (d) => d.discount_approval_status === 'pending'
   );
+
+  const quickAccessTools = [
+    { name: t('nav_estimates') || 'Estimates', view: 'orders', icon: ShoppingCart, color: 'bg-violet-500 text-white' },
+    { name: t('nav_dispatches') || 'Dispatches', view: 'dispatches', icon: Truck, color: 'bg-emerald-500 text-white' },
+    { name: t('nav_billing') || 'Billing', view: 'billing', icon: Receipt, color: 'bg-blue-500 text-white' },
+    { name: t('nav_customers') || 'Customers', view: 'customers', icon: Users, color: 'bg-amber-500 text-white' },
+    { name: t('nav_pricelist') || 'Products', view: 'pricelist', icon: Package, color: 'bg-indigo-500 text-white' },
+    { name: t('nav_drivers') || 'Drivers', view: 'drivers', icon: HardHat, color: 'bg-teal-500 text-white' },
+    { name: t('nav_reports') || 'Reports', view: 'reports', icon: BarChart3, color: 'bg-rose-500 text-white' },
+    { name: t('nav_settings') || 'Settings', view: 'settings', icon: Settings, color: 'bg-slate-600 text-white' },
+  ];
 
   const load = useCallback(async () => {
     try {
