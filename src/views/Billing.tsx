@@ -126,8 +126,6 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const [creatingBill, setCreatingBill] = useState(false);
   const [notifyingDispatch, setNotifyingDispatch] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [unloadingCharge, setUnloadingCharge] = useState<string>('');
-  const [deliveryCharge, setDeliveryCharge] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
 
   // Discount States
@@ -173,7 +171,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const pendingBills = allDispatches.filter((d: Dispatch) => d.status === 'sent_to_billing');
   const completedBills = allDispatches.filter((d: Dispatch) => d.status === 'ready_for_loading' || d.status === 'completed' || !!d.bill);
 
-  const selectedCustomer = customers.find(c => c.id === selectedDispatch?.customer_id);
+  const selectedCustomer = customers.find(c => c.id === selectedDispatch?.customer_id) || selectedDispatch?.customer;
 
   const isDiscountApproved =
     selectedDispatch?.discount_approval_status === 'approved' &&
@@ -535,7 +533,6 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const dCharge = parseFloat(deliveryCharge) || 0;
   const grandTotalAmount = round2(totalAmount + uCharge + dCharge);
 
-  const selectedCustomer = customers.find(c => c.id === selectedDispatch?.customer_id) || selectedDispatch?.customer;
   const customerPriorDues = round2(Number(selectedCustomer?.pending_amount || 0));
   const priorPaidVal = round2(parseFloat(priorPendingPaid) || 0);
   const remainingPriorDues = round2(Math.max(0, customerPriorDues - priorPaidVal));

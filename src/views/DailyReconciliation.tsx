@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { useTranslation } from '@/lib/i18n';
 import Modal from '@/components/Modal';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/context/AuthContext';
 import { 
   Calendar, 
   DollarSign, 
