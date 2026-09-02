@@ -8,9 +8,20 @@ import core.push  # Registers SQLAlchemy push event listeners
 from api.routes import api_router
 from db.session import engine
 from db.base_class import Base
+from sqlalchemy import text
 import models.all  # Ensure all models are registered
 
 Base.metadata.create_all(bind=engine)
+
+# Ensure new columns on existing tables are present
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS prior_pending_paid NUMERIC(12, 2) DEFAULT 0.00;"))
+        conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS unloading_charge NUMERIC(12, 2) DEFAULT 0.00;"))
+        conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS delivery_charge NUMERIC(12, 2) DEFAULT 0.00;"))
+        conn.commit()
+except Exception as e:
+    print(f"Schema sync notice: {e}")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
