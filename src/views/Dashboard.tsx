@@ -959,7 +959,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                           </button>
                         </div>
                       )}
-                    </div>
                   </div>
                 );
               })}
