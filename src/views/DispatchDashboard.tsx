@@ -460,16 +460,6 @@ export default function DispatchDashboard({
         photos: [...(detail.photos || []), ...newPhotos]
       });
 
-      const customerName = detail.customer?.name ?? 'Unknown';
-      await api.post('/notifications', {
-        type: 'billing_alert',
-        title: `Dispatch ${detail.dispatch_no} ready for billing`,
-        message: `Dispatch ${detail.dispatch_no} for ${customerName} has been verified and assigned driver ${driverName || 'N/A'}. Ready for billing.`,
-        dispatch_id: detail.id,
-        order_id: detail.order_id,
-        customer_name: customerName,
-      });
-
       toast('Verified and sent to billing', 'success');
       setConfirmModalOpen(false);
       onRefresh();
@@ -506,16 +496,6 @@ export default function DispatchDashboard({
       if (detail.order_id) {
         await api.put(`/orders/${detail.order_id}`, { status: 'completed' }).catch(() => {});
       }
-
-      await api.post('/notifications', {
-        type: 'dispatch_completed',
-        title: `Dispatch ${detail.dispatch_no} completed`,
-        message: `Dispatch ${detail.dispatch_no} for ${detail.customer?.name} has been loaded onto vehicle ${vehicleNo.trim()} and completed.`,
-        dispatch_id: detail.id,
-        order_id: detail.order_id,
-        customer_name: detail.customer?.name,
-        image_url: photoUrl
-      });
 
       toast('Dispatch loaded and completed', 'success');
       setConfirmModalOpen(false);

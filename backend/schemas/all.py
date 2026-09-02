@@ -484,5 +484,6 @@ class PushTestRequest(BaseModel):
     body: Optional[str] = "Background notifications are working smoothly on your phone!"
     url: Optional[str] = "/"
     role: Optional[str] = "all"
+    endpoint: Optional[str] = None
 
 

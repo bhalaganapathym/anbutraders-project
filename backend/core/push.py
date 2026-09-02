@@ -8,23 +8,49 @@ from core.config import settings
 from db.session import SessionLocal
 from models.all import PushSubscription, Notification
 
+import time
+
 logger = logging.getLogger("anbu_push")
+
+# In-memory deduplication cache: (endpoint, tag) -> timestamp (TTL 5 seconds)
+_recent_push_cache = {}
+_cache_lock = threading.Lock()
+
+def _is_duplicate_push(endpoint: str, tag: str) -> bool:
+    now = time.time()
+    key = f"{endpoint}::{tag}"
+    with _cache_lock:
+        # Cleanup older entries (> 10s)
+        expired_keys = [k for k, ts in _recent_push_cache.items() if now - ts > 10]
+        for k in expired_keys:
+            del _recent_push_cache[k]
+        
+        last_sent = _recent_push_cache.get(key)
+        if last_sent and (now - last_sent < 5.0):
+            return True
+        _recent_push_cache[key] = now
+        return False
 
 def send_web_push(
     title: str,
     body: str,
     url: str = "/",
     tag: str = "general",
-    role: str = None
+    role: str = None,
+    target_endpoint: str = None
 ):
     """
     Sends a Web Push notification to subscribed devices in the background.
     Compatible with installed Android Chrome PWAs and iOS 16.4+ Home Screen PWAs.
+    If target_endpoint is specified, only that single device receives the notification.
     """
     db = SessionLocal()
     try:
         query = db.query(PushSubscription)
-        if role and role != "all":
+
+        if target_endpoint:
+            query = query.filter(PushSubscription.endpoint == target_endpoint)
+        elif role and role != "all":
             # Match role hierarchy: Admin always receives dispatch/billing alerts
             if role in ["dispatch", "billing", "cashier"]:
                 allowed_roles = [role, "admin", "all"]
@@ -44,7 +70,7 @@ def send_web_push(
         
         subscriptions = query.all()
         if not subscriptions:
-            logger.info("No active push subscriptions found for role: %s", role)
+            logger.info("No active push subscriptions found for role: %s (endpoint: %s)", role, target_endpoint)
             return {"sent": 0, "failed": 0, "total": 0}
 
         # Deduplicate subscriptions by unique endpoint
@@ -70,6 +96,11 @@ def send_web_push(
         dead_subscriptions = []
 
         for sub in subscriptions_to_send:
+            # Check 5s deduplication debounce
+            if _is_duplicate_push(sub.endpoint, tag):
+                logger.info("Skipping duplicate push to %s for tag %s", sub.endpoint[:30], tag)
+                continue
+
             try:
                 subscription_info = {
                     "endpoint": sub.endpoint,
@@ -114,7 +145,7 @@ def send_web_push(
     finally:
         db.close()
 
-def dispatch_web_push_async(title: str, body: str, url: str = "/", tag: str = "general", role: str = "all"):
+def dispatch_web_push_async(title: str, body: str, url: str = "/", tag: str = "general", role: str = "all", target_endpoint: str = None):
     """
     Non-blocking background worker that executes send_web_push asynchronously.
     """
@@ -125,7 +156,8 @@ def dispatch_web_push_async(title: str, body: str, url: str = "/", tag: str = "g
             "body": body,
             "url": url,
             "tag": tag,
-            "role": role
+            "role": role,
+            "target_endpoint": target_endpoint
         },
         daemon=True
     )

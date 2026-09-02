@@ -93,13 +93,15 @@ def test_push_notification(
 ):
     """
     Triggers a test push notification to verify background delivery on mobile devices.
+    If req.endpoint is provided, delivers ONLY to the requesting device.
     """
     background_tasks.add_task(
         send_web_push,
         title=req.title or "🔔 Anbu Traders Test Alert",
         body=req.body or "Background notification delivered successfully!",
         url=req.url or "/",
-        tag="test-push",
-        role=req.role or "all"
+        tag=f"test-push-{int(datetime.now(timezone.utc).timestamp())}",
+        role=req.role or "all",
+        target_endpoint=req.endpoint
     )
     return {"status": "test_triggered", "message": "Test push notification dispatched"}

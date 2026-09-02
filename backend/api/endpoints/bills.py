@@ -146,14 +146,6 @@ def check_today_payments(background_tasks: BackgroundTasks, db: Session = Depend
         )
         db.add(notif)
         overdue_count += 1
-        background_tasks.add_task(
-            send_web_push,
-            title=notif.title,
-            body=notif.message,
-            url="/#/billing",
-            tag=f"overdue-{b.id}",
-            role="all"
-        )
         
     if overdue_count > 0:
         db.commit()

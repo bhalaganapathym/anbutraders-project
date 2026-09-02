@@ -819,14 +819,6 @@ async def request_mismatch_approval(
     
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-    background_tasks.add_task(
-        send_web_push,
-        title=notif.title,
-        body=notif.message,
-        url="/#/dispatch",
-        tag=f"mismatch-{dispatch.id}",
-        role="admin"
-    )
     return dispatch
 
 @router.get("/dispatches/{id}/voice-note")
@@ -919,14 +911,6 @@ def decide_mismatch_approval(
 
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-    background_tasks.add_task(
-        send_web_push,
-        title=notif.title,
-        body=notif.message,
-        url="/#/dispatch",
-        tag=f"mismatch-dec-{dispatch.id}",
-        role="dispatch"
-    )
     return dispatch
 
 @router.post("/dispatches/{id}/request-discount-approval", response_model=DispatchResponse)
@@ -963,14 +947,6 @@ def request_discount_approval(
     
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-    background_tasks.add_task(
-        send_web_push,
-        title=notif.title,
-        body=notif.message,
-        url="/#/billing",
-        tag=f"discount-{dispatch.id}",
-        role="admin"
-    )
     return dispatch
 
 @router.post("/dispatches/{id}/discount-decision", response_model=DispatchResponse)
@@ -1123,14 +1099,6 @@ def create_notification(
     db.commit()
     db.refresh(notification)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
-    background_tasks.add_task(
-        send_web_push,
-        title=notification.title,
-        body=notification.message,
-        url="/#/notifications",
-        tag=f"notif-{notification.id}",
-        role="all"
-    )
     return notification
 
 @router.get("/notifications", response_model=List[NotificationResponse])

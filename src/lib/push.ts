@@ -210,15 +210,25 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
  */
 export async function sendTestPushNotification(userRole: string = 'all'): Promise<{ success: boolean; message: string }> {
   try {
+    let endpoint: string | null = null;
+    try {
+      const registration = await getOrRegisterServiceWorker();
+      const subscription = await registration.pushManager.getSubscription();
+      endpoint = subscription?.endpoint || null;
+    } catch {
+      // Fallback if pushManager is not available
+    }
+
     await api.post('/push/test', {
       title: '🔔 Anbu Traders Test Notification',
       body: 'Background notifications are working smoothly on your device!',
       url: '/#/notifications',
       role: userRole,
+      endpoint: endpoint,
     });
     return {
       success: true,
-      message: 'Test notification sent from server! Check your lock screen / notification shade.',
+      message: 'Test notification sent to this device! Check your notification shade.',
     };
   } catch (err: any) {
     return {

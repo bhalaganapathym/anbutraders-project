@@ -421,9 +421,6 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         credit_days: isCredit && creditDays !== '' ? Number(creditDays) : null,
       });
 
-      // Notify dispatch team automatically with customer name, phone, address
-      await sendDispatchNotification(selectedDispatch);
-
       toast('Bill generated & dispatch team notified with customer details!', 'success');
       setSelectedDispatch(null);
       loadData();

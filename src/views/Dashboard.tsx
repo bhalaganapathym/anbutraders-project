@@ -816,36 +816,43 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                 return (
                   <div
                     key={d.id}
-                    className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm hover:shadow-md transition space-y-4 sm:space-y-6"
+                    className="w-full overflow-hidden rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm hover:shadow-md transition space-y-4 sm:space-y-6"
                   >
                     {/* Top Row matching Handwritten Sketch: [DSP-0005] on left | Centered Customer Name | Pending & Timer on right */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs sm:text-sm font-black bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-3 py-1 rounded-xl shadow-sm tracking-wider">
+                    <div className="border-b border-slate-100 dark:border-slate-800/80 pb-3 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3">
+                      {/* Mobile Row 1 / Desktop Left & Right items */}
+                      <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+                        <span className="font-mono text-xs sm:text-sm font-black bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-2.5 sm:px-3 py-1 rounded-xl shadow-sm tracking-wider shrink-0">
                           {d.dispatch_no}
                         </span>
+                        <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+                          <DispatchStatusBadge status={d.status} />
+                          <LiveTimer start={d.created_at} end={d.completed_at} />
+                        </div>
                       </div>
 
-                      <div className="flex-1 text-center min-w-[160px]">
-                        <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide">
+                      {/* Center: Customer Name & Transport */}
+                      <div className="text-center flex-1 min-w-0 px-1">
+                        <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide truncate">
                           {d.customers?.name || 'Customer'}
                         </h3>
                         {d.vehicle_number && (
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                             🚚 {d.vehicle_number} {d.driver_name ? `(${d.driver_name})` : ''}
                           </p>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      {/* Desktop Right items */}
+                      <div className="hidden sm:flex items-center gap-2 shrink-0">
                         <DispatchStatusBadge status={d.status} />
                         <LiveTimer start={d.created_at} end={d.completed_at} />
                       </div>
                     </div>
 
                     {/* Horizontal 5-Step Stepper Timeline with Colored Connector Lines & Elevated Duration Badges */}
-                    <div className="pt-3 pb-1">
-                      <div className="flex items-center justify-between w-full">
+                    <div className="pt-2 pb-1 overflow-x-auto no-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
+                      <div className="flex items-center justify-between min-w-[480px] sm:min-w-0 sm:w-full">
                         {steps.map((step, sIdx) => {
                           const isLast = sIdx === steps.length - 1;
                           const dur = segDurations[sIdx];
@@ -856,10 +863,10 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                           return (
                             <div key={step.name} className="flex-1 flex items-center last:flex-none">
                               {/* Step Node Column */}
-                              <div className="flex flex-col items-center relative z-10 min-w-[68px] sm:min-w-[85px] text-center">
+                              <div className="flex flex-col items-center relative z-10 min-w-[62px] sm:min-w-[80px] text-center">
                                 {/* Step Node Icon */}
                                 <div
-                                  className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border-2 transition-all shadow-sm ${
+                                  className={`flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full border-2 transition-all shadow-sm ${
                                     step.done
                                       ? 'bg-emerald-500 border-emerald-600 text-white shadow-emerald-100 dark:shadow-emerald-950'
                                       : step.active
@@ -868,17 +875,17 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                                   }`}
                                 >
                                   {step.done ? (
-                                    <CheckCircle2 size={20} className="stroke-[2.5]" />
+                                    <CheckCircle2 size={18} className="sm:w-5 sm:h-5 stroke-[2.5]" />
                                   ) : step.active ? (
-                                    <CircleDot size={20} className="animate-spin" />
+                                    <CircleDot size={18} className="sm:w-5 sm:h-5 animate-spin" />
                                   ) : (
-                                    <Minus size={16} className="stroke-[2.5]" />
+                                    <Minus size={14} className="sm:w-4 sm:h-4 stroke-[2.5]" />
                                   )}
                                 </div>
 
                                 {/* Step Label */}
                                 <p
-                                  className={`text-[11px] sm:text-xs font-black mt-2 leading-tight ${
+                                  className={`text-[10px] sm:text-xs font-black mt-1.5 leading-tight ${
                                     step.done || step.active
                                       ? 'text-slate-900 dark:text-slate-100'
                                       : 'text-slate-400 dark:text-slate-500'
@@ -889,7 +896,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
 
                                 {/* Step Timestamp */}
                                 <p
-                                  className={`text-[10px] sm:text-[11px] font-bold mt-0.5 ${
+                                  className={`text-[9px] sm:text-[11px] font-bold mt-0.5 ${
                                     step.done
                                       ? 'text-emerald-700 dark:text-emerald-400 font-extrabold'
                                       : step.active
@@ -903,11 +910,11 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
 
                               {/* Connector Line to Next Step with Duration Badge ABOVE the Line */}
                               {!isLast && (
-                                <div className="flex-1 flex flex-col items-center justify-center -mt-9 px-1 min-w-[28px]">
+                                <div className="flex-1 flex flex-col items-center justify-center -mt-8 sm:-mt-9 px-1 min-w-[20px]">
                                   {/* Duration Badge Floating ABOVE the Line */}
                                   <div className="h-5 flex items-center justify-center mb-1">
                                     {dur ? (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm whitespace-nowrap">
+                                      <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 shadow-sm whitespace-nowrap">
                                         ⏱ {dur}
                                       </span>
                                     ) : null}
@@ -915,7 +922,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
 
                                   {/* Connecting Line Segment Filled based on completion */}
                                   <div
-                                    className={`w-full h-1.5 rounded-full transition-all duration-300 ${
+                                    className={`w-full h-1 sm:h-1.5 rounded-full transition-all duration-300 ${
                                       segDone
                                         ? 'bg-emerald-500 shadow-sm shadow-emerald-200 dark:shadow-emerald-950'
                                         : segActive
@@ -929,6 +936,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                           );
                         })}
                       </div>
+                    </div>
 
                       {/* Mismatch Approval Banner in Timeline Card */}
                       {d.mismatch_approval_status === 'pending' && (
