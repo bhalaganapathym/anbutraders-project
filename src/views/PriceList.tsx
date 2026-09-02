@@ -183,47 +183,61 @@ export default function PriceList() {
               const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
 
               return (
-                <div key={p.id} className="card p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-bold text-slate-800 text-sm">{p.name}</p>
+                <div key={p.id} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                  {/* Header: Product Name & Price */}
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide truncate">
+                        {p.name}
+                      </p>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                        {p.brand && (
-                          <span className="badge bg-indigo-50 text-indigo-700 text-xs">{p.brand}</span>
-                        )}
-                        <span className={`badge text-xs ${categoryColor[p.category] ?? categoryColor.Other}`}>
+                        <span className={`badge text-[10px] font-bold ${categoryColor[p.category] ?? categoryColor.Other}`}>
                           {p.category}
                         </span>
-                        {p.size && (
-                          <span className="text-xs text-slate-500 font-medium">Size: {p.size}</span>
+                        {p.brand && (
+                          <span className="badge bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
+                            {p.brand}
+                          </span>
                         )}
-                        {hasWeight && (
-                          <span className="text-xs text-slate-500 font-medium">Std: {p.standard_weight}kg</span>
+                        {p.size && (
+                          <span className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold">
+                            {p.size}
+                          </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="flex items-center text-base font-extrabold text-amber-600">
+                    <div className="text-right shrink-0">
+                      <span className="text-base font-black text-amber-600 dark:text-amber-400">
                         ₹{(p.price ?? 0).toFixed(2)}
                       </span>
-                      <span className="text-[11px] text-slate-400">per {p.unit}</span>
-                      {rateKg && (
-                        <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
-                          (₹{rateKg}/kg)
-                        </p>
-                      )}
+                      <p className="text-[10px] font-medium text-slate-400">per {p.unit}</p>
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex justify-end">
-                    <button
-                      onClick={() => openEdit(p)}
-                      className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-1.5 font-semibold"
-                    >
-                      <Pencil size={14} /> Edit Price
-                    </button>
+                  {/* Micro-metrics: Rate/kg & Standard weight */}
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl text-xs">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Std Weight</span>
+                      <p className="font-bold text-slate-700 dark:text-slate-200">
+                        {hasWeight ? `${p.standard_weight} kg` : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Rate / Kg</span>
+                      <p className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                        {rateKg ? `₹${rateKg} / kg` : '—'}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Action Button */}
+                  <button
+                    onClick={() => openEdit(p)}
+                    className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-1.5 font-bold bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  >
+                    <Pencil size={13} className="text-indigo-600" /> Edit Price
+                  </button>
                 </div>
               );
             })}

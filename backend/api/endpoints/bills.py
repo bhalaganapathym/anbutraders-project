@@ -46,6 +46,24 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
             bill_data["credit_due_date"] = today_evening
         bill_data["credit_days"] = 0
 
+    # Handle prior pending dues payment: deduct from prior unpaid bills of this customer
+    prior_paid = round(float(bill_data.get("prior_pending_paid") or 0), 2)
+    if prior_paid > 0:
+        remaining_to_deduct = prior_paid
+        old_unpaid_bills = db.query(Bill).filter(
+            Bill.customer_id == dispatch.customer_id,
+            Bill.pending_amount > 0
+        ).order_by(Bill.created_at.asc()).all()
+
+        for old_b in old_unpaid_bills:
+            if remaining_to_deduct <= 0:
+                break
+            old_pending = float(old_b.pending_amount or 0)
+            deduction = min(old_pending, remaining_to_deduct)
+            old_b.pending_amount = round(old_pending - deduction, 2)
+            old_b.paid_amount = round(float(old_b.paid_amount or 0) + deduction, 2)
+            remaining_to_deduct -= deduction
+
     bill = Bill(**bill_data)
     db.add(bill)
     

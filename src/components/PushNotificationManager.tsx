@@ -126,39 +126,28 @@ export default function PushNotificationManager({ variant = 'card' }: Props) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {status.isSubscribed && (
+          {status.isSubscribed ? (
             <button
               type="button"
               onClick={handleSendTest}
               disabled={testing}
-              className="px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 flex items-center gap-1.5 transition"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 flex items-center gap-1.5 transition shadow-sm active:scale-95"
               title="Test lock screen notification"
             >
               {testing ? <RefreshCw size={13} className="animate-spin" /> : <Send size={13} />}
               Test Notification
             </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleTogglePush}
+              disabled={loading}
+              className="px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-sm active:scale-95 bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20"
+            >
+              {loading ? <RefreshCw size={13} className="animate-spin" /> : <Bell size={14} />}
+              🔔 Enable Notifications
+            </button>
           )}
-          <button
-            type="button"
-            onClick={handleTogglePush}
-            disabled={loading}
-            className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-sm active:scale-95 ${
-              status.isSubscribed
-                ? 'bg-slate-200 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-700 dark:text-slate-300 hover:text-rose-700 dark:hover:text-rose-400'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20'
-            }`}
-          >
-            {loading && <RefreshCw size={13} className="animate-spin" />}
-            {status.isSubscribed ? (
-              <>
-                <BellOff size={14} /> Turn Off
-              </>
-            ) : (
-              <>
-                <Bell size={14} /> 🔔 Enable Notifications
-              </>
-            )}
-          </button>
         </div>
       </div>
     );

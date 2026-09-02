@@ -6,6 +6,11 @@ import os
 from core.config import settings
 import core.push  # Registers SQLAlchemy push event listeners
 from api.routes import api_router
+from db.session import engine
+from db.base_class import Base
+import models.all  # Ensure all models are registered
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

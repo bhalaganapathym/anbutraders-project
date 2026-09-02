@@ -203,6 +203,9 @@ class Bill(Base):
     discount_amount = Column(Numeric, default=0, nullable=False)
     paid_amount = Column(Numeric, default=0, nullable=False)
     pending_amount = Column(Numeric, default=0, nullable=False)
+    prior_pending_paid = Column(Numeric, default=0, nullable=False)
+    unloading_charge = Column(Numeric, default=0, nullable=False)
+    delivery_charge = Column(Numeric, default=0, nullable=False)
     credit_due_date = Column(DateTime(timezone=True), nullable=True)
     credit_days = Column(Integer, nullable=True)
     is_today_payment_overdue = Column(Boolean, default=False)
@@ -285,4 +288,22 @@ class PushSubscription(Base):
     user_id = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"))
+
+class DriverHandover(Base):
+    __tablename__ = "driver_handovers"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    driver_id = Column(UUID(as_uuid=True), ForeignKey("drivers.id", ondelete="SET NULL"), nullable=True, index=True)
+    driver_name = Column(String, nullable=False)
+    vehicle_number = Column(String, nullable=True)
+    settlement_date = Column(String, nullable=False, index=True)  # YYYY-MM-DD
+    amount_in_hand = Column(Numeric, default=0, nullable=False)
+    expected_amount = Column(Numeric, default=0, nullable=False)
+    payment_mode = Column(String, default="cash", nullable=False)
+    received_by = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=text("now()"))
+    updated_at = Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"))
+
+    driver = relationship("Driver")
+
 

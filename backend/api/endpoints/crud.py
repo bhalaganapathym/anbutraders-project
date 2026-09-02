@@ -7,12 +7,13 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from uuid import UUID
 from api.deps import get_db, get_current_active_user
-from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification, Bill, Driver
+from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification, Bill, Driver, DriverHandover
 from schemas.all import (
     CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest,
     OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, DispatchDraftUpdate,
     WeightMismatchDecision, DiscountApprovalRequest, DiscountDecisionRequest,
-    NotificationCreate, NotificationResponse, BulkDeleteRequest
+    NotificationCreate, NotificationResponse, BulkDeleteRequest,
+    DriverHandoverCreate, DriverHandoverResponse
 )
 from core.websocket import manager
 from core.push import send_web_push
@@ -1167,7 +1168,7 @@ def delete_notification(id: UUID, background_tasks: BackgroundTasks, db: Session
 @router.get("/reports/daily-reconciliation")
 def get_daily_reconciliation(date: str = None, db: Session = Depends(get_db)):
     from datetime import datetime, date as date_cls
-    from models.all import Bill
+    from models.all import Bill, DriverHandover
     from sqlalchemy import cast, Date
     
     if date:
@@ -1177,6 +1178,8 @@ def get_daily_reconciliation(date: str = None, db: Session = Depends(get_db)):
             target_date = date_cls.today()
     else:
         target_date = date_cls.today()
+
+    date_str = target_date.strftime("%Y-%m-%d")
         
     bills = db.query(Bill).options(
         joinedload(Bill.dispatch),
@@ -1224,16 +1227,130 @@ def get_daily_reconciliation(date: str = None, db: Session = Depends(get_db)):
             "pending_amount": float(b.pending_amount or 0),
             "payment_method": b.payment_method
         })
+
+    # Query persistent driver handovers for this date
+    handovers = db.query(DriverHandover).filter(DriverHandover.settlement_date == date_str).all()
+    handover_map = {}
+    for h in handovers:
+        if h.driver_id:
+            handover_map[str(h.driver_id)] = h
+        if h.driver_name:
+            handover_map[h.driver_name.lower().strip()] = h
+
+    for d_id, d_data in driver_map.items():
+        h = handover_map.get(d_id) or handover_map.get(d_data["driver_name"].lower().strip())
+        if h:
+            d_data["handover"] = {
+                "id": str(h.id),
+                "amount_in_hand": float(h.amount_in_hand or 0),
+                "expected_amount": float(h.expected_amount or 0),
+                "payment_mode": h.payment_mode,
+                "received_by": h.received_by,
+                "notes": h.notes,
+                "created_at": h.created_at.isoformat() if h.created_at else None
+            }
+        else:
+            d_data["handover"] = None
+
+    total_handover_received = sum(float(h.amount_in_hand or 0) for h in handovers)
         
     return {
-        "date": target_date.strftime("%Y-%m-%d"),
+        "date": date_str,
         "total_bills_count": len(bills),
         "total_billed": total_billed,
         "total_paid": total_paid,
         "total_pending": total_pending,
+        "total_handover_received": total_handover_received,
         "payment_modes": by_payment_method,
-        "drivers_summary": list(driver_map.values())
+        "drivers_summary": list(driver_map.values()),
+        "handovers": [
+            {
+                "id": str(h.id),
+                "driver_id": str(h.driver_id) if h.driver_id else None,
+                "driver_name": h.driver_name,
+                "vehicle_number": h.vehicle_number,
+                "settlement_date": h.settlement_date,
+                "amount_in_hand": float(h.amount_in_hand or 0),
+                "expected_amount": float(h.expected_amount or 0),
+                "payment_mode": h.payment_mode,
+                "received_by": h.received_by,
+                "notes": h.notes,
+                "created_at": h.created_at.isoformat() if h.created_at else None
+            } for h in handovers
+        ]
     }
+
+# --- DRIVER HANDOVERS CRUD ---
+@router.get("/reports/driver-handovers", response_model=List[DriverHandoverResponse])
+def get_driver_handovers(date: str = None, db: Session = Depends(get_db)):
+    query = db.query(DriverHandover)
+    if date:
+        query = query.filter(DriverHandover.settlement_date == date)
+    return query.order_by(DriverHandover.created_at.desc()).all()
+
+@router.post("/reports/driver-handovers", response_model=DriverHandoverResponse)
+def save_driver_handover(
+    payload: DriverHandoverCreate,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    existing = None
+    if payload.driver_id:
+        existing = db.query(DriverHandover).filter(
+            DriverHandover.driver_id == payload.driver_id,
+            DriverHandover.settlement_date == payload.settlement_date
+        ).first()
+    if not existing and payload.driver_name:
+        existing = db.query(DriverHandover).filter(
+            func.lower(DriverHandover.driver_name) == payload.driver_name.lower().strip(),
+            DriverHandover.settlement_date == payload.settlement_date
+        ).first()
+
+    if existing:
+        existing.amount_in_hand = round(float(payload.amount_in_hand or 0), 2)
+        existing.expected_amount = round(float(payload.expected_amount or 0), 2)
+        existing.payment_mode = payload.payment_mode or "cash"
+        existing.received_by = payload.received_by or current_user.username or "Office Cashier"
+        existing.notes = payload.notes
+        if payload.vehicle_number:
+            existing.vehicle_number = payload.vehicle_number
+        existing.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(existing)
+        handover = existing
+    else:
+        handover = DriverHandover(
+            driver_id=payload.driver_id,
+            driver_name=payload.driver_name,
+            vehicle_number=payload.vehicle_number,
+            settlement_date=payload.settlement_date,
+            amount_in_hand=round(float(payload.amount_in_hand or 0), 2),
+            expected_amount=round(float(payload.expected_amount or 0), 2),
+            payment_mode=payload.payment_mode or "cash",
+            received_by=payload.received_by or current_user.username or "Office Cashier",
+            notes=payload.notes
+        )
+        db.add(handover)
+        db.commit()
+        db.refresh(handover)
+
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "driver_handovers"})
+    return handover
+
+@router.delete("/reports/driver-handovers/{id}")
+def delete_driver_handover(
+    id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    h = db.query(DriverHandover).filter(DriverHandover.id == id).first()
+    if h:
+        db.delete(h)
+        db.commit()
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "driver_handovers"})
+    return {"status": "ok"}
+
 
 # --- PUBLIC ORDER TRACKING & DIGITAL RECEIPT ---
 @router.get("/public/track/{tracking_ref}")

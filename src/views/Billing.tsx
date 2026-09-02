@@ -114,6 +114,9 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
   const [paidAmount, setPaidAmount] = useState<string>('');
   const [toCollectAmount, setToCollectAmount] = useState<string>('');
+  const [priorPendingPaid, setPriorPendingPaid] = useState<string>('');
+  const [unloadingCharge, setUnloadingCharge] = useState<string>('');
+  const [deliveryCharge, setDeliveryCharge] = useState<string>('');
   const [creditDays, setCreditDays] = useState<number | ''>(7);
   const [creditDueDate, setCreditDueDate] = useState<string>(() => {
     const d = new Date();
@@ -404,6 +407,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
     const paidVal = round2(parseFloat(paidAmount) || 0);
     const toCollectVal = round2(parseFloat(toCollectAmount) || 0);
+    const priorPaidVal = round2(parseFloat(priorPendingPaid) || 0);
     const isCredit = paymentMethod === 'credit' || paymentMethod === 'today payment' || toCollectVal > 0;
 
     try {
@@ -417,12 +421,18 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         discount_amount: round2(selectedDispatch.discount_amount || 0),
         paid_amount: round2(paidVal),
         pending_amount: round2(toCollectVal),
+        prior_pending_paid: priorPaidVal,
+        unloading_charge: round2(uChargeVal),
+        delivery_charge: round2(dChargeVal),
         credit_due_date: isCredit && creditDueDate ? new Date(creditDueDate).toISOString() : null,
         credit_days: isCredit && creditDays !== '' ? Number(creditDays) : null,
       });
 
       toast('Bill generated & dispatch team notified with customer details!', 'success');
       setSelectedDispatch(null);
+      setPriorPendingPaid('');
+      setUnloadingCharge('');
+      setDeliveryCharge('');
       loadData();
     } catch (err: any) {
       toast(err?.message || 'Failed to create bill', 'error');
@@ -524,6 +534,15 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const uCharge = parseFloat(unloadingCharge) || 0;
   const dCharge = parseFloat(deliveryCharge) || 0;
   const grandTotalAmount = round2(totalAmount + uCharge + dCharge);
+
+  const selectedCustomer = customers.find(c => c.id === selectedDispatch?.customer_id) || selectedDispatch?.customer;
+  const customerPriorDues = round2(Number(selectedCustomer?.pending_amount || 0));
+  const priorPaidVal = round2(parseFloat(priorPendingPaid) || 0);
+  const remainingPriorDues = round2(Math.max(0, customerPriorDues - priorPaidVal));
+  const paidVal = round2(parseFloat(paidAmount) || 0);
+  const toCollectVal = round2(parseFloat(toCollectAmount) || 0);
+  const totalReceivedInTransaction = round2(paidVal + priorPaidVal);
+  const totalCustomerNetOutstanding = round2(toCollectVal + remainingPriorDues);
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -1011,6 +1030,55 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
               </div>
             </div>
 
+            {/* Customer Prior Pending Dues & Payment Section */}
+            <div className="bg-orange-50/70 dark:bg-slate-900 border border-orange-200/90 dark:border-orange-950 p-4 rounded-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-orange-900 dark:text-orange-300 flex items-center gap-1.5">
+                  <Clock size={14} className="text-orange-600" />
+                  Customer Prior Pending Dues
+                </span>
+                <span className="text-xs font-black px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-950/80 text-orange-900 dark:text-orange-200 border border-orange-300 dark:border-orange-800">
+                  Old Outstanding: ₹{customerPriorDues.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Prior Dues Paid in this Bill (₹) <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={priorPendingPaid}
+                      onChange={(e) => setPriorPendingPaid(e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="any"
+                      className="input pl-8 font-bold text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">Amount paying toward old pending dues</p>
+                </div>
+
+                <div className="flex flex-col justify-center bg-white/80 dark:bg-slate-800/80 p-3 rounded-xl border border-orange-100 dark:border-slate-700 text-xs space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Remaining Prior Dues:</span>
+                    <strong className="text-orange-700 dark:text-orange-400 font-bold">
+                      ₹{remainingPriorDues.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-700">
+                    <span className="text-slate-700 dark:text-slate-200 font-extrabold">Total Collected in Hand:</span>
+                    <strong className="text-emerald-700 dark:text-emerald-400 font-black text-sm">
+                      ₹{totalReceivedInTransaction.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Payment & Collection Breakdown Box */}
             <div className="bg-amber-50/50 dark:bg-slate-900 border border-amber-200/80 dark:border-slate-700 p-4 rounded-xl space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1279,20 +1347,47 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
                   <div className="grid grid-cols-3 gap-2 border-2 border-black p-2.5 my-2 bg-gray-50 text-[11px]">
                     <div>
-                      <p className="text-[10px] font-bold text-gray-600 uppercase">Total Invoice Amount</p>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Current Invoice Amount</p>
                       <p className="font-black text-sm text-black">₹{grandTotalAmount.toFixed(2)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-gray-600 uppercase">Amount Paid / Received</p>
-                      <p className="font-black text-sm text-emerald-800">₹{(parseFloat(paidAmount) || 0).toFixed(2)}</p>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Current Bill Paid</p>
+                      <p className="font-black text-sm text-emerald-800">₹{paidVal.toFixed(2)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-gray-600 uppercase">Balance to Collect on Site</p>
-                      <p className="font-black text-sm text-rose-800">₹{(parseFloat(toCollectAmount) || 0).toFixed(2)}</p>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Current Bill Balance</p>
+                      <p className="font-black text-sm text-rose-800">₹{toCollectVal.toFixed(2)}</p>
                     </div>
                   </div>
 
-                  <p className="text-amber-900 font-bold"><strong>Customer Prior Pending Dues:</strong> ₹{Number(selectedCustomer?.pending_amount || 0).toLocaleString('en-IN')}</p>
+                  {/* Customer Prior Dues & Comprehensive Ledger Breakdown */}
+                  <div className="border border-black p-2.5 bg-gray-50/80 space-y-1 text-[11px] my-2">
+                    <div className="flex justify-between">
+                      <span><strong>Customer Prior Pending Dues:</strong></span>
+                      <span className="font-bold">₹{customerPriorDues.toFixed(2)}</span>
+                    </div>
+                    {priorPaidVal > 0 && (
+                      <>
+                        <div className="flex justify-between text-emerald-800 font-bold">
+                          <span>Prior Dues Paid in this Bill:</span>
+                          <span>(-) ₹{priorPaidVal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-amber-900 font-semibold">
+                          <span>Remaining Prior Pending Dues:</span>
+                          <span>₹{remainingPriorDues.toFixed(2)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex justify-between pt-1 border-t border-black font-black text-xs">
+                      <span>Total Cash/Payment Received in this Transaction:</span>
+                      <span className="text-emerald-900">₹{totalReceivedInTransaction.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-black text-xs text-rose-900">
+                      <span>Total Customer Net Outstanding Balance:</span>
+                      <span>₹{totalCustomerNetOutstanding.toFixed(2)}</span>
+                    </div>
+                  </div>
+
                   <p><strong>Payment Mode:</strong> {paymentMethod.toUpperCase()}</p>
                   {selectedDispatch.vehicle_number && (
                     <p><strong>Transport:</strong> Vehicle {selectedDispatch.vehicle_number} {selectedDispatch.driver_name ? `(${selectedDispatch.driver_name})` : ''}</p>

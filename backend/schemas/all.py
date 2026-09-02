@@ -417,6 +417,9 @@ class BillCreate(BaseModel):
     discount_amount: Optional[float] = 0.0
     paid_amount: Optional[float] = 0.0
     pending_amount: Optional[float] = 0.0
+    prior_pending_paid: Optional[float] = 0.0
+    unloading_charge: Optional[float] = 0.0
+    delivery_charge: Optional[float] = 0.0
     credit_due_date: Optional[datetime] = None
     credit_days: Optional[int] = None
     is_today_payment_overdue: Optional[bool] = False
@@ -433,6 +436,9 @@ class BillResponse(BaseModel):
     discount_amount: float = 0.0
     paid_amount: float = 0.0
     pending_amount: float = 0.0
+    prior_pending_paid: float = 0.0
+    unloading_charge: float = 0.0
+    delivery_charge: float = 0.0
     credit_due_date: Optional[datetime] = None
     credit_days: Optional[int] = None
     is_today_payment_overdue: bool = False
@@ -443,6 +449,13 @@ class BillResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Reports & Metrics
+class SalesReport(BaseModel):
+    total_revenue: float
+    total_orders: int
+    top_selling_products: List[Any]
+    low_stock_alerts: List[ProductResponse]
 
 class SystemSettingUpdate(BaseModel):
     value: str
@@ -486,4 +499,31 @@ class PushTestRequest(BaseModel):
     role: Optional[str] = "all"
     endpoint: Optional[str] = None
 
+# Driver Handover Schemas
+class DriverHandoverCreate(BaseModel):
+    driver_id: Optional[UUID] = None
+    driver_name: str
+    vehicle_number: Optional[str] = None
+    settlement_date: str
+    amount_in_hand: float
+    expected_amount: Optional[float] = 0.0
+    payment_mode: Optional[str] = "cash"
+    received_by: Optional[str] = "Office Cashier"
+    notes: Optional[str] = None
 
+class DriverHandoverResponse(BaseModel):
+    id: UUID
+    driver_id: Optional[UUID] = None
+    driver_name: str
+    vehicle_number: Optional[str] = None
+    settlement_date: str
+    amount_in_hand: float
+    expected_amount: float
+    payment_mode: str
+    received_by: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

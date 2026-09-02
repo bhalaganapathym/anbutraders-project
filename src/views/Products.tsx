@@ -695,103 +695,184 @@ function ProductTable({
   };
 
   return (
-    <div className="table-wrap">
-      <table className="w-full">
-        <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-          <tr>
-            <th className="th">Product</th>
-            <th className="th">Brand</th>
-            <th className="th">Size</th>
-            <th className="th">Category</th>
-            <th className="th">Unit</th>
-            <th className="th">Std Wt (kg)</th>
-            <th className="th">Est. Diff (kg)</th>
-            <th className="th">Price / Rate</th>
-            {isAdmin && <th className="th text-right">Actions</th>}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {products.map((p) => {
-            const hasWeight = p.standard_weight && p.standard_weight > 0;
-            const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
+    <>
+      {/* MOBILE CARD VIEW (< 768px) */}
+      <div className="grid grid-cols-1 gap-3 md:hidden">
+        {products.map((p) => {
+          const hasWeight = p.standard_weight && p.standard_weight > 0;
+          const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
 
-            return (
-              <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <td className="td">
-                  <div className="flex items-center gap-2">
-                    <Layers size={16} className="text-slate-400" />
-                    <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
-                  </div>
-                </td>
-                <td className="td">
-                  {p.brand ? <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{p.brand}</span> : <span className="text-slate-300">—</span>}
-                </td>
-                <td className="td">
-                  {p.size ? <span className="font-medium text-slate-600 dark:text-slate-300">{p.size}</span> : <span className="text-slate-300">—</span>}
-                </td>
-                <td className="td">
-                  <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
-                    {p.category}
-                  </span>
-                </td>
-                <td className="td">{p.unit}</td>
-                <td className="td">
-                  <span className="font-medium text-slate-600 dark:text-slate-300">
-                    {p.standard_weight ? `${p.standard_weight} kg` : '—'}
-                  </span>
-                </td>
-                <td className="td">
-                  {editingTolId === p.id ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={tolValue}
-                      onChange={(e) => setTolValue(e.target.value)}
-                      onBlur={() => finishEditTol(p)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') finishEditTol(p);
-                        if (e.key === 'Escape') setEditingTolId(null);
-                      }}
-                      className="input py-0.5 px-2 w-20 text-xs font-bold text-amber-600 border-amber-400"
-                      autoFocus
-                    />
-                  ) : (
-                    <span 
-                      onClick={() => startEditTol(p)}
-                      className={`font-medium ${canEditTolerance ? 'cursor-pointer hover:underline text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}
-                      title={canEditTolerance ? 'Click to edit weight tolerance' : undefined}
-                    >
-                      {p.weight_tolerance != null ? `±${p.weight_tolerance} kg` : 'Default'}
+          return (
+            <div key={p.id} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+              {/* Header: Product Name & Category */}
+              <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide truncate">
+                    {p.name}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className={`badge text-[10px] font-bold ${categoryColor[p.category] ?? categoryColor.Other}`}>
+                      {p.category}
                     </span>
-                  )}
-                </td>
-                <td className="td">
-                  <div>
-                    <span className="flex items-center font-bold text-slate-800 dark:text-slate-200">
-                      <IndianRupee size={13} className="text-slate-400" />{(p.price ?? 0).toFixed(2)}
-                    </span>
-                    {rateKg && (
-                      <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
-                        (₹{rateKg}/kg)
+                    {p.brand && (
+                      <span className="badge bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
+                        {p.brand}
+                      </span>
+                    )}
+                    {p.size && (
+                      <span className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold">
+                        {p.size}
                       </span>
                     )}
                   </div>
-                </td>
-                {isAdmin && (
-                  <td className="td text-right">
-                    <button onClick={() => onEdit(p)} className="btn-ghost p-1.5" aria-label="Edit">
-                      <Pencil size={15} />
-                    </button>
-                    <button onClick={() => onRemove(p)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
-                      <Trash2 size={15} />
-                    </button>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-base font-black text-amber-600 dark:text-amber-400">
+                    ₹{(p.price ?? 0).toFixed(2)}
+                  </span>
+                  <p className="text-[10px] font-medium text-slate-400">per {p.unit}</p>
+                </div>
+              </div>
+
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Std Weight</span>
+                  <p className="font-bold text-slate-700 dark:text-slate-200">
+                    {hasWeight ? `${p.standard_weight} kg` : '—'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Rate / Kg</span>
+                  <p className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                    {rateKg ? `₹${rateKg} / kg` : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons for Mobile */}
+              {isAdmin && (
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => onEdit(p)}
+                    className="btn-secondary flex-1 py-2 text-xs flex items-center justify-center gap-1.5 font-bold rounded-xl"
+                  >
+                    <Pencil size={13} className="text-indigo-600" /> Edit
+                  </button>
+                  <button
+                    onClick={() => onRemove(p)}
+                    className="btn-secondary px-3 py-2 text-xs flex items-center justify-center text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl"
+                    title="Delete Product"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* DESKTOP TABLE VIEW (>= 768px) */}
+      <div className="hidden md:block table-wrap">
+        <table className="w-full">
+          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+            <tr>
+              <th className="th">Product</th>
+              <th className="th">Brand</th>
+              <th className="th">Size</th>
+              <th className="th">Category</th>
+              <th className="th">Unit</th>
+              <th className="th">Std Wt (kg)</th>
+              <th className="th">Est. Diff (kg)</th>
+              <th className="th">Price / Rate</th>
+              {isAdmin && <th className="th text-right">Actions</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {products.map((p) => {
+              const hasWeight = p.standard_weight && p.standard_weight > 0;
+              const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
+
+              return (
+                <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="td">
+                    <div className="flex items-center gap-2">
+                      <Layers size={16} className="text-slate-400" />
+                      <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
+                    </div>
                   </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  <td className="td">
+                    {p.brand ? <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{p.brand}</span> : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="td">
+                    {p.size ? <span className="font-medium text-slate-600 dark:text-slate-300">{p.size}</span> : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="td">
+                    <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
+                      {p.category}
+                    </span>
+                  </td>
+                  <td className="td">{p.unit}</td>
+                  <td className="td">
+                    <span className="font-medium text-slate-600 dark:text-slate-300">
+                      {p.standard_weight ? `${p.standard_weight} kg` : '—'}
+                    </span>
+                  </td>
+                  <td className="td">
+                    {editingTolId === p.id ? (
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={tolValue}
+                        onChange={(e) => setTolValue(e.target.value)}
+                        onBlur={() => finishEditTol(p)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') finishEditTol(p);
+                          if (e.key === 'Escape') setEditingTolId(null);
+                        }}
+                        className="input py-0.5 px-2 w-20 text-xs font-bold text-amber-600 border-amber-400"
+                        autoFocus
+                      />
+                    ) : (
+                      <span 
+                        onClick={() => startEditTol(p)}
+                        className={`font-medium ${canEditTolerance ? 'cursor-pointer hover:underline text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}
+                        title={canEditTolerance ? 'Click to edit weight tolerance' : undefined}
+                      >
+                        {p.weight_tolerance != null ? `±${p.weight_tolerance} kg` : 'Default'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="td">
+                    <div>
+                      <span className="flex items-center font-bold text-slate-800 dark:text-slate-200">
+                        <IndianRupee size={13} className="text-slate-400" />{(p.price ?? 0).toFixed(2)}
+                      </span>
+                      {rateKg && (
+                        <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                          (₹{rateKg}/kg)
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  {isAdmin && (
+                    <td className="td text-right">
+                      <button onClick={() => onEdit(p)} className="btn-ghost p-1.5" aria-label="Edit">
+                        <Pencil size={15} />
+                      </button>
+                      <button onClick={() => onRemove(p)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
