@@ -77,11 +77,10 @@ const isCementProduct = (prod: Product | undefined, item: DispatchItem) => {
 
 const isCementMatch = (enteredText: string | undefined, expectedQty: number) => {
   if (!enteredText) return false;
-  const clean = enteredText.trim().toLowerCase().replace(/\s+/g, ' ');
-  const expectedSingular = `${expectedQty} bag`;
-  const expectedPlural = `${expectedQty} bags`;
-  const expectedCompact = `${expectedQty}bags`;
-  return clean === expectedPlural || clean === expectedSingular || clean === expectedCompact;
+  const clean = enteredText.trim().toLowerCase();
+  const numOnly = clean.replace(/[^0-9.]/g, '');
+  if (numOnly && Number(numOnly) === expectedQty) return true;
+  return clean === String(expectedQty) || clean === `${expectedQty} bags` || clean === `${expectedQty} bag`;
 };
 
 export default function DispatchDashboard({
@@ -691,7 +690,6 @@ export default function DispatchDashboard({
               const requiresWeight = prod?.standard_weight ? prod.standard_weight > 0 : false;
               const isCement = isCementProduct(prod, item);
               const cementQty = Math.round(Number(item.quantity) || 1);
-              const expectedCementText = `${cementQty} bags`;
               const isCementCorrect = isCement && isCementMatch(iv.cementText, cementQty);
               const hasEnteredCement = iv.cementText !== undefined && iv.cementText.trim() !== '';
               const isCementMismatch = isCement && hasEnteredCement && !isCementCorrect;
@@ -851,31 +849,36 @@ export default function DispatchDashboard({
                       !isVerificationDone ? (
                         <div>
                           <div className="flex items-center gap-2">
-                            <input 
-                              type="text" 
-                              value={iv.cementText || ''} 
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const matches = isCementMatch(val, cementQty);
-                                setItemVerification(prev => ({
-                                  ...prev, 
-                                  [item.id]: {
-                                    ...prev[item.id], 
-                                    cementText: val,
-                                    verified: matches ? true : (prev[item.id]?.verified && !matches ? false : prev[item.id]?.verified)
-                                  }
-                                }));
-                              }}
-                              disabled={iv.verified && isCementCorrect}
-                              placeholder={`e.g. ${expectedCementText}`}
-                              className={`input w-44 text-center text-sm font-black transition-all rounded-xl ${
-                                isCementMismatch 
-                                  ? 'bg-red-600 dark:bg-red-600 border-2 border-red-700 text-white placeholder-white/70 shadow-lg shadow-red-600/30' 
-                                  : isCementCorrect
-                                    ? 'bg-emerald-600 dark:bg-emerald-600 border-2 border-emerald-700 text-white placeholder-white/70 shadow-lg shadow-emerald-600/30'
-                                    : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-400'
-                              }`}
-                            />
+                            <div className="relative flex items-center">
+                              <input 
+                                type="text" 
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={iv.cementText || ''} 
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const matches = isCementMatch(val, cementQty);
+                                  setItemVerification(prev => ({
+                                    ...prev, 
+                                    [item.id]: {
+                                      ...prev[item.id], 
+                                      cementText: val,
+                                      verified: matches ? true : (prev[item.id]?.verified && !matches ? false : prev[item.id]?.verified)
+                                    }
+                                  }));
+                                }}
+                                disabled={iv.verified && isCementCorrect}
+                                placeholder={`e.g. ${cementQty}`}
+                                className={`input w-32 text-center text-base font-black transition-all rounded-xl ${
+                                  isCementMismatch 
+                                    ? 'bg-red-600 dark:bg-red-600 border-2 border-red-700 text-white placeholder-white/70 shadow-lg shadow-red-600/30' 
+                                    : isCementCorrect
+                                      ? 'bg-emerald-600 dark:bg-emerald-600 border-2 border-emerald-700 text-white placeholder-white/70 shadow-lg shadow-emerald-600/30'
+                                      : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-400'
+                                }`}
+                              />
+                            </div>
+                            <span className="text-xs font-black text-slate-500 uppercase">bags</span>
                             {isCementCorrect && (
                               <div className="text-emerald-600 flex items-center gap-1 text-xs font-black ml-1">
                                 <CheckCircle2 size={16} /> Verified
@@ -888,26 +891,26 @@ export default function DispatchDashboard({
                             <div className="flex items-center gap-1.5 text-xs flex-wrap">
                               <span className="text-slate-500 dark:text-slate-400 font-semibold">Requirement:</span>
                               <span className="font-mono font-black text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.5 rounded text-[11px]">
-                                Type "{expectedCementText}"
+                                Enter "{cementQty}" ({cementQty} bags)
                               </span>
                             </div>
 
                             {isCementMismatch ? (
                               <div className="text-[11px] text-rose-600 dark:text-rose-400 font-extrabold flex items-center gap-1">
                                 <AlertCircle size={13} className="shrink-0 animate-bounce" />
-                                <span>Mismatch! Enter "{expectedCementText}" to confirm {cementQty} bags</span>
+                                <span>Mismatch! Enter "{cementQty}" to confirm {cementQty} bags</span>
                               </div>
                             ) : isCementCorrect ? (
                               <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center gap-1">
                                 <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
-                                <span>Match ✓ {expectedCementText} confirmed</span>
+                                <span>Match ✓ {cementQty} bags confirmed</span>
                               </div>
                             ) : null}
                           </div>
                         </div>
                       ) : (
                         <p className="font-bold text-slate-700 dark:text-slate-300">
-                          {expectedCementText} (Verified)
+                          {cementQty} bags (Verified)
                         </p>
                       )
                     ) : (
