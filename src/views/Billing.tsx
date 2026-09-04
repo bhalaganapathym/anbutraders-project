@@ -688,7 +688,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                     className="btn-primary text-xs py-2 flex items-center gap-1 bg-amber-600 hover:bg-amber-700"
                     title="Send alert to Dispatch team with customer name, phone, address"
                   >
-                    <Bell size={13} /> Notify Dispatch
+                    <Bell size={13} /> Bill Ready
                   </button>
                 </div>
               </div>

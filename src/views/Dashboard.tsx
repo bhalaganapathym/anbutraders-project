@@ -788,7 +788,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                     time: estimatedTime,
                   },
                   {
-                    name: 'Dispatch P-I',
+                    name: 'Weighment',
                     done: dispatchP1Done,
                     active: dispatchP1Active,
                     time: dispatchP1Time,
@@ -800,7 +800,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                     time: billingTime,
                   },
                   {
-                    name: 'Dispatch P-II',
+                    name: 'Load Confirmed',
                     done: dispatchP2Done,
                     active: dispatchP2Active,
                     time: dispatchP2Time,

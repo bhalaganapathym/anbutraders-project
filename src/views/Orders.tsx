@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api, type Customer, type Order, type OrderItem, type Product } from '@/lib/api';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import {
-  Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock, Calendar, Sparkles
+  Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock, Calendar, Sparkles,
+  Download, Image as ImageIcon
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice, round2 } from '@/lib/pricing';
+import html2canvas from 'html2canvas';
+import { openWhatsApp } from '@/lib/whatsapp';
 
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type OrderItemWithProduct = OrderItem & { product: Product | null };
@@ -153,6 +156,161 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const [selBrand, setSelBrand] = useState('');
   const [selSize, setSelSize] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const [sharingImageOrder, setSharingImageOrder] = useState<OrderWithCustomer | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const estimatePrintRef = useRef<HTMLDivElement>(null);
+
+  const generateEstimateImageBlob = async (order: OrderWithCustomer): Promise<{ blob: Blob; totalAmount: number; totalWeight: number } | null> => {
+    setSharingImageOrder(order);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    if (!estimatePrintRef.current) return null;
+
+    try {
+      const canvas = await html2canvas(estimatePrintRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+
+      let totalAmount = 0;
+      let totalWeight = 0;
+      (order.items || []).forEach((it) => {
+        const prod = it.product || products.find(p => p.id === it.product_id);
+        const pricing = calculateProductPrice(prod, it.quantity || 1);
+        totalAmount += pricing.totalPrice;
+        totalWeight += pricing.totalWeight;
+      });
+
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve({ blob, totalAmount, totalWeight });
+          } else {
+            resolve(null);
+          }
+        }, 'image/png', 1.0);
+      });
+    } catch (err) {
+      console.error('Failed to generate estimate image:', err);
+      return null;
+    }
+  };
+
+  const handleSendEstimateImageWhatsApp = async (order: OrderWithCustomer) => {
+    setIsGeneratingImage(true);
+    try {
+      const res = await generateEstimateImageBlob(order);
+      if (!res) {
+        toast('Failed to render estimate image', 'error');
+        return;
+      }
+      const { blob, totalAmount } = res;
+      const estNo = order.order_no || order.id.substring(0, 8).toUpperCase();
+      const phone = order.customer?.phone ? order.customer.phone.replace(/[^0-9]/g, '') : '';
+      const dateStr = new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+      let advanceBlock = '';
+      if (order.is_advance_order) {
+        const advPaid = Number(order.advance_paid_amount || 0);
+        const balDue = Math.max(0, totalAmount - advPaid);
+        advanceBlock = `\n💵 *Advance Paid:* ₹${advPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n🔴 *Balance Due:* ₹${balDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      }
+
+      const caption = 
+`🧾 *ANBU TRADERS — ESTIMATE BILL*
+*Estimate No:* ${estNo}
+*Date:* ${dateStr}
+*Customer:* ${order.customer?.name ?? 'Customer'}
+*Total Amount:* ₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}${advanceBlock}
+
+_Please find attached the official estimate bill image._
+*ANBU TRADERS* | Ph: 0413-2964204, 9626325204`;
+
+      const fileName = `Estimate_${estNo}.png`;
+      const imageFile = new File([blob], fileName, { type: 'image/png' });
+
+      // 1. Mobile native Web Share API with file attachment support
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+        try {
+          await navigator.share({
+            files: [imageFile],
+            title: `Estimate ${estNo}`,
+            text: caption,
+          });
+          toast('Estimate image shared via WhatsApp!', 'success');
+          return;
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') return;
+          console.warn('Share API failed, using desktop fallback:', shareErr);
+        }
+      }
+
+      // 2. Desktop fallback: Copy image to clipboard for instant Ctrl+V paste
+      let copiedToClipboard = false;
+      if (typeof navigator !== 'undefined' && navigator.clipboard && (window as any).ClipboardItem) {
+        try {
+          await navigator.clipboard.write([
+            new (window as any).ClipboardItem({ 'image/png': blob })
+          ]);
+          copiedToClipboard = true;
+        } catch (clipErr) {
+          console.warn('Clipboard write failed:', clipErr);
+        }
+      }
+
+      // 3. Auto-download the image file
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // 4. Open WhatsApp chat
+      openWhatsApp(phone, caption);
+
+      if (copiedToClipboard) {
+        toast('WhatsApp opened! Image copied to clipboard — press Paste (Ctrl+V) in chat.', 'success');
+      } else {
+        toast('WhatsApp opened & image downloaded! Attach the downloaded estimate image.', 'success');
+      }
+    } catch (e: any) {
+      console.error('Error sharing estimate image:', e);
+      toast('Error preparing estimate image', 'error');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleDownloadEstimateImage = async (order: OrderWithCustomer) => {
+    setIsGeneratingImage(true);
+    try {
+      const res = await generateEstimateImageBlob(order);
+      if (!res) {
+        toast('Failed to generate image', 'error');
+        return;
+      }
+      const { blob } = res;
+      const estNo = order.order_no || order.id.substring(0, 8).toUpperCase();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Estimate_${estNo}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('Estimate image downloaded!', 'success');
+    } catch (err) {
+      toast('Failed to download image', 'error');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -691,10 +849,19 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                   {/* Touch Action Bar */}
                   <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
                     <button
-                      onClick={() => sendEstimateWhatsApp(o)}
-                      className="btn-secondary flex-1 py-1.5 px-2 text-xs text-emerald-700 font-semibold flex items-center justify-center gap-1"
+                      onClick={() => handleSendEstimateImageWhatsApp(o)}
+                      className="btn-secondary flex-1 py-1.5 px-2 text-xs text-emerald-700 font-semibold flex items-center justify-center gap-1 shadow-sm"
+                      title="Send Estimate Image via WhatsApp"
                     >
-                      <Phone size={13} /> WhatsApp
+                      <ImageIcon size={13} /> Send Image
+                    </button>
+
+                    <button
+                      onClick={() => sendEstimateWhatsApp(o)}
+                      className="btn-ghost py-1.5 px-2 text-xs text-emerald-600 flex items-center gap-1"
+                      title="Send Estimate as Text via WhatsApp"
+                    >
+                      <Phone size={13} /> Text
                     </button>
 
                     {o.status === 'pending' && (
@@ -809,11 +976,18 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                       <td className="td text-right">
                         <div className="flex justify-end gap-1 items-center">
                           <button
-                            onClick={() => sendEstimateWhatsApp(o)}
+                            onClick={() => handleSendEstimateImageWhatsApp(o)}
                             className="btn-ghost p-1.5 text-emerald-600 hover:bg-emerald-50 flex items-center gap-1 text-xs font-semibold"
-                            title="Send Estimate via WhatsApp"
+                            title="Send Estimate Image via WhatsApp"
                           >
-                            <Phone size={14} /> Send
+                            <ImageIcon size={14} /> Send Image
+                          </button>
+                          <button
+                            onClick={() => sendEstimateWhatsApp(o)}
+                            className="btn-ghost p-1.5 text-slate-500 hover:bg-slate-100 flex items-center gap-1 text-xs"
+                            title="Send Estimate as Text via WhatsApp"
+                          >
+                            <Phone size={14} /> Text
                           </button>
                           {o.status === 'pending' && (
                             <button
@@ -1204,13 +1378,32 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
                 ))}
               </div>
             </div>
-            <div className="pt-2 flex justify-between items-center">
-              <button
-                onClick={() => sendEstimateWhatsApp(detailOrder)}
-                className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
-              >
-                <Phone size={16} /> Send Estimate via WhatsApp
-              </button>
+            <div className="pt-3 flex flex-wrap justify-between items-center gap-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => handleSendEstimateImageWhatsApp(detailOrder)}
+                  disabled={isGeneratingImage}
+                  className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm"
+                  title="Generate and send official estimate bill image via WhatsApp"
+                >
+                  <ImageIcon size={16} /> {isGeneratingImage ? 'Generating...' : 'Send Image via WhatsApp'}
+                </button>
+                <button
+                  onClick={() => sendEstimateWhatsApp(detailOrder)}
+                  className="btn-secondary text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5"
+                  title="Send plain text estimate summary via WhatsApp"
+                >
+                  <Phone size={15} /> Send Text
+                </button>
+                <button
+                  onClick={() => handleDownloadEstimateImage(detailOrder)}
+                  disabled={isGeneratingImage}
+                  className="btn-secondary flex items-center gap-1.5"
+                  title="Download estimate as PNG image"
+                >
+                  <Download size={15} /> Download Image
+                </button>
+              </div>
               <button onClick={() => setDetailOrder(null)} className="btn-secondary">
                 Close
               </button>
@@ -1218,6 +1411,142 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
           </div>
         )}
       </Modal>
+
+      {/* Hidden Printable Estimate Element matching Anbu Traders official template */}
+      {(() => {
+        const targetEstimate = sharingImageOrder || detailOrder;
+        const targetItems = (targetEstimate?.items || []) as OrderItemWithProduct[];
+        let targetTotalAmount = 0;
+        let targetTotalWeight = 0;
+        targetItems.forEach((it) => {
+          const prod = it.product || products.find((p) => p.id === it.product_id);
+          const pricing = calculateProductPrice(prod, it.quantity || 1);
+          targetTotalAmount += pricing.totalPrice;
+          targetTotalWeight += pricing.totalWeight;
+        });
+
+        return (
+          <div className="fixed top-[-9999px] left-[-9999px]">
+            <div ref={estimatePrintRef} className="w-[794px] bg-white text-black p-8 text-xs font-sans border-2 border-black space-y-4">
+              {/* Header */}
+              <div className="flex justify-between items-start border-b-2 border-black pb-3">
+                <div className="flex items-center gap-3.5">
+                  <img
+                    src="/pwa-192x192.png"
+                    alt="Anbu Traders Logo"
+                    className="h-16 w-16 object-contain rounded-lg border border-black/20 p-0.5"
+                    crossOrigin="anonymous"
+                  />
+                  <div>
+                    <h1 className="text-2xl font-black tracking-wide text-black uppercase">ANBU TRADERS</h1>
+                    <p className="text-[11px] font-semibold text-gray-800">No.4/5 Pondy Mailam Road, T.C.Kootroad</p>
+                    <p className="text-[11px] font-semibold text-gray-800">Vanur T.K 605 111 | Ph: 0413-2964204, 9626325204</p>
+                    <p className="text-[11px] font-semibold text-gray-800">State Name : Tamil Nadu, Code : 33</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <h2 className="text-lg font-black border-2 border-black px-3 py-0.5 inline-block uppercase">ESTIMATE</h2>
+                  <p className="text-[10px] italic mt-1 text-gray-700">(CUSTOMER ESTIMATE COPY)</p>
+                  <p className="text-[11px] mt-2 font-bold"><strong>Estimate No:</strong> {targetEstimate?.order_no || targetEstimate?.id?.substring(0, 8).toUpperCase() || 'EST'}</p>
+                  <p className="text-[11px] font-bold"><strong>Date:</strong> {targetEstimate?.created_at ? new Date(targetEstimate.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</p>
+                </div>
+              </div>
+
+              {/* Customer & Delivery Info */}
+              <div className="grid grid-cols-2 gap-4 border-b-2 border-black pb-3 text-[11px]">
+                <div className="pr-2 border-r border-gray-400">
+                  <p className="font-bold uppercase tracking-wider text-[10px] border-b border-gray-300 pb-1 mb-1 text-gray-700">Buyer (Bill to)</p>
+                  <p className="font-extrabold text-sm text-black">{targetEstimate?.customer?.name || 'Customer'}</p>
+                  <p className="font-semibold">{targetEstimate?.delivery_address || '—'}</p>
+                  <p className="font-semibold">Ph: {targetEstimate?.customer?.phone || '—'}</p>
+                </div>
+                <div className="pl-2">
+                  <p className="font-bold uppercase tracking-wider text-[10px] border-b border-gray-300 pb-1 mb-1 text-gray-700">Delivery & Site Info</p>
+                  <p className="font-semibold"><strong>Site:</strong> {targetEstimate?.delivery_address || 'Site Delivery'}</p>
+                  {targetEstimate?.notes && <p className="font-medium text-gray-700 italic mt-0.5">Note: {targetEstimate.notes}</p>}
+                  {targetEstimate?.is_advance_order && (
+                    <div className="mt-1.5 text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 rounded p-1.5 text-[10.5px]">
+                      <span>📦 Advance Booking — Scheduled Date: {targetEstimate.scheduled_delivery_date ? new Date(targetEstimate.scheduled_delivery_date).toLocaleDateString('en-IN') : '—'}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <table className="w-full border-collapse border-2 border-black text-[11px]">
+                <thead>
+                  <tr className="bg-gray-100 border-b-2 border-black font-extrabold">
+                    <th className="border border-black p-1.5 text-center w-10">SI</th>
+                    <th className="border border-black p-1.5 text-left">Description of Goods</th>
+                    <th className="border border-black p-1.5 text-center w-28">Quantity</th>
+                    <th className="border border-black p-1.5 text-center w-24">Weight (kg)</th>
+                    <th className="border border-black p-1.5 text-right w-24">Rate (₹)</th>
+                    <th className="border border-black p-1.5 text-right w-28">Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {targetItems.map((it, idx) => {
+                    const prod = it.product || products.find((p) => p.id === it.product_id);
+                    const pricing = calculateProductPrice(prod, it.quantity || 1);
+                    return (
+                      <tr key={it.id || idx}>
+                        <td className="border border-black p-1.5 text-center font-medium">{idx + 1}</td>
+                        <td className="border border-black p-1.5 font-bold uppercase">{prod?.name ?? 'Item'}</td>
+                        <td className="border border-black p-1.5 text-center font-semibold">{it.quantity} {it.unit ?? prod?.unit ?? 'nos'}</td>
+                        <td className="border border-black p-1.5 text-center font-semibold">{pricing.isSteel && pricing.totalWeight > 0 ? pricing.totalWeight.toFixed(2) : '—'}</td>
+                        <td className="border border-black p-1.5 text-right font-medium">
+                          {pricing.isSteel ? `${pricing.ratePerKg.toFixed(2)}/kg` : pricing.unitPrice.toFixed(2)}
+                        </td>
+                        <td className="border border-black p-1.5 text-right font-black">{pricing.totalPrice.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="font-extrabold border-t-2 border-black bg-gray-100">
+                    <td colSpan={3} className="border border-black p-2 text-right uppercase text-xs">Total:</td>
+                    <td className="border border-black p-2 text-center text-xs font-bold">{targetTotalWeight > 0 ? `${targetTotalWeight.toFixed(2)} kg` : '—'}</td>
+                    <td className="border border-black p-2 text-right uppercase text-xs">Grand Total:</td>
+                    <td className="border border-black p-2 text-right text-sm font-black">₹{targetTotalAmount.toFixed(2)}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Amount in words & Advance Info */}
+              <div className="space-y-2 pt-1 text-[11px]">
+                <p className="font-semibold"><strong>Amount Chargeable (in words):</strong> {numberToWords(targetTotalAmount)}</p>
+
+                {targetEstimate?.is_advance_order && (
+                  <div className="grid grid-cols-3 gap-2 border-2 border-black p-2.5 my-2 bg-gray-50 text-[11px]">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Estimated Total</p>
+                      <p className="font-black text-sm text-black">₹{targetTotalAmount.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Advance Paid</p>
+                      <p className="font-black text-sm text-emerald-800">₹{Number(targetEstimate.advance_paid_amount || 0).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-600 uppercase">Balance Due</p>
+                      <p className="font-black text-sm text-rose-800">₹{Math.max(0, targetTotalAmount - Number(targetEstimate.advance_paid_amount || 0)).toFixed(2)}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-end pt-4 border-t border-black text-[10px]">
+                  <div>
+                    <p className="italic text-gray-600">Declaration: We declare that this estimate shows the actual estimated price of</p>
+                    <p className="italic text-gray-600">the goods described and that all particulars are true and correct.</p>
+                  </div>
+                  <div className="text-center font-bold">
+                    <p className="uppercase text-black">for ANBU TRADERS</p>
+                    <div className="h-10"></div>
+                    <p className="border-t border-black pt-1">Authorised Signatory</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

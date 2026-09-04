@@ -4,12 +4,18 @@ import { useToast } from '@/components/Toast';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Camera, User, Calendar, MapPin, Search, Plus, Truck, UserCheck,
-  Mic, MicOff, Play, Pause, RotateCcw, Volume2, Clock, AlertTriangle
+  Mic, MicOff, Play, Pause, RotateCcw, Volume2, Clock, AlertTriangle, Upload, Eye
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { round2 } from '@/lib/pricing';
 
 type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string; order_no?: string } };
+
+export interface GoodsPhotoItem {
+  id: string;
+  file: File;
+  preview: string;
+}
 
 // Utility to compress images
 const compressImage = async (file: File): Promise<File> => {
@@ -290,15 +296,50 @@ export default function DispatchDashboard({
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Photo of vehicle/goods leaving
-  const [vehicleLeavePhotoPreview, setVehicleLeavePhotoPreview] = useState<string|null>(null);
-  const [vehicleLeavePhotoFile, setVehicleLeavePhotoFile] = useState<File|null>(null);
+  // Multiple Goods / Vehicle Leaving Photos
+  const [goodsPhotos, setGoodsPhotos] = useState<GoodsPhotoItem[]>([]);
+  const [enlargedPhotoUrl, setEnlargedPhotoUrl] = useState<string | null>(null);
+  const goodsFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (videoRef.current && cameraStream) {
       videoRef.current.srcObject = cameraStream;
     }
   }, [cameraStream, cameraModalOpen]);
+
+  const handleGoodsFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const newItems: GoodsPhotoItem[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const compressed = await compressImage(file);
+        const preview = URL.createObjectURL(compressed);
+        newItems.push({
+          id: `photo_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}`,
+          file: compressed,
+          preview: preview
+        });
+      } catch (err) {
+        console.warn('Failed to compress selected image:', err);
+      }
+    }
+    if (newItems.length > 0) {
+      setGoodsPhotos(prev => [...prev, ...newItems]);
+      toast(`Added ${newItems.length} goods photo${newItems.length > 1 ? 's' : ''}`, 'success');
+    }
+    if (goodsFileInputRef.current) goodsFileInputRef.current.value = '';
+  };
+
+  const handleRemoveGoodsPhoto = (id: string) => {
+    setGoodsPhotos(prev => {
+      const target = prev.find(p => p.id === id);
+      if (target?.preview) URL.revokeObjectURL(target.preview);
+      return prev.filter(p => p.id !== id);
+    });
+  };
 
   const startCamera = async (itemId: string) => {
     try {
@@ -361,11 +402,16 @@ export default function DispatchDashboard({
             photoPreview: preview
           }
         }));
+        stopCamera();
       } else if (cameraType === 'vehicle') {
-        setVehicleLeavePhotoFile(compressed);
-        setVehicleLeavePhotoPreview(preview);
+        const newItem: GoodsPhotoItem = {
+          id: `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          file: compressed,
+          preview: preview
+        };
+        setGoodsPhotos(prev => [...prev, newItem]);
+        toast(`Goods photo #${goodsPhotos.length + 1} captured!`, 'success');
       }
-      stopCamera();
     }, 'image/jpeg', 0.6);
   };
 
@@ -471,22 +517,32 @@ export default function DispatchDashboard({
   };
 
   const handleLoadAndComplete = async () => {
+    if (goodsPhotos.length === 0) {
+      toast('Please add at least one goods photo before loading & completing', 'error');
+      return;
+    }
     setCompleting(true);
     try {
-      let photoUrl = null;
-      if (vehicleLeavePhotoFile) {
-         photoUrl = await new Promise((res, rej) => {
-            const reader = new FileReader();
-            reader.onload = () => res(reader.result as string);
-            reader.onerror = rej;
-            reader.readAsDataURL(vehicleLeavePhotoFile);
-         });
-      }
+      const photoUrls: string[] = await Promise.all(
+        goodsPhotos.map(p => new Promise<string>((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result as string);
+          reader.onerror = rej;
+          reader.readAsDataURL(p.file);
+        }))
+      );
+
+      const primaryCover = photoUrls[0] || null;
+      const goodsPhotoEntries = photoUrls.map((url, idx) => ({
+        url,
+        caption: `Goods Loaded Photo #${idx + 1}`
+      }));
 
       await api.put(`/dispatches/${detail.id}`, {
         ...detail,
         status: 'completed',
-        vehicle_leave_photo_url: photoUrl,
+        vehicle_leave_photo_url: primaryCover,
+        photos: [...(detail.photos || []), ...goodsPhotoEntries],
         vehicle_number: vehicleNo.trim() || null,
         driver_name: driverName.trim() || null,
         driver_mobile: driverMobile.trim() || null,
@@ -497,7 +553,7 @@ export default function DispatchDashboard({
         await api.put(`/orders/${detail.order_id}`, { status: 'completed' }).catch(() => {});
       }
 
-      toast('Dispatch loaded and completed', 'success');
+      toast(`Dispatch loaded and completed with ${goodsPhotos.length} photo${goodsPhotos.length > 1 ? 's' : ''}`, 'success');
       setConfirmModalOpen(false);
       setIsCompletedLocal(true);
       onRefresh();
@@ -1063,35 +1119,71 @@ export default function DispatchDashboard({
           )}
 
           {!isCompleted && detail.status === 'ready_for_loading' && (
-            <div className="flex items-center gap-4">
-              {/* Optional Photo */}
-              <div className="flex items-center gap-2">
-                {vehicleLeavePhotoPreview ? (
-                  <div className="relative">
-                    <img src={vehicleLeavePhotoPreview} alt="Vehicle Preview" className="h-12 w-16 object-cover rounded border border-slate-300" />
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
+              {/* Goods Photos Multi-Thumbnails & Upload */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {goodsPhotos.map((photo, idx) => (
+                  <div key={photo.id} className="relative group">
+                    <img 
+                      src={photo.preview} 
+                      alt={`Goods ${idx + 1}`} 
+                      onClick={() => setEnlargedPhotoUrl(photo.preview)}
+                      className="h-12 w-14 object-cover rounded-xl border-2 border-indigo-200 dark:border-indigo-800 shadow-sm cursor-pointer hover:opacity-90 hover:scale-105 transition" 
+                    />
+                    <span className="absolute bottom-1 left-1 bg-black/75 text-white text-[9px] font-mono px-1 rounded font-bold">
+                      #{idx + 1}
+                    </span>
                     <button 
-                      onClick={() => { setVehicleLeavePhotoFile(null); setVehicleLeavePhotoPreview(null); }}
-                      className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex justify-center items-center text-xs"
+                      type="button"
+                      onClick={() => handleRemoveGoodsPhoto(photo.id)}
+                      className="absolute -top-1.5 -right-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full w-5 h-5 flex justify-center items-center text-xs shadow-md transition"
+                      title="Remove Photo"
                     >×</button>
                   </div>
-                ) : (
+                ))}
+
+                {/* Add Photo Actions */}
+                <div className="flex items-center gap-1.5">
+                  <input
+                    ref={goodsFileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleGoodsFilesSelected}
+                  />
                   <button 
-                    onClick={() => startVehicleCamera()}
-                    className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-500"
+                    type="button"
+                    onClick={() => goodsFileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-bold transition shadow-sm"
+                    title="Upload goods photos from device gallery"
                   >
-                    <Camera size={20} />
-                    <span className="text-sm font-medium">Add Goods Photo *</span>
+                    <Upload size={15} />
+                    <span>Upload Photos</span>
                   </button>
-                )}
+
+                  <button 
+                    type="button"
+                    onClick={() => startVehicleCamera()}
+                    className="flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold transition shadow-sm"
+                    title="Take photo with camera"
+                  >
+                    <Camera size={15} />
+                    <span>Camera</span>
+                  </button>
+                </div>
               </div>
+
               <button 
                 onClick={() => handleLoadAndComplete()}
-                disabled={completing || !vehicleLeavePhotoFile}
-                className={`flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition ${
-                  vehicleLeavePhotoFile ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                disabled={completing || goodsPhotos.length === 0}
+                className={`flex items-center gap-2 px-7 py-3.5 rounded-xl font-bold text-base transition ${
+                  goodsPhotos.length > 0 && !completing
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg cursor-pointer' 
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
                 }`}
               >
-                <Truck size={24} /> {completing ? 'Processing...' : 'Load & Complete'}
+                <Truck size={22} /> {completing ? 'Processing...' : `Load & Complete (${goodsPhotos.length} photo${goodsPhotos.length === 1 ? '' : 's'})`}
               </button>
             </div>
           )}
@@ -1225,16 +1317,41 @@ export default function DispatchDashboard({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4">
           <div className="relative w-full max-w-lg bg-black rounded-xl overflow-hidden shadow-2xl border border-slate-800">
             <video ref={videoRef} autoPlay playsInline className="w-full aspect-video object-cover bg-slate-900" />
-            <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex justify-center items-center gap-6">
+            <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex justify-between items-center px-6">
               <button onClick={stopCamera} className="text-white hover:text-rose-400 transition font-medium">Cancel</button>
               <button 
                 onClick={() => capturePhoto(videoRef.current)}
                 className="w-16 h-16 rounded-full bg-white/20 border-4 border-white flex items-center justify-center hover:bg-white/40 transition active:scale-95"
+                title="Capture Photo"
               >
                 <Camera size={24} className="text-white" />
               </button>
-              <div className="w-12"></div>
+              {cameraType === 'vehicle' && goodsPhotos.length > 0 ? (
+                <button 
+                  onClick={stopCamera} 
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg transition"
+                >
+                  Done ({goodsPhotos.length})
+                </button>
+              ) : (
+                <div className="w-12"></div>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enlarged Photo Lightbox Modal */}
+      {enlargedPhotoUrl && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" onClick={() => setEnlargedPhotoUrl(null)}>
+          <div className="relative max-w-2xl max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+            <img src={enlargedPhotoUrl} alt="Enlarged Goods Preview" className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl" />
+            <button 
+              type="button"
+              onClick={() => setEnlargedPhotoUrl(null)}
+              className="absolute -top-3 -right-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-lg shadow-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+              title="Close Preview"
+            >×</button>
           </div>
         </div>
       )}
