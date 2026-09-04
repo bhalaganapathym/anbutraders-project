@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api, type Dispatch, type DispatchItem, type Product, type Driver } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { useAuth } from '@/context/AuthContext';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Camera, User, Calendar, MapPin, Search, Plus, Truck, UserCheck,
@@ -93,6 +94,7 @@ export default function DispatchDashboard({
   onRefresh: () => void;
 }) {
   const toast = useToast();
+  const { user } = useAuth();
   
   // Products lookup to get standard_weight
   const [products, setProducts] = useState<Product[]>([]);
@@ -194,7 +196,7 @@ export default function DispatchDashboard({
     return () => clearTimeout(timer);
   }, [itemVerification, selectedDriverId, driverName, driverMobile, vehicleNo, remarks, detail.id, detail.status]);
 
-  // Voice Note Recording State for Weight Mismatch Approval
+  // Voice Note Recording State (Visible and accessible for both Dispatch & Admin)
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -203,6 +205,8 @@ export default function DispatchDashboard({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [mismatchReasonInput, setMismatchReasonInput] = useState('');
   const [submittingVoiceNote, setSubmittingVoiceNote] = useState(false);
+  const [isListeningSpeech, setIsListeningSpeech] = useState(false);
+  const [adminDeciding, setAdminDeciding] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -210,19 +214,26 @@ export default function DispatchDashboard({
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const startVoiceRecording = async () => {
+    if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+      toast('Microphone access not available in this browser. Please ensure HTTPS or localhost.', 'error');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
       
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
-        else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
-        else if (MediaRecorder.isTypeSupported('audio/ogg')) mimeType = 'audio/ogg';
-        else mimeType = '';
+      let options: MediaRecorderOptions | undefined = undefined;
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav'];
+      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+        for (const cand of candidates) {
+          if (MediaRecorder.isTypeSupported(cand)) {
+            options = { mimeType: cand };
+            break;
+          }
+        }
       }
       
-      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const mediaRecorder = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       
       mediaRecorder.ondataavailable = (e) => {
@@ -232,7 +243,7 @@ export default function DispatchDashboard({
       };
 
       mediaRecorder.onstop = () => {
-        const finalType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const finalType = mediaRecorder.mimeType || options?.mimeType || 'audio/webm';
         const blob = new Blob(audioChunksRef.current, { type: finalType });
         setAudioBlob(blob);
         const url = URL.createObjectURL(blob);
@@ -240,7 +251,7 @@ export default function DispatchDashboard({
         stream.getTracks().forEach(t => t.stop());
       };
 
-      mediaRecorder.start(250);
+      mediaRecorder.start();
       setIsRecording(true);
       setRecordingSeconds(0);
 
@@ -254,16 +265,20 @@ export default function DispatchDashboard({
         });
       }, 1000);
     } catch (e) {
+      console.error('Microphone error:', e);
       toast('Microphone access denied. Please allow microphone permissions in your browser.', 'error');
     }
   };
 
   const stopVoiceRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.requestData();
+      } catch {}
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     }
+    setIsRecording(false);
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
   };
 
   const resetVoiceRecording = () => {
@@ -275,9 +290,57 @@ export default function DispatchDashboard({
     if (isRecording) stopVoiceRecording();
   };
 
+  const startSpeechDictation = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast('Speech recognition not supported in this browser', 'error');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ta-IN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    setIsListeningSpeech(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setRemarks(prev => (prev ? `${prev} ${transcript}` : transcript));
+      setIsListeningSpeech(false);
+      toast(`Transcribed: "${transcript}"`, 'success');
+    };
+
+    recognition.onerror = () => {
+      setIsListeningSpeech(false);
+      toast('Could not recognize voice, please try typing', 'error');
+    };
+
+    recognition.onend = () => {
+      setIsListeningSpeech(false);
+    };
+
+    recognition.start();
+  };
+
+  const handleAdminMismatchDecision = async (decision: 'approved' | 'rejected', reason?: string) => {
+    setAdminDeciding(true);
+    try {
+      await api.post(`/dispatches/${detail.id}/mismatch-decision`, {
+        decision,
+        approved_by: user?.name || 'Admin',
+        rejection_reason: reason || null,
+      });
+      toast(`Weight mismatch ${decision === 'approved' ? 'approved' : 'rejected'} successfully`, 'success');
+      onRefresh();
+    } catch (err: any) {
+      toast(err?.message || 'Failed to update decision', 'error');
+    } finally {
+      setAdminDeciding(false);
+    }
+  };
+
   const submitMismatchApproval = async () => {
     if (!audioBlob && !mismatchReasonInput.trim()) {
-      toast('Please record a voice note or enter a reason for approval', 'error');
+      toast('Please record a voice note or enter a reason', 'error');
       return;
     }
 
@@ -292,14 +355,35 @@ export default function DispatchDashboard({
         formData.append('reason', mismatchReasonInput.trim());
       }
 
-      await api.postForm(`/dispatches/${detail.id}/request-mismatch-approval`, formData);
+      // If weight warning / mismatch and user is not admin, submit for admin approval
+      const isWeightDiff = isWeightWarning || detail.mismatch_approval_status === 'pending' || detailItems.some(item => {
+        const ivItem = itemVerification[item.id];
+        const prod = products.find(p => p.id === item.product_id);
+        if (!prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
+        let actualWt = Number(ivItem.weight);
+        if (ivItem.weightUnit === 'g') actualWt /= 1000;
+        const q = Number(item.quantity) || 1;
+        const nom = Number((prod.standard_weight * q).toFixed(3));
+        const plusT = prod.weight_tolerance != null ? Number(prod.weight_tolerance) : (weightThreshold / q);
+        const minusT = prod.weight_tolerance_minus != null ? Number(prod.weight_tolerance_minus) : plusT;
+        const minW = Number((nom - (minusT * q)).toFixed(3));
+        const maxW = Number((nom + (plusT * q)).toFixed(3));
+        return actualWt < minW || actualWt > maxW;
+      });
 
-      toast('Voice note sent to Admin for approval!', 'success');
+      if (isWeightDiff && user?.role !== 'admin') {
+        await api.postForm(`/dispatches/${detail.id}/request-mismatch-approval`, formData);
+        toast('Voice note saved & delivered to Admin for approval!', 'success');
+      } else {
+        await api.postForm(`/dispatches/${detail.id}/voice-note`, formData);
+        toast('Voice note attached to dispatch successfully!', 'success');
+      }
+
       setVoiceModalOpen(false);
       resetVoiceRecording();
       onRefresh();
     } catch (err: any) {
-      toast(err?.message || 'Failed to send approval request', 'error');
+      toast(err?.message || 'Failed to save voice note', 'error');
     } finally {
       setSubmittingVoiceNote(false);
     }
@@ -974,10 +1058,11 @@ export default function DispatchDashboard({
         </div>
 
         {/* Weight Mismatch Status & Admin Approval Banner */}
-        {detail.status === 'pending' && (
-          <div>
-            {isMismatchApproved ? (
-              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+        {/* Voice Note & Weight Mismatch Alert Section (Visible for both Dispatch & Admin) */}
+        <div className="space-y-3">
+          {isMismatchApproved ? (
+            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 space-y-2.5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 shrink-0 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow">
                     <CheckCircle2 size={22} />
@@ -995,91 +1080,232 @@ export default function DispatchDashboard({
                   Override Authorized
                 </span>
               </div>
-            ) : detail.mismatch_approval_status === 'pending' ? (
-              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+              {detail.mismatch_voice_note_url && (
+                <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-emerald-200 dark:border-emerald-800/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1 shrink-0">
+                    <Volume2 size={14} className="text-emerald-600" />
+                    <span>Approved Voice Note:</span>
+                  </span>
+                  <audio
+                    controls
+                    src={
+                      detail.mismatch_voice_note_url.startsWith('data:')
+                        ? detail.mismatch_voice_note_url
+                        : `/api/dispatches/${detail.id}/voice-note`
+                    }
+                    className="flex-1 h-8 rounded"
+                  />
+                </div>
+              )}
+            </div>
+          ) : detail.mismatch_approval_status === 'pending' ? (
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 space-y-3 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 shrink-0 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow animate-pulse">
                     <Clock size={22} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-amber-900 dark:text-amber-100">
-                      ⏳ Admin Approval Pending (Voice Note Sent)
+                    <h3 className="font-bold text-sm text-amber-900 dark:text-amber-100 flex items-center gap-2">
+                      <span>⏳ Admin Approval Pending (Voice Note Attached)</span>
                     </h3>
                     <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Your voice note has been delivered to Admin. Waiting for authorization to proceed.
+                      {detail.mismatch_reason ? `Reason: "${detail.mismatch_reason}"` : 'Voice note recorded for Admin review and authorization.'}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setVoiceModalOpen(true)}
-                  className="px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-900 text-xs font-bold rounded-lg transition"
+                  className="px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-900 text-xs font-bold rounded-lg transition flex items-center gap-1"
                 >
-                  🎙️ Re-record Voice Note
+                  <Mic size={13} /> Re-record Voice Note
                 </button>
               </div>
-            ) : detail.mismatch_approval_status === 'rejected' ? (
-              <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-300 dark:border-rose-700 text-rose-900 dark:text-rose-200 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+
+              {/* Audio Player visible to BOTH Admin & Dispatch */}
+              <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300 shrink-0">
+                  <Volume2 size={15} className="text-amber-600 animate-pulse" />
+                  <span>Listen to Voice Note:</span>
+                </div>
+                <audio
+                  controls
+                  src={
+                    detail.mismatch_voice_note_url?.startsWith('data:')
+                      ? detail.mismatch_voice_note_url
+                      : `/api/dispatches/${detail.id}/voice-note`
+                  }
+                  className="flex-1 h-8 rounded"
+                />
+                {/* Admin 1-Click Action Controls */}
+                {user?.role === 'admin' && (
+                  <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0">
+                    <button
+                      type="button"
+                      onClick={() => handleAdminMismatchDecision('approved')}
+                      disabled={adminDeciding}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-lg shadow transition flex items-center gap-1 active:scale-95"
+                    >
+                      <CheckCircle2 size={14} /> Approve Mismatch
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const r = prompt('Enter rejection reason:');
+                        if (r) handleAdminMismatchDecision('rejected', r);
+                      }}
+                      disabled={adminDeciding}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg shadow transition flex items-center gap-1 active:scale-95"
+                    >
+                      <AlertCircle size={14} /> Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : detail.mismatch_approval_status === 'rejected' ? (
+            <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-300 dark:border-rose-700 text-rose-900 dark:text-rose-200 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 shrink-0 rounded-lg bg-rose-600 text-white flex items-center justify-center shadow">
+                  <AlertCircle size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-rose-900 dark:text-rose-100">
+                    ❌ Weight Mismatch Request Rejected by Admin
+                  </h3>
+                  <p className="text-xs text-rose-700 dark:text-rose-300">
+                    Reason: <strong className="underline">{detail.mismatch_rejection_reason || 'Please re-weigh items on scale.'}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVoiceModalOpen(true)}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5"
+              >
+                <Mic size={14} /> Send New Voice Note
+              </button>
+            </div>
+          ) : detail.mismatch_voice_note_url ? (
+            <div className="p-4 rounded-xl bg-indigo-50/90 dark:bg-indigo-950/40 border-2 border-indigo-200 dark:border-indigo-800 text-indigo-950 dark:text-indigo-200 space-y-2.5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 shrink-0 rounded-lg bg-rose-600 text-white flex items-center justify-center shadow">
-                    <AlertCircle size={22} />
+                  <div className="h-10 w-10 shrink-0 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow">
+                    <Mic size={22} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-rose-900 dark:text-rose-100">
-                      ❌ Weight Mismatch Request Rejected by Admin
+                    <h3 className="font-bold text-sm text-indigo-950 dark:text-indigo-100">
+                      🎙️ Dispatch Voice Note Attached
                     </h3>
-                    <p className="text-xs text-rose-700 dark:text-rose-300">
-                      Reason: <strong className="underline">{detail.mismatch_rejection_reason || 'Please re-weigh items on scale.'}</strong>
+                    <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                      {detail.mismatch_reason ? `Note: "${detail.mismatch_reason}"` : 'Voice note recorded for this dispatch.'}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setVoiceModalOpen(true)}
-                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 text-xs font-bold rounded-lg transition flex items-center gap-1"
                 >
-                  <Mic size={14} /> Send New Voice Note
+                  <Mic size={13} /> Re-record Voice Note
                 </button>
               </div>
-            ) : isWeightWarning || detailItems.some(item => {
-              const ivItem = itemVerification[item.id];
-              const prod = products.find(p => p.id === item.product_id);
-              if (!prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
-              let actualWt = Number(ivItem.weight);
-              if (ivItem.weightUnit === 'g') actualWt /= 1000;
-              const q = Number(item.quantity) || 1;
-              const nom = Number((prod.standard_weight * q).toFixed(3));
-              const plusT = prod.weight_tolerance != null ? Number(prod.weight_tolerance) : (weightThreshold / q);
-              const minusT = prod.weight_tolerance_minus != null ? Number(prod.weight_tolerance_minus) : plusT;
-              const minW = Number((nom - (minusT * q)).toFixed(3));
-              const maxW = Number((nom + (plusT * q)).toFixed(3));
-              return actualWt < minW || actualWt > maxW;
-            }) ? (
-              <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-orange-500/15 border-2 border-amber-400 dark:border-amber-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 shrink-0 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow">
-                    <AlertTriangle size={22} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-white">
-                      Weight Difference Detected (Above Allowed Tolerance)
-                    </h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-300">
-                      To proceed with this dispatch, record a voice note for the Admin explaining the difference.
-                    </p>
-                  </div>
+              <audio
+                controls
+                src={
+                  detail.mismatch_voice_note_url.startsWith('data:')
+                    ? detail.mismatch_voice_note_url
+                    : `/api/dispatches/${detail.id}/voice-note`
+                }
+                className="w-full h-8 rounded"
+              />
+            </div>
+          ) : isWeightWarning || detailItems.some(item => {
+            const ivItem = itemVerification[item.id];
+            const prod = products.find(p => p.id === item.product_id);
+            if (!prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
+            let actualWt = Number(ivItem.weight);
+            if (ivItem.weightUnit === 'g') actualWt /= 1000;
+            const q = Number(item.quantity) || 1;
+            const nom = Number((prod.standard_weight * q).toFixed(3));
+            const plusT = prod.weight_tolerance != null ? Number(prod.weight_tolerance) : (weightThreshold / q);
+            const minusT = prod.weight_tolerance_minus != null ? Number(prod.weight_tolerance_minus) : plusT;
+            const minW = Number((nom - (minusT * q)).toFixed(3));
+            const maxW = Number((nom + (plusT * q)).toFixed(3));
+            return actualWt < minW || actualWt > maxW;
+          }) ? (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-orange-500/15 border-2 border-amber-400 dark:border-amber-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 shrink-0 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow">
+                  <AlertTriangle size={22} />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setVoiceModalOpen(true)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition"
-                >
-                  <Mic size={16} /> Request Admin Approval (Voice Note)
-                </button>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">
+                    Weight Difference Detected (Above Allowed Tolerance)
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    To proceed with this dispatch, record a voice note for the Admin explaining the difference.
+                  </p>
+                </div>
               </div>
-            ) : null}
-          </div>
-        )}
+              <button
+                type="button"
+                onClick={() => setVoiceModalOpen(true)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition active:scale-95"
+              >
+                <Mic size={16} /> Request Admin Approval (Voice Note)
+              </button>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 shrink-0 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Mic size={18} />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                    🎙️ Voice Note / Audio Instructions (Visible to Admin & Dispatch)
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Record spoken delivery instructions, item weight explanations, or notes.
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVoiceModalOpen(true)}
+                className="w-full sm:w-auto px-3.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95"
+              >
+                <Mic size={14} /> Record Voice Note
+              </button>
+            </div>
+          )}
+
+          {/* Driver Proof of Delivery Voice Note (if completed by driver) */}
+          {detail.pod_voice_note_url && (
+            <div className="p-3.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border-2 border-indigo-200 dark:border-indigo-800 text-indigo-950 dark:text-indigo-200 space-y-2 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Truck size={16} className="text-indigo-600" />
+                  <h4 className="font-black text-xs">🚚 Driver Proof of Delivery (POD) Voice Note</h4>
+                </div>
+                <span className="text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 px-2 py-0.5 rounded-full text-indigo-700 dark:text-indigo-300">
+                  On-Site Recording
+                </span>
+              </div>
+              <audio
+                controls
+                src={
+                  detail.pod_voice_note_url.startsWith('data:')
+                    ? detail.pod_voice_note_url
+                    : `/api/dispatches/${detail.id}/pod-voice-note`
+                }
+                className="w-full h-8 rounded"
+              />
+            </div>
+          )}
+        </div>
 
         {/* Lower Section: Weights & Phase 1 Driver Assignment */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1173,7 +1399,33 @@ export default function DispatchDashboard({
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="label">Remarks / Delivery Instructions</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="label mb-0">Remarks / Delivery Instructions</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={startSpeechDictation}
+                        disabled={isCompleted || isListeningSpeech}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 transition ${
+                          isListeningSpeech
+                            ? 'bg-rose-100 text-rose-600 animate-pulse'
+                            : 'text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50'
+                        }`}
+                        title="Dictate in Tamil or English (Speech to Text)"
+                      >
+                        <Mic size={13} /> {isListeningSpeech ? 'Listening...' : 'Voice Type'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVoiceModalOpen(true)}
+                        disabled={isCompleted}
+                        className="text-xs font-bold px-2.5 py-1 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 flex items-center gap-1 transition"
+                        title="Record a voice note"
+                      >
+                        <Volume2 size={13} /> Voice Note
+                      </button>
+                    </div>
+                  </div>
                   <textarea 
                     value={remarks}
                     onChange={(e) => setRemarks(e.target.value)}
@@ -1304,10 +1556,10 @@ export default function DispatchDashboard({
 
       {/* Voice Note Recording Modal */}
       {voiceModalOpen && (
-        <Modal open={voiceModalOpen} onClose={() => { if (!submittingVoiceNote) setVoiceModalOpen(false); }} title="Record Voice Note for Admin Approval">
+        <Modal open={voiceModalOpen} onClose={() => { if (!submittingVoiceNote) setVoiceModalOpen(false); }} title="Record Voice Note (Admin & Dispatch)">
           <div className="space-y-5">
             <div className="p-3.5 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 text-xs text-blue-900 dark:text-blue-200">
-              Explain why the measured weight differs (e.g. customer added extra steel on spot, truck moisture, or rod scale tolerance). Admin will listen to this recording to approve.
+              Speak to explain weight differences, loading instructions, customer requests, or dispatch notes. Both Admin and Dispatch can listen to this recording.
             </div>
 
             {/* Recorder Controls */}
@@ -1346,43 +1598,26 @@ export default function DispatchDashboard({
                 </div>
               ) : (
                 /* Recorded Audio Preview */
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center justify-center gap-1">
                     <CheckCircle2 size={16} /> Audio Recorded ({recordingSeconds}s)
                   </div>
 
-                  <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-indigo-200 dark:border-slate-700 flex items-center gap-3 justify-center">
+                  <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-indigo-200 dark:border-slate-700 flex flex-col gap-2.5">
                     <audio 
-                      ref={previewAudioRef} 
+                      controls
                       src={audioPreviewUrl} 
-                      onEnded={() => setIsPlayingAudio(false)} 
+                      className="w-full h-9 rounded"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!previewAudioRef.current) return;
-                        if (isPlayingAudio) {
-                          previewAudioRef.current.pause();
-                          setIsPlayingAudio(false);
-                        } else {
-                          previewAudioRef.current.play();
-                          setIsPlayingAudio(true);
-                        }
-                      }}
-                      className="h-10 w-10 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow"
-                    >
-                      {isPlayingAudio ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
-                    </button>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {isPlayingAudio ? 'Playing...' : 'Play Preview'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={resetVoiceRecording}
-                      className="ml-auto text-xs text-rose-600 hover:underline flex items-center gap-1 font-bold"
-                    >
-                      <RotateCcw size={13} /> Retake
-                    </button>
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={resetVoiceRecording}
+                        className="text-xs text-rose-600 hover:text-rose-700 flex items-center gap-1 font-bold"
+                      >
+                        <RotateCcw size={13} /> Retake Recording
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1397,7 +1632,7 @@ export default function DispatchDashboard({
                 type="text"
                 value={mismatchReasonInput}
                 onChange={(e) => setMismatchReasonInput(e.target.value)}
-                placeholder="e.g. Bundles weighed with protective straps"
+                placeholder="e.g. Bundles weighed with protective straps or loading instructions"
                 className="w-full rounded-lg border border-slate-300 dark:border-slate-700 p-2.5 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
             </div>
@@ -1417,7 +1652,7 @@ export default function DispatchDashboard({
                 disabled={submittingVoiceNote || (!audioBlob && !mismatchReasonInput.trim())}
                 className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md disabled:opacity-50 flex items-center gap-1.5"
               >
-                {submittingVoiceNote ? 'Sending...' : '🚀 Submit to Admin for Approval'}
+                {submittingVoiceNote ? 'Saving...' : '🚀 Save & Attach Voice Note'}
               </button>
             </div>
           </div>

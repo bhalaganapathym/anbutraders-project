@@ -147,19 +147,26 @@ export default function DriverDelivery() {
   };
 
   const startVoiceRecording = async () => {
+    if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+      toast('மைக்ரோஃபோன் அணுகல் இந்த உலாவியில் இல்லை (Microphone not available)', 'error');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
 
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
-        else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
-        else if (MediaRecorder.isTypeSupported('audio/ogg')) mimeType = 'audio/ogg';
-        else mimeType = '';
+      let options: MediaRecorderOptions | undefined = undefined;
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav'];
+      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+        for (const cand of candidates) {
+          if (MediaRecorder.isTypeSupported(cand)) {
+            options = { mimeType: cand };
+            break;
+          }
+        }
       }
 
-      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const mediaRecorder = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (e) => {
@@ -169,7 +176,7 @@ export default function DriverDelivery() {
       };
 
       mediaRecorder.onstop = () => {
-        const finalType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const finalType = mediaRecorder.mimeType || options?.mimeType || 'audio/webm';
         const blob = new Blob(audioChunksRef.current, { type: finalType });
         setAudioBlob(blob);
         const url = URL.createObjectURL(blob);
@@ -177,7 +184,7 @@ export default function DriverDelivery() {
         stream.getTracks().forEach((t) => t.stop());
       };
 
-      mediaRecorder.start(250);
+      mediaRecorder.start();
       setIsVoiceRecording(true);
       setRecordingSeconds(0);
 
@@ -196,11 +203,14 @@ export default function DriverDelivery() {
   };
 
   const stopVoiceRecording = () => {
-    if (mediaRecorderRef.current && isVoiceRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.requestData();
+      } catch {}
       mediaRecorderRef.current.stop();
-      setIsVoiceRecording(false);
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     }
+    setIsVoiceRecording(false);
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
   };
 
   const resetVoiceRecording = () => {
@@ -919,23 +929,12 @@ export default function DriverDelivery() {
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-2 rounded-lg border border-emerald-100 dark:border-slate-700">
+                  <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg border border-emerald-100 dark:border-slate-700">
                     <audio
-                      ref={audioPlayerRef}
+                      controls
                       src={audioPreviewUrl}
-                      onEnded={() => setIsPlayingAudio(false)}
-                      className="hidden"
+                      className="w-full h-8 rounded"
                     />
-                    <button
-                      type="button"
-                      onClick={togglePlayAudio}
-                      className="w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-sm shrink-0 transition"
-                    >
-                      {isPlayingAudio ? <Pause size={15} /> : <Play size={15} className="ml-0.5" />}
-                    </button>
-                    <div className="flex-1 text-xs font-medium text-slate-700 dark:text-slate-300">
-                      {isPlayingAudio ? 'குரல் ஒலிக்கிறது...' : 'குரல் குறிப்பைக் கேட்க தொடவும் (Play Voice Note)'}
-                    </div>
                   </div>
                 </div>
               )}

@@ -738,14 +738,6 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
             db.add(notif)
         elif dispatch_in.status == "completed":
             dispatch.completed_at = datetime.now(timezone.utc)
-            # Clean up temporary voice note file if any exists to free server storage
-            if dispatch.mismatch_voice_note_path and os.path.exists(dispatch.mismatch_voice_note_path):
-                try:
-                    os.remove(dispatch.mismatch_voice_note_path)
-                except Exception:
-                    pass
-                dispatch.mismatch_voice_note_url = None
-                dispatch.mismatch_voice_note_path = None
             if dispatch.order_id:
                 order = db.query(Order).filter(Order.id == dispatch.order_id).first()
                 if order:
@@ -863,6 +855,39 @@ async def request_mismatch_approval(
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
     return dispatch
+
+@router.post("/dispatches/{id}/voice-note")
+async def upload_dispatch_voice_note(
+    id: UUID,
+    audio_file: UploadFile = File(...),
+    reason: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    
+    os.makedirs("uploads/voice_notes", exist_ok=True)
+    ext = audio_file.filename.split(".")[-1] if "." in audio_file.filename else "webm"
+    filename = f"voice_{dispatch.id}_{int(datetime.now().timestamp())}.{ext}"
+    local_path = os.path.join("uploads", "voice_notes", filename)
+    
+    content = await audio_file.read()
+    with open(local_path, "wb") as f:
+        f.write(content)
+    
+    voice_path = os.path.abspath(local_path)
+    voice_url = f"/uploads/voice_notes/{filename}"
+
+    dispatch.mismatch_voice_note_url = voice_url
+    dispatch.mismatch_voice_note_path = voice_path
+    if reason:
+        dispatch.mismatch_reason = reason
+    db.commit()
+    db.refresh(dispatch)
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    return {"url": voice_url}
 
 @router.get("/dispatches/{id}/voice-note")
 def get_dispatch_voice_note(id: UUID, db: Session = Depends(get_db)):
@@ -986,15 +1011,6 @@ def decide_mismatch_approval(
         dispatch.mismatch_rejection_reason = decision_in.rejection_reason or "Weight discrepancy rejected by admin. Please re-weigh materials."
     else:
         dispatch.mismatch_rejection_reason = None
-
-    # Storage Cleanup: Delete temporary voice note file immediately from disk to free storage!
-    if dispatch.mismatch_voice_note_path and os.path.exists(dispatch.mismatch_voice_note_path):
-        try:
-            os.remove(dispatch.mismatch_voice_note_path)
-        except Exception as e:
-            print(f"Warning: Could not remove voice note file {dispatch.mismatch_voice_note_path}: {e}")
-    dispatch.mismatch_voice_note_url = None
-    dispatch.mismatch_voice_note_path = None
 
     # Send notification to dispatch team
     customer_name = dispatch.customer.name if dispatch.customer else "Customer"

@@ -10,7 +10,7 @@ import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import { useToast } from '@/components/Toast';
 import {
   Plus, Search, Truck, Trash2, Package, AlertCircle, Clock, MessageSquare, Play, MapPin, User, Mic, CheckCircle2,
-  Sparkles
+  Sparkles, Volume2
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import DispatchDashboard from './DispatchDashboard';
@@ -520,6 +520,11 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                           <CheckCircle2 size={11} className="text-emerald-600" /> Mismatch Approved
                         </span>
                       )}
+                      {d.pod_voice_note_url && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-300">
+                          <Volume2 size={11} className="text-indigo-600" /> Driver Voice POD
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -551,16 +556,19 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       </p>
                     )}
 
-                    {d.mismatch_approval_status === 'pending' && user?.role === 'admin' && (
+                    {(d.mismatch_approval_status === 'pending' || d.mismatch_voice_note_url) && (
                       <div className="mt-2 p-2 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 flex items-center justify-between">
                         <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
-                          <Mic size={13} className="text-indigo-600 animate-pulse" /> Voice Note Awaiting Review
+                          <Mic size={13} className="text-indigo-600 animate-pulse" />
+                          {d.mismatch_approval_status === 'pending'
+                            ? (user?.role === 'admin' ? 'Voice Note Awaiting Review' : 'Voice Note Sent for Approval')
+                            : 'Voice Note Attached'}
                         </span>
                         <button
                           onClick={() => handleOpenApprovalModal(d)}
                           className="text-[11px] font-black text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded shadow"
                         >
-                          Review Voice Note
+                          {user?.role === 'admin' ? 'Review Voice Note' : 'Listen Voice Note'}
                         </button>
                       </div>
                     )}
@@ -669,6 +677,11 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                               <CheckCircle2 size={10} className="text-emerald-600" /> Mismatch Approved
                             </span>
                           )}
+                          {d.pod_voice_note_url && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-300">
+                              <Volume2 size={10} className="text-indigo-600" /> Driver Voice POD
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="td">
@@ -680,13 +693,13 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       </td>
                       <td className="td text-right">
                         <div className="flex justify-end items-center gap-1">
-                          {user?.role === 'admin' && d.mismatch_approval_status === 'pending' && (
+                          {(d.mismatch_approval_status === 'pending' || d.mismatch_voice_note_url) && (
                             <button
                               onClick={() => handleOpenApprovalModal(d)}
                               className="btn-ghost px-2 py-1 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1 rounded-md"
-                              title="Review Dispatcher Voice Note"
+                              title={user?.role === 'admin' ? "Review Dispatcher Voice Note" : "Listen to Voice Note"}
                             >
-                              <Mic size={13} /> Review Voice Note
+                              <Mic size={13} /> {user?.role === 'admin' ? 'Review Voice Note' : 'Voice Note'}
                             </button>
                           )}
                           {d.customer?.phone && (

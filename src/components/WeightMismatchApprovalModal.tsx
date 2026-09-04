@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 
+import { useAuth } from '@/context/AuthContext';
+
 export default function WeightMismatchApprovalModal({
   open,
   isOpen,
@@ -21,6 +23,7 @@ export default function WeightMismatchApprovalModal({
 }) {
   const isModalOpen = open ?? isOpen ?? false;
   const toast = useToast();
+  const { user } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -52,8 +55,10 @@ export default function WeightMismatchApprovalModal({
   if (!isModalOpen || !dispatch) return null;
 
   // Resolve audio streaming endpoint
-  const apiBase = import.meta.env.VITE_API_URL || '/api/v1';
-  const audioUrl = `${apiBase.replace(/\/$/, '')}/dispatches/${dispatch.id}/voice-note`;
+  const apiBase = import.meta.env.VITE_API_URL || '/api';
+  const audioUrl = dispatch.mismatch_voice_note_url?.startsWith('data:') || dispatch.mismatch_voice_note_url?.startsWith('blob:')
+    ? dispatch.mismatch_voice_note_url
+    : `${apiBase.replace(/\/$/, '')}/dispatches/${dispatch.id}/voice-note`;
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -366,9 +371,18 @@ export default function WeightMismatchApprovalModal({
               </div>
             </div>
 
+            {/* Native Audio Player Control for 100% cross-browser reliability */}
+            <div className="pt-1">
+              <audio 
+                controls 
+                src={audioUrl} 
+                className="w-full h-8 rounded"
+              />
+            </div>
+
             {audioError && (
               <div className="flex items-center justify-between text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-xl border border-amber-200 dark:border-amber-800">
-                <span>Audio stream loading... If playback doesn't start, click retry.</span>
+                <span>Audio stream loading... If playback doesn't start, use the player above or click retry.</span>
                 <button
                   type="button"
                   onClick={togglePlay}
@@ -388,7 +402,7 @@ export default function WeightMismatchApprovalModal({
           )}
           
           <p className="text-[11px] text-indigo-700 dark:text-indigo-400 font-semibold italic">
-            🔒 Voice note is automatically purged from disk storage once approved or rejected to conserve storage.
+            🎙️ Voice note recording is safely preserved for verification and audits.
           </p>
         </div>
 
@@ -417,28 +431,36 @@ export default function WeightMismatchApprovalModal({
             disabled={submitting}
             className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
-            Cancel
+            {user?.role === 'admin' ? 'Cancel' : 'Close'}
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleDecision('rejected')}
-            disabled={submitting}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition flex items-center justify-center gap-2 shadow-md hover:shadow-rose-600/20 disabled:opacity-50"
-          >
-            <XCircle size={17} />
-            {rejecting ? 'Confirm Rejection' : 'Reject Mismatch'}
-          </button>
+          {user?.role === 'admin' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => handleDecision('rejected')}
+                disabled={submitting}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition flex items-center justify-center gap-2 shadow-md hover:shadow-rose-600/20 disabled:opacity-50"
+              >
+                <XCircle size={17} />
+                {rejecting ? 'Confirm Rejection' : 'Reject Mismatch'}
+              </button>
 
-          <button
-            type="button"
-            onClick={() => handleDecision('approved')}
-            disabled={submitting}
-            className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 hover:shadow-emerald-600/40 disabled:opacity-50 active:scale-95"
-          >
-            <CheckCircle2 size={18} />
-            {submitting ? 'Processing...' : 'Approve Weight Mismatch'}
-          </button>
+              <button
+                type="button"
+                onClick={() => handleDecision('approved')}
+                disabled={submitting}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 hover:shadow-emerald-600/40 disabled:opacity-50 active:scale-95"
+              >
+                <CheckCircle2 size={18} />
+                {submitting ? 'Processing...' : 'Approve Weight Mismatch'}
+              </button>
+            </>
+          ) : (
+            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 rounded-xl border border-amber-200 dark:border-amber-800">
+              ℹ️ Dispatch View: Voice note is on record. Waiting for Admin review.
+            </span>
+          )}
         </div>
 
       </div>
