@@ -72,7 +72,7 @@ const isCementProduct = (prod: Product | undefined, item: DispatchItem) => {
   const cat = (prod?.category || '').toUpperCase();
   const name = (item.product_name || '').toLowerCase();
   const unit = (item.unit || '').toLowerCase();
-  return cat === 'CEMENT' || name.includes('cement') || unit.includes('bag');
+  return cat === 'CEMENT' || name.includes('cement');
 };
 
 const isCementMatch = (enteredText: string | undefined, expectedQty: number) => {
