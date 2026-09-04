@@ -17,7 +17,8 @@ import {
   AlertCircle,
   ExternalLink,
   Image as ImageIcon,
-  Share2
+  Share2,
+  MapPin
 } from 'lucide-react';
 
 interface Transaction {
@@ -40,6 +41,7 @@ interface CustomerLedgerData {
     name: string;
     phone: string | null;
     address: string | null;
+    delivery_addresses?: string[] | null;
     credit_due_date?: string | null;
     pending_amount: number;
   };
@@ -258,6 +260,35 @@ _Thank you for your business!_`;
               </p>
             </div>
           </div>
+
+          {/* Saved Delivery & Site Locations stored in Ledger */}
+          {data.customer.delivery_addresses && data.customer.delivery_addresses.length > 0 && (
+            <div className="p-3 bg-blue-50/60 dark:bg-slate-800/60 rounded-xl border border-blue-200 dark:border-slate-700 space-y-2">
+              <p className="text-xs font-black text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
+                <MapPin size={14} className="text-rose-500" />
+                லெட்ஜரில் சேமிக்கப்பட்ட தள முகவரிகள் (Saved Site Locations in Ledger):
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {data.customer.delivery_addresses.map((addr, i) => (
+                  <div 
+                    key={i} 
+                    className="bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2 shadow-sm"
+                  >
+                    <span className="text-rose-500">📍</span>
+                    <span>{addr}</span>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr.replace(/\(GPS:.*?\)/, '').trim() || addr)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 text-[10px] font-bold underline ml-1"
+                    >
+                      Maps
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Action Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">

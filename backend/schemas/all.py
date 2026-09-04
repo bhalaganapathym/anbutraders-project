@@ -39,6 +39,11 @@ class CustomerBase(BaseModel):
     address: Optional[str] = None
     delivery_addresses: Optional[List[str]] = []
 
+class CustomerLocationIn(BaseModel):
+    address: Optional[str] = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
 class CustomerCreate(CustomerBase):
     pass
 

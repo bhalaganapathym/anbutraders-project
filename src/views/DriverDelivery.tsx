@@ -38,7 +38,60 @@ export default function DriverDelivery() {
   const [collectedAmount, setCollectedAmount] = useState<string>('');
   const [receiverNotes, setReceiverNotes] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  const [savingLocationForDispatchId, setSavingLocationForDispatchId] = useState<string | null>(null);
+  const [savedLocationDispatches, setSavedLocationDispatches] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveSiteLocationToLedger = async (d: Dispatch) => {
+    const customerId = d.customer_id || d.customer?.id;
+    if (!customerId) {
+      toast('வாடிக்கையாளர் விவரம் கிடைக்கவில்லை (Customer not found)', 'error');
+      return;
+    }
+
+    setSavingLocationForDispatchId(d.id);
+
+    const performSave = async (lat?: number, lng?: number) => {
+      try {
+        const baseAddress = d.delivery_address || d.customer?.address || 'தள இருப்பிடம் (Site Location)';
+        await api.post(`/customers/${customerId}/delivery-addresses`, {
+          address: baseAddress,
+          latitude: lat ?? null,
+          longitude: lng ?? null,
+        });
+
+        setSavedLocationDispatches(prev => ({ ...prev, [d.id]: true }));
+        toast('📍 தள இருப்பிடம் வாடிக்கையாளர் லெட்ஜரில் சேமிக்கப்பட்டது! அடுத்த முறை பில்லிங்கில் இது பரிந்துரைக்கப்படும்.', 'success');
+        loadData();
+      } catch (err: any) {
+        toast(err?.message || 'தள முகவரியைச் சேமிப்பதில் பிழை ஏற்பட்டது', 'error');
+      } finally {
+        setSavingLocationForDispatchId(null);
+      }
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          performSave(pos.coords.latitude, pos.coords.longitude);
+        },
+        (_err) => {
+          performSave();
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
+      );
+    } else {
+      performSave();
+    }
+  };
+
+  const isLocationSavedInLedger = (d: Dispatch) => {
+    if (savedLocationDispatches[d.id]) return true;
+    const addrs = d.customer?.delivery_addresses || [];
+    const current = (d.delivery_address || '').trim().toLowerCase();
+    if (!current) return false;
+    return addrs.some(a => a.toLowerCase().includes(current));
+  };
 
   const loadData = async () => {
     try {
@@ -301,19 +354,40 @@ export default function DriverDelivery() {
 
                 {/* தள முகவரி மற்றும் கூகுள் மேப்ஸ் (Delivery Address & Quick Navigation) */}
                 {deliveryAddress && (
-                  <div className="space-y-1.5 text-xs bg-blue-50/40 dark:bg-slate-800/40 p-3 rounded-xl border border-blue-100 dark:border-slate-700">
+                  <div className="space-y-2 text-xs bg-blue-50/40 dark:bg-slate-800/40 p-3 rounded-xl border border-blue-100 dark:border-slate-700">
                     <p className="text-slate-700 dark:text-slate-200 font-bold flex items-start gap-1.5">
                       <MapPin size={16} className="text-rose-500 shrink-0 mt-0.5" />
                       <span>{deliveryAddress}</span>
                     </p>
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-extrabold text-xs pl-5 hover:underline"
-                    >
-                      <ExternalLink size={13} /> 🗺️ கூகுள் மேப்ஸில் வழியைப் பார்க்க (Google Maps)
-                    </a>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-blue-100/70 dark:border-slate-700">
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-extrabold text-xs hover:underline"
+                      >
+                        <ExternalLink size={13} /> 🗺️ கூகுள் மேப்ஸில் பார்க்க (Maps)
+                      </a>
+
+                      <button
+                        type="button"
+                        disabled={savingLocationForDispatchId === d.id}
+                        onClick={() => handleSaveSiteLocationToLedger(d)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
+                          isLocationSavedInLedger(d)
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300'
+                            : 'bg-white hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 border border-rose-300'
+                        }`}
+                        title="தளத்தை அடைந்ததும் இந்த இருப்பிடத்தை வாடிக்கையாளர் லெட்ஜரில் சேமித்து வைக்க"
+                      >
+                        <MapPin size={13} className={isLocationSavedInLedger(d) ? "text-emerald-600" : "text-rose-600"} />
+                        {savingLocationForDispatchId === d.id
+                          ? 'சேமிக்கப்படுகிறது...'
+                          : isLocationSavedInLedger(d)
+                            ? '✓ லெட்ஜரில் சேமிக்கப்பட்டது'
+                            : '📍 தளத்தை லெட்ஜரில் சேர்க்க'}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -379,10 +453,33 @@ export default function DriverDelivery() {
       >
         {completingDispatch && (
           <div className="space-y-4 font-sans">
-            <div className="bg-slate-50 dark:bg-slate-900 p-3.5 rounded-xl text-xs space-y-1.5 border border-slate-200 dark:border-slate-700">
+            <div className="bg-slate-50 dark:bg-slate-900 p-3.5 rounded-xl text-xs space-y-2 border border-slate-200 dark:border-slate-700">
               <p><strong className="text-slate-900 dark:text-slate-100">வாடிக்கையாளர்:</strong> {completingDispatch.customer?.name}</p>
               <p><strong className="text-slate-900 dark:text-slate-100">முகவரி:</strong> {completingDispatch.delivery_address || completingDispatch.customer?.address || 'தள டெலிவரி'}</p>
               <p><strong className="text-slate-900 dark:text-slate-100">ஓட்டுநர்:</strong> {completingDispatch.driver_name || 'ஓட்டுநர்'}</p>
+
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-slate-500">
+                  தள இருப்பிடத்தை வாடிக்கையாளர் லெட்ஜரில் சேர்க்க:
+                </span>
+                <button
+                  type="button"
+                  disabled={savingLocationForDispatchId === completingDispatch.id}
+                  onClick={() => handleSaveSiteLocationToLedger(completingDispatch)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm ${
+                    isLocationSavedInLedger(completingDispatch)
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white'
+                  }`}
+                >
+                  <MapPin size={13} />
+                  {savingLocationForDispatchId === completingDispatch.id
+                    ? 'சேமிக்கப்படுகிறது...'
+                    : isLocationSavedInLedger(completingDispatch)
+                      ? '✓ லெட்ஜரில் சேமிக்கப்பட்டது'
+                      : '📍 லெட்ஜரில் சேமிக்க'}
+                </button>
+              </div>
             </div>
 
             {/* வசூலித்த தொகை (Payment Collection Confirmation) */}

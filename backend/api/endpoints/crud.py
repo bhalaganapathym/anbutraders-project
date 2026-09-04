@@ -9,7 +9,7 @@ from uuid import UUID
 from api.deps import get_db, get_current_active_user
 from models.all import Customer, Product, Order, OrderItem, Dispatch, DispatchItem, User, Weight, Photo, Notification, Bill, Driver, DriverHandover
 from schemas.all import (
-    CustomerCreate, CustomerResponse, ProductCreate, ProductResponse, BrandPriceAdjustRequest,
+    CustomerCreate, CustomerResponse, CustomerLocationIn, ProductCreate, ProductResponse, BrandPriceAdjustRequest,
     OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, DispatchDraftUpdate,
     WeightMismatchDecision, DiscountApprovalRequest, DiscountDecisionRequest,
     NotificationCreate, NotificationResponse, BulkDeleteRequest,
@@ -171,12 +171,54 @@ def get_customer_ledger(id: UUID, db: Session = Depends(get_db)):
             "name": customer.name,
             "phone": customer.phone,
             "address": customer.address,
+            "delivery_addresses": customer.delivery_addresses or [],
             "credit_due_date": customer.credit_due_date.isoformat() if customer.credit_due_date else None
         },
         "total_billed": sum(t["total_amount"] for t in transactions),
         "total_paid": sum(t["paid_amount"] for t in transactions),
         "total_balance": running_balance,
         "transactions": transactions
+    }
+
+@router.post("/customers/{id}/delivery-addresses")
+def add_customer_delivery_address(
+    id: UUID, 
+    loc_in: CustomerLocationIn, 
+    background_tasks: BackgroundTasks, 
+    db: Session = Depends(get_db)
+):
+    customer = db.query(Customer).filter(Customer.id == id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+        
+    raw_addr = (loc_in.address or "").strip()
+    if loc_in.latitude is not None and loc_in.longitude is not None:
+        gps_tag = f"(GPS: {loc_in.latitude:.5f}, {loc_in.longitude:.5f})"
+        if gps_tag not in raw_addr:
+            clean_addr = f"{raw_addr} {gps_tag}".strip() if raw_addr else f"Site Location {gps_tag}"
+        else:
+            clean_addr = raw_addr
+    else:
+        clean_addr = raw_addr
+        
+    if not clean_addr:
+        raise HTTPException(status_code=400, detail="Address or coordinates required")
+        
+    curr_addrs = list(customer.delivery_addresses or [])
+    # Check if address already exists (case-insensitive)
+    if not any(a.strip().lower() == clean_addr.lower() for a in curr_addrs):
+        curr_addrs.append(clean_addr)
+        customer.delivery_addresses = curr_addrs
+        if not customer.address or not customer.address.strip():
+            customer.address = clean_addr
+        db.commit()
+        db.refresh(customer)
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "customers"})
+        
+    return {
+        "success": True, 
+        "address": clean_addr, 
+        "delivery_addresses": customer.delivery_addresses or []
     }
 
 @router.put("/customers/{id}", response_model=CustomerResponse)

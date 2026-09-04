@@ -178,11 +178,12 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   };
 
   const handleQtyChange = (val: number) => {
-    const qty = Math.max(1, val);
-    setItemQty(qty);
+    setItemQty(val);
     const stdWeight = Number(selectedProduct?.standard_weight || 0);
-    if (stdWeight > 0) {
-      setTargetWeightInput((qty * stdWeight).toFixed(2));
+    if (stdWeight > 0 && val > 0) {
+      setTargetWeightInput((val * stdWeight).toFixed(2));
+    } else if (val === 0) {
+      setTargetWeightInput('');
     }
   };
 
@@ -198,13 +199,14 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
 
   const handleAddItem = () => {
     if (!selectedProduct) return;
+    const finalQty = Math.max(1, itemQty || 1);
     if (lines.some(l => l.product_id === selectedProduct.id)) {
       toast('Product already added', 'info');
       return;
     }
     setLines([...lines, { 
       product_id: selectedProduct.id, 
-      quantity: itemQty, 
+      quantity: finalQty, 
       unit: itemUnit || selectedProduct.unit || 'nos',
       product: selectedProduct 
     }]);
@@ -926,22 +928,14 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                 {/* Selected Product Configuration & Dual Steel Input */}
                 {selectedProduct && (
                   <div className="bg-blue-50/50 border-2 border-blue-200 rounded-xl p-4 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 pb-2">
-                      <div>
-                        <span className="text-sm font-black text-slate-900">
-                          {selectedProduct.name}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-500 ml-2">
-                          Brand: <strong className="text-blue-700">{selectedProduct.brand || 'General'}</strong>
-                          {Number(selectedProduct.standard_weight || 0) > 0 && ` • Std Weight: ${selectedProduct.standard_weight} kg/no`}
-                        </span>
-                      </div>
-                      <button
-                        onClick={handleAddItem}
-                        className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 shadow-sm transition flex items-center gap-1.5"
-                      >
-                        <PlusIcon size={16} /> Add to Order
-                      </button>
+                    <div className="border-b border-blue-100 pb-2">
+                      <span className="text-sm font-black text-slate-900">
+                        {selectedProduct.name}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-500 ml-2">
+                        Brand: <strong className="text-blue-700">{selectedProduct.brand || 'General'}</strong>
+                        {Number(selectedProduct.standard_weight || 0) > 0 && ` • Std Weight: ${selectedProduct.standard_weight} kg/no`}
+                      </span>
                     </div>
 
                     {Number(selectedProduct.standard_weight || 0) > 0 ? (
@@ -971,32 +965,27 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                             <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
                               Quantity in Nos (Rods / Pieces)
                             </label>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleQtyChange(itemQty - 1)}
-                                className="h-10 w-10 rounded-lg border border-slate-300 bg-slate-50 flex items-center justify-center font-bold text-slate-700 hover:bg-slate-100 transition"
-                              >
-                                <Minus size={16} />
-                              </button>
+                            <div className="relative flex items-center">
                               <input
-                                type="number"
-                                min="1"
-                                value={itemQty}
-                                onChange={e => handleQtyChange(Number(e.target.value))}
-                                className="w-full rounded-lg border border-slate-300 p-2 text-center text-base font-black text-slate-900 outline-none focus:border-blue-500"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={itemQty || ''}
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/\D/g, '');
+                                  const parsed = raw === '' ? 0 : parseInt(raw, 10);
+                                  handleQtyChange(parsed);
+                                }}
+                                onBlur={() => {
+                                  if (!itemQty || itemQty < 1) handleQtyChange(1);
+                                }}
+                                placeholder="Enter count in pieces..."
+                                className="w-full rounded-xl border-2 border-slate-300 p-2.5 pr-14 text-center text-lg font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
                               />
-                              <button
-                                type="button"
-                                onClick={() => handleQtyChange(itemQty + 1)}
-                                className="h-10 w-10 rounded-lg border border-slate-300 bg-slate-50 flex items-center justify-center font-bold text-slate-700 hover:bg-slate-100 transition"
-                              >
-                                <Plus size={16} />
-                              </button>
-                              <span className="text-xs font-black text-slate-600 px-1">nos</span>
+                              <span className="absolute right-3 text-xs font-black text-slate-500 pointer-events-none uppercase">nos</span>
                             </div>
                             <p className="text-xs font-bold text-slate-600 mt-2">
-                              ➔ Weight: <strong className="text-blue-700">{(itemQty * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg</strong> ({selectedProduct.standard_weight} kg/no)
+                              ➔ Weight: <strong className="text-blue-700">{((itemQty || 1) * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg</strong> ({selectedProduct.standard_weight} kg/no)
                             </p>
                           </div>
                         ) : (
@@ -1005,55 +994,95 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                               <span>Target Weight in Kgs</span>
                               <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Auto-converts to pieces</span>
                             </label>
-                            <div className="flex items-center gap-2">
+                            <div className="relative flex items-center">
                               <input
-                                type="number"
-                                step="any"
-                                min="0.1"
+                                type="text"
+                                inputMode="decimal"
                                 placeholder="e.g. 50 kg"
                                 value={targetWeightInput}
-                                onChange={e => handleTargetWeightChange(e.target.value)}
-                                className="w-full rounded-lg border-2 border-blue-300 p-2 text-base font-black text-blue-900 outline-none focus:border-blue-500"
+                                onChange={e => {
+                                  const sanitized = e.target.value.replace(/[^0-9.]/g, '');
+                                  handleTargetWeightChange(sanitized);
+                                }}
+                                className="w-full rounded-xl border-2 border-blue-300 p-2.5 pr-12 text-center text-lg font-black text-blue-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
                               />
-                              <span className="text-xs font-black text-blue-700 px-1">kg</span>
+                              <span className="absolute right-3 text-xs font-black text-blue-700 pointer-events-none uppercase">kg</span>
                             </div>
                             <p className="text-xs font-bold text-blue-800 mt-2">
-                              ➔ Converts to: <strong className="text-amber-600 text-sm">{itemQty} nos</strong> ({(itemQty * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg actual weight)
+                              ➔ Converts to: <strong className="text-amber-600 text-sm">{itemQty} nos</strong> ({((itemQty || 1) * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg actual weight)
                             </p>
                           </div>
                         )}
 
                         {(() => {
-                          const pr = calculateProductPrice(selectedProduct, itemQty);
+                          const effectiveQty = Math.max(1, itemQty || 1);
+                          const pr = calculateProductPrice(selectedProduct, effectiveQty);
                           return (
                             <div className="p-3 bg-blue-100/70 rounded-xl text-xs font-bold text-blue-950 flex flex-wrap items-center justify-between gap-2 border border-blue-200">
-                              <span>Formula: {itemQty} nos × {pr.standardWeight} kg = <strong>{pr.totalWeight.toFixed(2)} kg</strong> @ ₹{pr.ratePerKg.toFixed(2)}/kg</span>
+                              <span>Formula: {effectiveQty} nos × {pr.standardWeight} kg = <strong>{pr.totalWeight.toFixed(2)} kg</strong> @ ₹{pr.ratePerKg.toFixed(2)}/kg</span>
                               <span className="text-sm font-black text-blue-700">Line Total: ₹{pr.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                             </div>
                           );
                         })()}
+
+                        {/* Add to Order Button positioned below the box */}
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={handleAddItem}
+                            className="w-full sm:w-auto rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6 py-2.5 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                          >
+                            <PlusIcon size={18} /> Add to Order
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       /* Non-steel product input */
-                      <div className="flex items-center gap-4">
-                        <div className="w-40">
-                          <label className="block text-xs font-bold text-slate-700 mb-1">Quantity</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={itemQty}
-                            onChange={e => setItemQty(Number(e.target.value))}
-                            className="w-full rounded-lg border border-slate-300 p-2 text-sm font-bold text-slate-900 outline-none focus:border-blue-500 bg-white"
-                          />
-                        </div>
-                        {(() => {
-                          const pr = calculateProductPrice(selectedProduct, itemQty);
-                          return (
-                            <div className="pt-5 text-sm font-bold text-slate-700">
-                              {itemQty} {selectedProduct.unit || 'nos'} × ₹{pr.unitPrice.toFixed(2)} = <span className="font-black text-blue-600">₹{pr.totalPrice.toFixed(2)}</span>
+                      <div className="space-y-3 bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                          <div className="w-48">
+                            <label className="block text-xs font-extrabold text-slate-700 mb-1.5">Quantity</label>
+                            <div className="relative flex items-center">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={itemQty || ''}
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/\D/g, '');
+                                  const parsed = raw === '' ? 0 : parseInt(raw, 10);
+                                  setItemQty(parsed);
+                                }}
+                                onBlur={() => {
+                                  if (!itemQty || itemQty < 1) setItemQty(1);
+                                }}
+                                placeholder="Enter quantity..."
+                                className="w-full rounded-xl border-2 border-slate-300 p-2 pr-12 text-center text-base font-black text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
+                              />
+                              <span className="absolute right-3 text-xs font-bold text-slate-500 pointer-events-none">{selectedProduct.unit || 'nos'}</span>
                             </div>
-                          );
-                        })()}
+                          </div>
+                          {(() => {
+                            const effectiveQty = Math.max(1, itemQty || 1);
+                            const pr = calculateProductPrice(selectedProduct, effectiveQty);
+                            return (
+                              <div className="pt-2 text-sm font-bold text-slate-700">
+                                {effectiveQty} {selectedProduct.unit || 'nos'} × ₹{pr.unitPrice.toFixed(2)} = <span className="font-black text-blue-600">₹{pr.totalPrice.toFixed(2)}</span>
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Add to Order Button positioned below the box */}
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={handleAddItem}
+                            className="w-full sm:w-auto rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6 py-2.5 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                          >
+                            <PlusIcon size={18} /> Add to Order
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
