@@ -21,6 +21,9 @@ try:
         conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS delivery_charge NUMERIC(12, 2) DEFAULT 0.00;"))
         conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_tolerance NUMERIC;"))
         conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_tolerance_minus NUMERIC;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS notes VARCHAR;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS pod_voice_note_url VARCHAR;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS pod_voice_note_path VARCHAR;"))
         conn.commit()
 except Exception as e:
     print(f"Schema sync notice: {e}")

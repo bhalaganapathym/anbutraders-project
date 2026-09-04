@@ -134,6 +134,11 @@ class Dispatch(Base):
     discount_rejection_reason = Column(String, nullable=True)
     discount_details = Column(JSON, nullable=True)
     
+    # POD Notes & Voice Note
+    notes = Column(String, nullable=True)
+    pod_voice_note_url = Column(String, nullable=True)
+    pod_voice_note_path = Column(String, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     
     order = relationship("Order")

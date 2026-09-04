@@ -104,7 +104,10 @@ def migrate():
             conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_approved_by VARCHAR;"))
             conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_approved_at TIMESTAMP WITH TIME ZONE;"))
             conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS mismatch_rejection_reason VARCHAR;"))
-            print("Added phase1_draft and mismatch approval fields to dispatches")
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS notes VARCHAR;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS pod_voice_note_url VARCHAR;"))
+            conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS pod_voice_note_path VARCHAR;"))
+            print("Added phase1_draft, mismatch approval, notes, and pod voice note fields to dispatches")
         except Exception as e:
             print("Skipping dispatch draft & mismatch fields: ", e)
 

@@ -900,6 +900,72 @@ def get_dispatch_voice_note(id: UUID, db: Session = Depends(get_db)):
         }
     )
 
+@router.post("/dispatches/{id}/pod-voice-note")
+async def upload_pod_voice_note(
+    id: UUID,
+    audio_file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    
+    os.makedirs("uploads/voice_notes", exist_ok=True)
+    ext = audio_file.filename.split(".")[-1] if "." in audio_file.filename else "webm"
+    filename = f"pod_{dispatch.id}_{int(datetime.now().timestamp())}.{ext}"
+    local_path = os.path.join("uploads", "voice_notes", filename)
+    
+    content = await audio_file.read()
+    with open(local_path, "wb") as f:
+        f.write(content)
+    
+    voice_path = os.path.abspath(local_path)
+    voice_url = f"/uploads/voice_notes/{filename}"
+
+    dispatch.pod_voice_note_url = voice_url
+    dispatch.pod_voice_note_path = voice_path
+    db.commit()
+    db.refresh(dispatch)
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    return {"url": voice_url}
+
+@router.get("/dispatches/{id}/pod-voice-note")
+def get_dispatch_pod_voice_note(id: UUID, db: Session = Depends(get_db)):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    
+    path = dispatch.pod_voice_note_path
+    if not path or not os.path.exists(path):
+        if dispatch.pod_voice_note_url:
+            clean_rel = dispatch.pod_voice_note_url.lstrip("/")
+            if os.path.exists(clean_rel):
+                path = os.path.abspath(clean_rel)
+    
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="POD Voice note audio not found")
+    
+    media_type = "audio/webm"
+    if path.endswith(".mp4") or path.endswith(".m4a"):
+        media_type = "audio/mp4"
+    elif path.endswith(".ogg") or path.endswith(".oga"):
+        media_type = "audio/ogg"
+    elif path.endswith(".mp3"):
+        media_type = "audio/mpeg"
+    elif path.endswith(".wav"):
+        media_type = "audio/wav"
+
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
 @router.post("/dispatches/{id}/mismatch-decision", response_model=DispatchResponse)
 def decide_mismatch_approval(
     id: UUID,

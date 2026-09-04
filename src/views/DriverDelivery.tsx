@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api, type Dispatch, type Driver } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { useRealtime } from '@/lib/useRealtime';
+import { compressImage } from '@/lib/imageCompressor';
 import {
   Truck,
   Phone,
@@ -15,8 +16,17 @@ import {
   Clock,
   User,
   Search,
-  Upload,
-  AlertCircle
+  AlertCircle,
+  Mic,
+  MicOff,
+  Play,
+  Pause,
+  RotateCcw,
+  Trash2,
+  SwitchCamera,
+  Volume2,
+  X,
+  Eye
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
@@ -40,7 +50,209 @@ export default function DriverDelivery() {
   const [submitting, setSubmitting] = useState(false);
   const [savingLocationForDispatchId, setSavingLocationForDispatchId] = useState<string | null>(null);
   const [savedLocationDispatches, setSavedLocationDispatches] = useState<Record<string, boolean>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Camera State (Live Camera Viewfinder Only - No Gallery Pickers)
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Voice Note Recording State
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isListeningSpeech, setIsListeningSpeech] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<any>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+
+  // Enlarged Photo Lightbox State
+  const [enlargedPhotoUrl, setEnlargedPhotoUrl] = useState<string | null>(null);
+
+  // Bind video stream to video element whenever camera stream changes
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream, cameraModalOpen]);
+
+  // Clean up camera & audio on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((t) => t.stop());
+      }
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    };
+  }, []);
+
+  const startCamera = async (mode: 'environment' | 'user' = facingMode) => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+      setCameraStream(null);
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: mode },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+      });
+      setCameraStream(stream);
+      setFacingMode(mode);
+      setCameraModalOpen(true);
+    } catch {
+      toast('மொபைல் கேமராவை இயக்க முடியவில்லை. கேமரா அனுமதியை சரிபார்க்கவும் (Camera access denied)', 'error');
+    }
+  };
+
+  const switchCamera = () => {
+    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    startCamera(nextMode);
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+    setCameraModalOpen(false);
+  };
+
+  const capturePhoto = (videoEl: HTMLVideoElement | null) => {
+    if (!videoEl) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoEl.videoWidth || 1280;
+    canvas.height = videoEl.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], `pod_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const compressed = await compressImage(file);
+      setPodPhotoFile(compressed);
+      if (podPhotoPreview) URL.revokeObjectURL(podPhotoPreview);
+      const preview = URL.createObjectURL(compressed);
+      setPodPhotoPreview(preview);
+      stopCamera();
+      toast('தள புகைப்படம் எடுக்கப்பட்டது! (Photo Captured)', 'success');
+    }, 'image/jpeg', 0.85);
+  };
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+        else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+        else if (MediaRecorder.isTypeSupported('audio/ogg')) mimeType = 'audio/ogg';
+        else mimeType = '';
+      }
+
+      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const finalType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: finalType });
+        setAudioBlob(blob);
+        const url = URL.createObjectURL(blob);
+        setAudioPreviewUrl(url);
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      mediaRecorder.start(250);
+      setIsVoiceRecording(true);
+      setRecordingSeconds(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((s) => {
+          if (s >= 60) {
+            stopVoiceRecording();
+            return 60;
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      toast('மைக்ரோஃபோன் அணுகல் மறுக்கப்பட்டது. மைக் அனுமதியை சரிபார்க்கவும் (Microphone access denied)', 'error');
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isVoiceRecording) {
+      mediaRecorderRef.current.stop();
+      setIsVoiceRecording(false);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    }
+  };
+
+  const resetVoiceRecording = () => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    setAudioBlob(null);
+    setAudioPreviewUrl(null);
+    setIsPlayingAudio(false);
+    setRecordingSeconds(0);
+    if (isVoiceRecording) stopVoiceRecording();
+  };
+
+  const togglePlayAudio = () => {
+    if (!audioPlayerRef.current) return;
+    if (isPlayingAudio) {
+      audioPlayerRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioPlayerRef.current.play();
+      setIsPlayingAudio(true);
+    }
+  };
+
+  const startSpeechDictation = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast('இந்த உலாவியில் வாய்மொழி தட்டச்சு ஆதரிக்கப்படவில்லை (Speech recognition not supported)', 'error');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ta-IN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    setIsListeningSpeech(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setReceiverNotes((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      setIsListeningSpeech(false);
+      toast(`பதிவானது: "${transcript}"`, 'success');
+    };
+
+    recognition.onerror = () => {
+      setIsListeningSpeech(false);
+      toast('குரல் அடையாளம் காண முடியவில்லை, தட்டச்சு செய்யவும்', 'error');
+    };
+
+    recognition.onend = () => {
+      setIsListeningSpeech(false);
+    };
+
+    recognition.start();
+  };
 
   const handleSaveSiteLocationToLedger = async (d: Dispatch) => {
     const customerId = d.customer_id || d.customer?.id;
@@ -144,24 +356,14 @@ export default function DriverDelivery() {
     setPodPhotoFile(null);
     setPodPhotoPreview(null);
     setReceiverNotes('');
+    resetVoiceRecording();
+    stopCamera();
     setPaymentMode('cash');
 
     const total = d.bill?.total_amount ?? (d.items?.reduce((s, it) => s + (it.price || 0) * (it.quantity || 1), 0) || 0);
     const paid = d.bill?.paid_amount ?? 0;
     const balance = d.bill?.pending_amount ?? Math.max(0, total - paid);
     setCollectedAmount(balance > 0 ? balance.toString() : '0');
-  };
-
-  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPodPhotoFile(file);
-      const reader = new FileReader();
-      reader.onload = () => {
-        setPodPhotoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   const handleCompleteDelivery = async () => {
@@ -179,10 +381,32 @@ export default function DriverDelivery() {
         });
       }
 
+      let uploadedVoiceUrl: string | null = null;
+      if (audioBlob) {
+        try {
+          const formData = new FormData();
+          const ext = audioBlob.type.includes('mp4') ? 'mp4' : audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
+          formData.append('audio_file', audioBlob, `pod_${completingDispatch.id}.${ext}`);
+          const res = await api.postForm(`/dispatches/${completingDispatch.id}/pod-voice-note`, formData);
+          if (res?.url) {
+            uploadedVoiceUrl = res.url;
+          }
+        } catch (voiceErr) {
+          console.warn('Could not upload voice note file, saving as base64 fallback:', voiceErr);
+          uploadedVoiceUrl = await new Promise((res, rej) => {
+            const reader = new FileReader();
+            reader.onload = () => res(reader.result as string);
+            reader.onerror = rej;
+            reader.readAsDataURL(audioBlob);
+          });
+        }
+      }
+
       const notesSummary = [
         completingDispatch.notes || '',
         `POD: தளத்தில் பொருட்கள் இறக்கப்பட்டது. வசூலித்த தொகை: ₹${collectedAmount} (${paymentMode.toUpperCase()}).`,
-        receiverNotes ? `குறிப்பு: ${receiverNotes}` : ''
+        receiverNotes ? `குறிப்பு: ${receiverNotes}` : '',
+        uploadedVoiceUrl ? '[🎙️ குரல் குறிப்பு இணைக்கப்பட்டுள்ளது]' : ''
       ].filter(Boolean).join(' | ');
 
       await api.put(`/dispatches/${completingDispatch.id}`, {
@@ -190,10 +414,13 @@ export default function DriverDelivery() {
         status: 'completed',
         vehicle_leave_photo_url: photoUrl,
         notes: notesSummary,
+        pod_voice_note_url: uploadedVoiceUrl || completingDispatch.pod_voice_note_url || null,
       });
 
       toast(`டெலிவரி (${completingDispatch.dispatch_no}) வெற்றிகரமாக முடிந்தது! ஓட்டுநர் தயார் நிலைக்கு மாற்றப்பட்டார்.`, 'success');
       setCompletingDispatch(null);
+      resetVoiceRecording();
+      stopCamera();
       loadData();
     } catch (err: any) {
       toast(err?.message || 'டெலிவரி முடிப்பதில் பிழை ஏற்பட்டது', 'error');
@@ -405,6 +632,51 @@ export default function DriverDelivery() {
                   </ul>
                 </div>
 
+                {/* முடிக்கப்பட்ட டெலிவரி சான்று & குரல் குறிப்பு (Completed POD Preview & Audio) */}
+                {d.status === 'completed' && (
+                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {d.vehicle_leave_photo_url && (
+                      <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                        <img
+                          src={d.vehicle_leave_photo_url}
+                          alt="POD Photo"
+                          onClick={() => setEnlargedPhotoUrl(d.vehicle_leave_photo_url!)}
+                          className="w-16 h-16 object-cover rounded-lg border-2 border-emerald-300 dark:border-emerald-700 cursor-pointer hover:opacity-90 hover:scale-105 transition shadow-sm shrink-0"
+                        />
+                        <div className="flex-1 min-w-0 text-xs">
+                          <p className="font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <Camera size={14} className="text-emerald-600" />
+                            <span>தளத்தில் இறக்கப்பட்ட புகைப்படம் (POD)</span>
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setEnlargedPhotoUrl(d.vehicle_leave_photo_url!)}
+                            className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1 mt-1"
+                          >
+                            <Eye size={12} /> பெரிதாக்கிப் பார்க்க (View Full)
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {d.pod_voice_note_url && (
+                      <div className="p-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/60 space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-black text-indigo-900 dark:text-indigo-300">
+                          <Volume2 size={15} className="text-indigo-600 animate-pulse" />
+                          <span>குரல் குறிப்பு (POD Voice Note):</span>
+                        </div>
+                        <audio controls src={d.pod_voice_note_url} className="w-full h-8 rounded" />
+                      </div>
+                    )}
+
+                    {d.notes && (
+                      <div className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <strong className="text-slate-900 dark:text-slate-100">குறிப்புகள்:</strong> {d.notes}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* நேரடி செயல் பொத்தான்கள் (1-Tap Action Buttons) */}
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2.5">
                   {customerPhone && (
@@ -447,7 +719,11 @@ export default function DriverDelivery() {
       {/* டெலிவரி நிறைவு மற்றும் ரசீது உறுதிப்படுத்தல் (PROOF OF DELIVERY MODAL) */}
       <Modal
         open={!!completingDispatch}
-        onClose={() => setCompletingDispatch(null)}
+        onClose={() => {
+          setCompletingDispatch(null);
+          resetVoiceRecording();
+          stopCamera();
+        }}
         title={`டெலிவரி நிறைவு மற்றும் ரசீது — ${completingDispatch?.dispatch_no}`}
         size="md"
       >
@@ -515,63 +791,194 @@ export default function DriverDelivery() {
               </div>
             </div>
 
-            {/* தள டெலிவரி புகைப்படம் (Photo Capture) */}
+            {/* தள டெலிவரி புகைப்படம் (Camera Capture ONLY - No File/Gallery Picker) */}
             <div>
               <label className="block text-xs font-black text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1.5">
                 <Camera size={16} className="text-amber-600" /> தளத்தில் இறக்கப்பட்ட பொருட்களின் புகைப்படம் (POD Photo)
               </label>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handlePhotoCapture}
-                className="hidden"
-              />
-
               {podPhotoPreview ? (
-                <div className="relative rounded-xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 h-48 bg-slate-900 flex items-center justify-center shadow">
+                <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500/50 dark:border-emerald-600/50 h-52 bg-slate-950 flex items-center justify-center shadow-md">
                   <img src={podPhotoPreview} alt="POD Preview" className="h-full w-full object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute bottom-3 right-3 bg-black/80 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur shadow"
-                  >
-                    <Camera size={14} /> மீண்டும் புகைப்படம் எடுக்க
-                  </button>
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent p-3 flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 size={15} /> புகைப்படம் எடுக்கப்பட்டது
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEnlargedPhotoUrl(podPhotoPreview)}
+                        className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 backdrop-blur shadow"
+                        title="பெரிதாக்கிப் பார்க்க"
+                      >
+                        <Eye size={13} /> பெரிதாக்கு
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startCamera()}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow"
+                      >
+                        <Camera size={13} /> மீண்டும் எடுக்க
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-36 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center gap-2 text-slate-600 dark:text-slate-400 hover:border-amber-500 hover:text-amber-600 transition bg-slate-50 dark:bg-slate-800/40 p-4"
+                  onClick={() => startCamera()}
+                  className="w-full h-36 border-2 border-dashed border-amber-400 dark:border-amber-600 hover:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:bg-amber-100/60 dark:hover:bg-amber-950/40 rounded-2xl flex flex-col items-center justify-center gap-2 text-amber-900 dark:text-amber-200 transition p-4 shadow-sm group active:scale-[0.99]"
                 >
-                  <Camera size={32} className="text-amber-600 animate-bounce" />
-                  <span className="text-xs font-extrabold text-center">மொபைல் கேமராவில் புகைப்படம் எடுக்க இங்கே தொடவும் (Tap to Take Photo)</span>
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 dark:bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition">
+                    <Camera size={26} className="text-amber-600 dark:text-amber-400 animate-pulse" />
+                  </div>
+                  <div className="text-center space-y-0.5">
+                    <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
+                      நேரடி கேமராவில் புகைப்படம் எடுக்கவும் (Take Photo with Camera)
+                    </p>
+                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      கேலரி அனுமதி இல்லை — தளத்தில் கேமரா மூலம் மட்டுமே படம் எடுக்க முடியும்
+                    </p>
+                  </div>
                 </button>
               )}
             </div>
 
-            {/* பெறுநர் பெயர் / குறிப்புகள் (Receiver Notes) */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                பொருளைப் பெற்றவர் பெயர் / குறிப்புகள் (விருப்பத்தேர்வு)
-              </label>
-              <input
-                type="text"
-                value={receiverNotes}
-                onChange={(e) => setReceiverNotes(e.target.value)}
-                placeholder="எ.கா. தள மேற்பார்வையாளர் முருகன் பெற்றுக்கொண்டார்"
-                className="input text-xs font-semibold"
-              />
+            {/* பெறுநர் பெயர் / குறிப்புகள் & குரல் குறிப்பு (Receiver Notes & Voice Note) */}
+            <div className="space-y-3 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Mic size={15} className="text-indigo-600" />
+                  பொருளைப் பெற்றவர் குறிப்பு & குரல் குறிப்பு (Voice Note)
+                </label>
+                {recordingSeconds > 0 && !audioBlob && (
+                  <span className="text-xs font-mono font-bold text-rose-600 animate-pulse">
+                    00:{recordingSeconds.toString().padStart(2, '0')} / 01:00
+                  </span>
+                )}
+              </div>
+
+              {/* Voice Note Recorder Bar */}
+              {!audioPreviewUrl ? (
+                <div>
+                  {isVoiceRecording ? (
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-300 dark:border-rose-800 rounded-xl flex items-center justify-between gap-3 shadow-inner">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-rose-600 animate-ping" />
+                        <span className="text-xs font-black text-rose-700 dark:text-rose-300">
+                          பதிவாகிறது... 00:{recordingSeconds.toString().padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 h-6">
+                        <div className="w-1 h-4 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-1 h-6 bg-rose-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-1 h-3 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <div className="w-1 h-5 bg-rose-600 rounded-full animate-bounce" style={{ animationDelay: '75ms' }} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={stopVoiceRecording}
+                        className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow active:scale-95 transition"
+                      >
+                        <MicOff size={14} /> நிறுத்து (Stop)
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={startVoiceRecording}
+                      className="w-full py-2.5 px-3 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-center gap-2 text-indigo-700 dark:text-indigo-300 text-xs font-extrabold shadow-sm transition active:scale-[0.99]"
+                    >
+                      <Mic size={16} className="text-indigo-600" />
+                      <span>🎙️ குரல் குறிப்பு பேசவும் (Record Voice Note)</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                /* Recorded Audio Preview Box */
+                <div className="p-3 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    <span className="flex items-center gap-1">
+                      <CheckCircle2 size={14} className="text-emerald-600" />
+                      குரல் குறிப்பு பதிவானது ({recordingSeconds}s)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={resetVoiceRecording}
+                        className="text-[11px] text-slate-600 hover:text-indigo-600 dark:text-slate-400 font-bold flex items-center gap-0.5"
+                      >
+                        <RotateCcw size={12} /> மீண்டும் பேச
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetVoiceRecording}
+                        className="text-[11px] text-rose-600 hover:text-rose-700 font-bold flex items-center gap-0.5"
+                      >
+                        <Trash2 size={12} /> நீக்கு
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-2 rounded-lg border border-emerald-100 dark:border-slate-700">
+                    <audio
+                      ref={audioPlayerRef}
+                      src={audioPreviewUrl}
+                      onEnded={() => setIsPlayingAudio(false)}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={togglePlayAudio}
+                      className="w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-sm shrink-0 transition"
+                    >
+                      {isPlayingAudio ? <Pause size={15} /> : <Play size={15} className="ml-0.5" />}
+                    </button>
+                    <div className="flex-1 text-xs font-medium text-slate-700 dark:text-slate-300">
+                      {isPlayingAudio ? 'குரல் ஒலிக்கிறது...' : 'குரல் குறிப்பைக் கேட்க தொடவும் (Play Voice Note)'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Text Input with Voice Dictation Mic Button */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                  எழுத்து வடிவில் குறிப்பு (அல்லது மைக் அழுத்தி பேசவும்):
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={receiverNotes}
+                    onChange={(e) => setReceiverNotes(e.target.value)}
+                    placeholder="எ.கா. தள மேற்பார்வையாளர் முருகன் பெற்றுக்கொண்டார்"
+                    className="input text-xs font-semibold pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={startSpeechDictation}
+                    disabled={isListeningSpeech}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition ${
+                      isListeningSpeech
+                        ? 'bg-rose-100 text-rose-600 animate-pulse'
+                        : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                    title="மைக்ரோஃபோனில் பேசினால் தானாக தட்டச்சாகும் (Speech to Text)"
+                  >
+                    <Mic size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* செயல் பொத்தான்கள் (Actions) */}
             <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-700">
               <button
                 type="button"
-                onClick={() => setCompletingDispatch(null)}
+                onClick={() => {
+                  setCompletingDispatch(null);
+                  resetVoiceRecording();
+                  stopCamera();
+                }}
                 className="btn-secondary font-bold text-xs"
               >
                 ரத்து செய் (Cancel)
@@ -588,6 +995,108 @@ export default function DriverDelivery() {
           </div>
         )}
       </Modal>
+
+      {/* நேரடி கேமரா மாடல் (Live Camera Viewfinder Modal) */}
+      {cameraModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-3 sm:p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col">
+            {/* Top Bar */}
+            <div className="p-3.5 bg-gradient-to-b from-black/90 to-transparent flex items-center justify-between text-white z-10">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                <span className="text-xs font-extrabold tracking-wide uppercase">தள கேமரா (Live POD Camera)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={switchCamera}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-xs font-bold flex items-center gap-1.5 transition"
+                  title="கேமராவை மாற்று (முன் / பின்)"
+                >
+                  <SwitchCamera size={14} />
+                  <span>{facingMode === 'environment' ? 'முன் கேமரா' : 'பின் கேமரா'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="p-1.5 rounded-lg bg-white/20 hover:bg-rose-600 text-white transition"
+                  title="ரத்து செய்"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Viewfinder Video */}
+            <div className="relative aspect-[4/3] sm:aspect-video w-full bg-slate-950 flex items-center justify-center overflow-hidden">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              {/* Framing Guide */}
+              <div className="absolute inset-8 border-2 border-white/30 rounded-2xl pointer-events-none flex items-center justify-center">
+                <div className="text-white/60 text-[11px] font-bold text-center px-4 py-2 bg-black/50 rounded-lg backdrop-blur-sm">
+                  தளத்தில் இறக்கப்பட்ட பொருட்கள் தெளிவாக தெரியும்படி வைத்து படம் எடுக்கவும்
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Controls Bar */}
+            <div className="p-5 bg-gradient-to-t from-black/95 to-black/70 flex items-center justify-between px-8">
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="text-xs font-bold text-slate-300 hover:text-white transition"
+              >
+                ரத்து (Cancel)
+              </button>
+
+              {/* Shutter Button */}
+              <button
+                type="button"
+                onClick={() => capturePhoto(videoRef.current)}
+                className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-white/20 border-4 border-white flex items-center justify-center hover:bg-white/40 active:scale-95 transition shadow-2xl cursor-pointer"
+                title="புகைப்படம் எடு (Capture Photo)"
+              >
+                <div className="w-14 h-14 sm:w-15 sm:h-15 rounded-full bg-white flex items-center justify-center">
+                  <Camera size={26} className="text-slate-900" />
+                </div>
+              </button>
+
+              <div className="w-16 text-right">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">நேரடி படம்</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* பெரிய புகைப்பட முன்னோட்டம் (Enlarged Photo Lightbox Modal) */}
+      {enlargedPhotoUrl && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setEnlargedPhotoUrl(null)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={enlargedPhotoUrl}
+              alt="Enlarged POD Preview"
+              className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl"
+            />
+            <button
+              type="button"
+              onClick={() => setEnlargedPhotoUrl(null)}
+              className="absolute -top-3 -right-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-full w-9 h-9 flex items-center justify-center font-black text-lg shadow-2xl hover:bg-rose-600 hover:text-white transition"
+              title="மூடு (Close)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

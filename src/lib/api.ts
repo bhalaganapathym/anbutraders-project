@@ -195,6 +195,9 @@ export type Dispatch = {
   discount_approved_at?: string | null;
   discount_rejection_reason?: string | null;
   discount_details?: any;
+  notes?: string | null;
+  pod_voice_note_url?: string | null;
+  pod_voice_note_path?: string | null;
   created_at: string;
   
   order?: Order | null;

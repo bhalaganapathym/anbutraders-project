@@ -268,6 +268,9 @@ class DispatchCreate(BaseModel):
     discount_approved_at: Optional[datetime] = None
     discount_rejection_reason: Optional[str] = None
     discount_details: Optional[Any] = None
+    notes: Optional[str] = None
+    pod_voice_note_url: Optional[str] = None
+    pod_voice_note_path: Optional[str] = None
     items: Optional[List[DispatchItemCreate]] = []
     weights: Optional[List[WeightCreate]] = []
     photos: Optional[List[PhotoCreate]] = []
@@ -309,6 +312,9 @@ class DispatchResponse(BaseModel):
     discount_approved_at: Optional[datetime] = None
     discount_rejection_reason: Optional[str] = None
     discount_details: Optional[Any] = None
+    notes: Optional[str] = None
+    pod_voice_note_url: Optional[str] = None
+    pod_voice_note_path: Optional[str] = None
     sent_to_billing_at: Optional[datetime] = None
     ready_for_loading_at: Optional[datetime] = None
     loading_at: Optional[datetime] = None
