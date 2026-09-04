@@ -529,11 +529,17 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           
           {/* 1. ESTIMATES Today Card */}
-          <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div 
+            onClick={() => {
+              sessionStorage.setItem('orders_tab', 'pending');
+              onNavigate('orders');
+            }}
+            className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm cursor-pointer hover:border-violet-500 hover:shadow-md hover:scale-[1.01] transition-all active:scale-[0.99] group"
+          >
+            <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between group-hover:bg-violet-50/60 dark:group-hover:bg-violet-950/30 transition-colors">
               <div className="flex items-center gap-2">
-                <ShoppingCart size={18} className="text-violet-600 dark:text-violet-400" />
-                <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                <ShoppingCart size={18} className="text-violet-600 dark:text-violet-400 group-hover:scale-110 transition-transform" />
+                <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200 group-hover:text-violet-700 dark:group-hover:text-violet-300 transition-colors">
                   Estimates
                 </h3>
               </div>
@@ -548,7 +554,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
             </div>
 
             <div className="grid grid-cols-3 divide-x divide-slate-100 dark:divide-slate-800 p-4">
-              <div className="text-center sm:text-left pr-1">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sessionStorage.setItem('orders_tab', 'pending');
+                  onNavigate('orders');
+                }}
+                className="text-center sm:text-left pr-1 hover:bg-amber-50/70 dark:hover:bg-amber-950/40 rounded-xl p-1.5 -m-1.5 transition-colors cursor-pointer"
+                title="View Pending Estimates"
+              >
                 <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                   Pending
                 </p>
@@ -556,7 +570,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                   {loading ? '—' : todayStats?.estimates.pending_to_start ?? 0}
                 </p>
               </div>
-              <div className="text-center sm:text-left px-2">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sessionStorage.setItem('orders_tab', 'pending');
+                  onNavigate('orders');
+                }}
+                className="text-center sm:text-left px-2 hover:bg-blue-50/70 dark:hover:bg-blue-950/40 rounded-xl p-1.5 -my-1.5 transition-colors cursor-pointer"
+                title="View Ongoing Estimates"
+              >
                 <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                   Ongoing
                 </p>
@@ -564,7 +586,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                   {loading ? '—' : todayStats?.estimates.ongoing ?? 0}
                 </p>
               </div>
-              <div className="text-center sm:text-left pl-2">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sessionStorage.setItem('orders_tab', 'confirmed');
+                  onNavigate('orders');
+                }}
+                className="text-center sm:text-left pl-2 hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 rounded-xl p-1.5 -m-1.5 transition-colors cursor-pointer"
+                title="View Closed / Settled Estimates"
+              >
                 <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                   Closed
                 </p>
@@ -576,11 +606,17 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
           </div>
 
           {/* 2. DISPATCHES Today Card */}
-          <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div 
+            onClick={() => {
+              sessionStorage.setItem('dispatches_tab', 'active');
+              onNavigate('dispatches');
+            }}
+            className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm cursor-pointer hover:border-emerald-500 hover:shadow-md hover:scale-[1.01] transition-all active:scale-[0.99] group"
+          >
+            <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between group-hover:bg-emerald-50/60 dark:group-hover:bg-emerald-950/30 transition-colors">
               <div className="flex items-center gap-2">
-                <Truck size={18} className="text-emerald-600 dark:text-emerald-400" />
-                <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                <Truck size={18} className="text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
+                <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
                   Dispatches
                 </h3>
               </div>
@@ -595,7 +631,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
             </div>
             
             <div className="grid grid-cols-2 divide-x divide-slate-100 dark:divide-slate-800 p-4">
-              <div className="text-center sm:text-left pr-2">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sessionStorage.setItem('dispatches_tab', 'active');
+                  onNavigate('dispatches');
+                }}
+                className="text-center sm:text-left pr-2 hover:bg-amber-50/70 dark:hover:bg-amber-950/40 rounded-xl p-1.5 -m-1.5 transition-colors cursor-pointer"
+                title="View Active Ongoing Deliveries"
+              >
                 <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                   Ongoing
                 </p>
@@ -604,7 +648,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                 </p>
                 <p className="text-[10px] font-medium text-slate-400 mt-0.5">Active pipeline</p>
               </div>
-              <div className="text-center sm:text-left pl-4">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sessionStorage.setItem('dispatches_tab', 'completed');
+                  onNavigate('dispatches');
+                }}
+                className="text-center sm:text-left pl-4 hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 rounded-xl p-1.5 -m-1.5 transition-colors cursor-pointer"
+                title="View Delivered / Completed Dispatches"
+              >
                 <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                   Closed
                 </p>
@@ -618,13 +670,16 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
 
           {/* 3. ADVANCE ORDERS Card */}
           <div 
-            onClick={() => onNavigate('orders')}
-            className="rounded-2xl border-2 border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-slate-900 overflow-hidden shadow-sm cursor-pointer hover:border-indigo-500 transition-all"
+            onClick={() => {
+              sessionStorage.setItem('orders_tab', 'advance_all');
+              onNavigate('orders');
+            }}
+            className="rounded-2xl border-2 border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-slate-900 overflow-hidden shadow-sm cursor-pointer hover:border-indigo-500 hover:shadow-md hover:scale-[1.01] transition-all active:scale-[0.99] group"
           >
-            <div className="bg-indigo-50/80 dark:bg-indigo-950/60 px-4 py-3 border-b border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between">
+            <div className="bg-indigo-50/80 dark:bg-indigo-950/60 px-4 py-3 border-b border-indigo-100 dark:border-indigo-900/60 flex items-center justify-between group-hover:bg-indigo-100/60 dark:group-hover:bg-indigo-950/40 transition-colors">
               <div className="flex items-center gap-2">
-                <Calendar size={18} className="text-indigo-600 dark:text-indigo-400" />
-                <h3 className="font-black text-sm uppercase tracking-wider text-indigo-950 dark:text-indigo-200">
+                <Calendar size={18} className="text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform" />
+                <h3 className="font-black text-sm uppercase tracking-wider text-indigo-950 dark:text-indigo-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
                   Advance Orders
                 </h3>
               </div>
@@ -639,7 +694,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
             </div>
 
             <div className="grid grid-cols-3 divide-x divide-slate-100 dark:divide-slate-800 p-4">
-              <div className="text-center sm:text-left pr-1">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sessionStorage.setItem('orders_tab', 'advance_today');
+                  onNavigate('orders');
+                }}
+                className="text-center sm:text-left pr-1 hover:bg-amber-50/70 dark:hover:bg-amber-950/40 rounded-xl p-1.5 -m-1.5 transition-colors cursor-pointer"
+                title="View Advance Orders Due Today"
+              >
                 <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                   Due Today
                 </p>
@@ -647,7 +710,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                   {loading ? '—' : advanceMetrics.today_pending}
                 </p>
               </div>
-              <div className="text-center sm:text-left px-2">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sessionStorage.setItem('orders_tab', 'advance_tomorrow');
+                  onNavigate('orders');
+                }}
+                className="text-center sm:text-left px-2 hover:bg-blue-50/70 dark:hover:bg-blue-950/40 rounded-xl p-1.5 -my-1.5 transition-colors cursor-pointer"
+                title="View Tomorrow Advance Orders"
+              >
                 <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                   Tomorrow
                 </p>
@@ -655,7 +726,15 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
                   {loading ? '—' : advanceMetrics.tomorrow_orders}
                 </p>
               </div>
-              <div className="text-center sm:text-left pl-2">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sessionStorage.setItem('orders_tab', 'advance_all');
+                  onNavigate('orders');
+                }}
+                className="text-center sm:text-left pl-2 hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 rounded-xl p-1.5 -m-1.5 transition-colors cursor-pointer"
+                title="View All Booked Advance Orders"
+              >
                 <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                   Booked
                 </p>

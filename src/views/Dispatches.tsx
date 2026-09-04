@@ -94,8 +94,22 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
   const [confirmedOrders, setConfirmedOrders] = useState<ConfirmedOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'new' | 'active' | 'completed'>('new');
+  const [activeTab, setActiveTab] = useState<'new' | 'active' | 'completed'>(() => {
+    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('dispatches_tab') : null;
+    if (saved === 'new' || saved === 'active' || saved === 'completed') {
+      sessionStorage.removeItem('dispatches_tab');
+      return saved;
+    }
+    return 'new';
+  });
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('dispatches_tab');
+    if (saved === 'new' || saved === 'active' || saved === 'completed') {
+      sessionStorage.removeItem('dispatches_tab');
+      setActiveTab(saved);
+    }
+  }, []);
   
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState('');

@@ -141,8 +141,22 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [detailOrder, setDetailOrder] = useState<OrderWithCustomer | null>(null);
-  const [detailItems, setDetailItems] = useState<OrderItemWithProduct[]>([]);
-  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'advance_today' | 'advance_tomorrow' | 'advance_all'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'advance_today' | 'advance_tomorrow' | 'advance_all'>(() => {
+    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('orders_tab') : null;
+    if (saved) {
+      sessionStorage.removeItem('orders_tab');
+      return saved as any;
+    }
+    return 'pending';
+  });
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('orders_tab');
+    if (saved) {
+      sessionStorage.removeItem('orders_tab');
+      setActiveTab(saved as any);
+    }
+  }, []);
 
   const [customerMode, setCustomerMode] = useState<'search' | 'new'>('search');
   const [phoneSearch, setPhoneSearch] = useState('');
