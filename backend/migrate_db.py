@@ -3,9 +3,16 @@ from sqlalchemy import create_engine, text
 
 def migrate():
     # Get DB URL
-    with open('.env', 'r') as f:
-        content = f.read()
-        db_url = [line.split('=')[1].strip() for line in content.split('\n') if line.startswith('DATABASE_URL')][0]
+    env_path = '.env' if os.path.exists('.env') else ('backend/.env' if os.path.exists('backend/.env') else os.path.join(os.path.dirname(__file__), '.env'))
+    db_url = None
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            content = f.read()
+            urls = [line.split('=', 1)[1].strip() for line in content.split('\n') if line.startswith('DATABASE_URL')]
+            if urls:
+                db_url = urls[0]
+    if not db_url:
+        db_url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/anbu_db")
     
     engine = create_engine(db_url)
     with engine.begin() as conn:
@@ -50,7 +57,8 @@ def migrate():
 
         try:
             conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_tolerance NUMERIC;"))
-            print("Added weight_tolerance to products")
+            conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS weight_tolerance_minus NUMERIC;"))
+            print("Added weight_tolerance and weight_tolerance_minus to products")
         except Exception as e:
             print("Skipping weight_tolerance: ", e)
 

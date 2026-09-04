@@ -18,6 +18,7 @@ type Form = {
   size: string;
   standard_weight: string;
   weight_tolerance: string;
+  weight_tolerance_minus: string;
 };
 
 const empty: Form = {
@@ -30,7 +31,8 @@ const empty: Form = {
   brand: '',
   size: '',
   standard_weight: '0',
-  weight_tolerance: ''
+  weight_tolerance: '',
+  weight_tolerance_minus: ''
 };
 
 const categories = ['Steel', 'Cement', 'TMT Bars', 'Pipes', 'Other'];
@@ -205,6 +207,7 @@ export default function Products() {
       size: (p.size ?? '').toUpperCase(),
       standard_weight: String(pStdWeight),
       weight_tolerance: p.weight_tolerance != null ? String(p.weight_tolerance) : '',
+      weight_tolerance_minus: p.weight_tolerance_minus != null ? String(p.weight_tolerance_minus) : '',
     });
     setOpen(true);
   };
@@ -246,6 +249,7 @@ export default function Products() {
       size: form.size.trim() ? form.size.trim().toUpperCase() : null,
       standard_weight: parseFloat(form.standard_weight) || 0,
       weight_tolerance: form.weight_tolerance !== '' ? parseFloat(form.weight_tolerance) : null,
+      weight_tolerance_minus: form.weight_tolerance_minus !== '' ? parseFloat(form.weight_tolerance_minus) : null,
     };
     try {
       if (editing) {
@@ -480,7 +484,7 @@ export default function Products() {
               </datalist>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="label">Standard Weight (kg)</label>
               <input
@@ -489,23 +493,38 @@ export default function Products() {
                 onChange={(e) => handleStdWeightChange(e.target.value)}
                 className="input font-semibold"
                 min="0"
-                step="0.01"
-                placeholder="e.g. 4.7"
+                step="0.001"
+                placeholder="e.g. 7.3"
               />
             </div>
             <div>
-              <label className="label">Difference Tolerance (kg)</label>
+              <label className="label">Plus Tol (+kg)</label>
               <input
                 type="number"
                 value={form.weight_tolerance}
                 onChange={(e) => setForm({ ...form, weight_tolerance: e.target.value })}
                 className="input"
                 min="0"
-                step="0.1"
-                placeholder="e.g. 2.0 (optional)"
+                step="0.001"
+                placeholder="e.g. 0.3 (300g)"
+              />
+            </div>
+            <div>
+              <label className="label">Minus Tol (-kg)</label>
+              <input
+                type="number"
+                value={form.weight_tolerance_minus}
+                onChange={(e) => setForm({ ...form, weight_tolerance_minus: e.target.value })}
+                className="input"
+                min="0"
+                step="0.001"
+                placeholder="e.g. 0.2 (200g)"
               />
             </div>
           </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-2">
+            💡 If <strong>Minus Tol</strong> is blank, Plus Tol applies symmetrically (±). Enter both for asymmetric rolling margins (e.g. +300g / -200g).
+          </p>
 
           {/* Linked Rate per kg & Unit Price */}
           <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
@@ -736,11 +755,23 @@ function ProductTable({
               </div>
 
               {/* Metrics Grid */}
-              <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl text-xs">
+              <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl text-xs">
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Std Weight</span>
                   <p className="font-bold text-slate-700 dark:text-slate-200">
                     {hasWeight ? `${p.standard_weight} kg` : '—'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Tolerance</span>
+                  <p className="font-bold text-amber-600 dark:text-amber-400 truncate" title={p.weight_tolerance != null ? `+${p.weight_tolerance} / -${p.weight_tolerance_minus ?? p.weight_tolerance}` : undefined}>
+                    {p.weight_tolerance != null ? (
+                      p.weight_tolerance_minus != null && Number(p.weight_tolerance_minus) !== Number(p.weight_tolerance) ? (
+                        `+${p.weight_tolerance}/-${p.weight_tolerance_minus}`
+                      ) : (
+                        `±${p.weight_tolerance}kg`
+                      )
+                    ) : '—'}
                   </p>
                 </div>
                 <div>
@@ -841,7 +872,13 @@ function ProductTable({
                         className={`font-medium ${canEditTolerance ? 'cursor-pointer hover:underline text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}
                         title={canEditTolerance ? 'Click to edit weight tolerance' : undefined}
                       >
-                        {p.weight_tolerance != null ? `±${p.weight_tolerance} kg` : 'Default'}
+                        {p.weight_tolerance != null ? (
+                          p.weight_tolerance_minus != null && Number(p.weight_tolerance_minus) !== Number(p.weight_tolerance) ? (
+                            `+${p.weight_tolerance} / -${p.weight_tolerance_minus} kg`
+                          ) : (
+                            `±${p.weight_tolerance} kg`
+                          )
+                        ) : 'Default'}
                       </span>
                     )}
                   </td>

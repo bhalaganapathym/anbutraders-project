@@ -600,22 +600,38 @@ export default function DispatchDashboard({
               const requiresWeight = prod?.standard_weight ? prod.standard_weight > 0 : false;
               const isVerificationDone = detail.status !== 'pending';
 
-              // Weight verification calculations & tolerance check
+              // Weight verification calculations & quantity-scaled tolerance range
               const hasWeight = iv.weight !== undefined && iv.weight !== null && iv.weight.toString().trim() !== '';
-              const expectedWt = (prod?.standard_weight || 0) * (item.quantity || 1);
-              const tolerance = prod?.weight_tolerance != null ? Number(prod.weight_tolerance) : weightThreshold;
-              
+              const qty = Number(item.quantity) || 1;
+              const stdWeight = Number(prod?.standard_weight) || 0;
+              const nominalWt = Number((stdWeight * qty).toFixed(3));
+
+              // Quantity-scaled acceptable range
+              const plusTolPerUnit = prod?.weight_tolerance != null ? Number(prod.weight_tolerance) : (weightThreshold / qty);
+              const minusTolPerUnit = prod?.weight_tolerance_minus != null ? Number(prod.weight_tolerance_minus) : plusTolPerUnit;
+              const minAllowedWeight = Number((nominalWt - (minusTolPerUnit * qty)).toFixed(3));
+              const maxAllowedWeight = Number((nominalWt + (plusTolPerUnit * qty)).toFixed(3));
+
               let actualWt = 0;
-              let itemDiff = 0;
               let isSteelMismatch = false;
               let isWeightCorrect = false;
+              let isBelowMin = false;
+              let isAboveMax = false;
+              let diffAmount = 0;
 
               if (requiresWeight && hasWeight && !isNaN(Number(iv.weight)) && Number(iv.weight) > 0) {
                 actualWt = Number(iv.weight);
                 if (iv.weightUnit === 'g') actualWt = actualWt / 1000;
-                itemDiff = Math.abs(expectedWt - actualWt);
-                if (itemDiff > tolerance) {
+                actualWt = Number(actualWt.toFixed(3));
+
+                if (actualWt < minAllowedWeight) {
                   isSteelMismatch = true;
+                  isBelowMin = true;
+                  diffAmount = Number((minAllowedWeight - actualWt).toFixed(3));
+                } else if (actualWt > maxAllowedWeight) {
+                  isSteelMismatch = true;
+                  isAboveMax = true;
+                  diffAmount = Number((actualWt - maxAllowedWeight).toFixed(3));
                 } else {
                   isWeightCorrect = true;
                 }
@@ -666,7 +682,7 @@ export default function DispatchDashboard({
                                   if (val && requiresWeight && Number(val) > 0) {
                                     let wt = Number(val);
                                     if (iv.weightUnit === 'g') wt = wt / 1000;
-                                    if (Math.abs(expectedWt - wt) > tolerance) {
+                                    if (wt < minAllowedWeight || wt > maxAllowedWeight) {
                                       if (typeof navigator !== 'undefined' && navigator.vibrate) {
                                         try { navigator.vibrate([150, 50, 150]); } catch {}
                                       }
@@ -700,22 +716,32 @@ export default function DispatchDashboard({
                             )}
                           </div>
                           
-                          {/* Expected & Entered Weight Feedback */}
-                          {isSteelMismatch ? (
-                            <div className="text-[11px] text-rose-600 dark:text-rose-400 font-extrabold mt-1.5 flex items-center gap-1">
-                              <AlertCircle size={13} className="shrink-0 animate-bounce" />
-                              <span>Expected: ~{expectedWt.toFixed(1)}kg (Diff: {itemDiff.toFixed(1)}kg &gt; {tolerance}kg tol)</span>
+                          {/* Expected & Entered Weight Feedback with Quantity-Scaled Difference */}
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                              <span className="text-slate-500 dark:text-slate-400 font-semibold">Acceptable:</span>
+                              <span className="font-mono font-black text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.5 rounded text-[11px]">
+                                {minAllowedWeight.toFixed(3)} kg – {maxAllowedWeight.toFixed(3)} kg
+                              </span>
+                              <span className="text-[11px] text-slate-400">
+                                (~{nominalWt.toFixed(2)} kg)
+                              </span>
                             </div>
-                          ) : isWeightCorrect ? (
-                            <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-extrabold mt-1.5 flex items-center gap-1">
-                              <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
-                              <span>Expected: ~{expectedWt.toFixed(1)}kg (Match ✓)</span>
-                            </div>
-                          ) : (
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-1">
-                              Expected standard: ~{expectedWt.toFixed(1)}kg (±{tolerance}kg tol)
-                            </p>
-                          )}
+
+                            {isSteelMismatch ? (
+                              <div className="text-[11px] text-rose-600 dark:text-rose-400 font-extrabold flex items-center gap-1">
+                                <AlertCircle size={13} className="shrink-0 animate-bounce" />
+                                <span>
+                                  Mismatch: {actualWt.toFixed(3)} kg ({isBelowMin ? `${diffAmount.toFixed(3)} kg below min` : `${diffAmount.toFixed(3)} kg above max`})
+                                </span>
+                              </div>
+                            ) : isWeightCorrect ? (
+                              <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center gap-1">
+                                <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                                <span>Match ✓ {actualWt.toFixed(3)} kg within allowed limits</span>
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       ) : (
                         <p className="font-bold text-slate-700 dark:text-slate-300">
@@ -847,17 +873,19 @@ export default function DispatchDashboard({
                   <Mic size={14} /> Send New Voice Note
                 </button>
               </div>
-            ) : isWeightWarning || Object.values(itemVerification).some(iv => {
-              // check if any steel item has mismatch
-              return detailItems.some(item => {
-                const prod = products.find(p => p.id === item.product_id);
-                if (!prod?.standard_weight || !iv.weight) return false;
-                let actualWt = Number(iv.weight);
-                if (iv.weightUnit === 'g') actualWt /= 1000;
-                const exp = prod.standard_weight * item.quantity;
-                const tol = prod.weight_tolerance != null ? Number(prod.weight_tolerance) : weightThreshold;
-                return Math.abs(exp - actualWt) > tol;
-              });
+            ) : isWeightWarning || detailItems.some(item => {
+              const ivItem = itemVerification[item.id];
+              const prod = products.find(p => p.id === item.product_id);
+              if (!prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
+              let actualWt = Number(ivItem.weight);
+              if (ivItem.weightUnit === 'g') actualWt /= 1000;
+              const q = Number(item.quantity) || 1;
+              const nom = Number((prod.standard_weight * q).toFixed(3));
+              const plusT = prod.weight_tolerance != null ? Number(prod.weight_tolerance) : (weightThreshold / q);
+              const minusT = prod.weight_tolerance_minus != null ? Number(prod.weight_tolerance_minus) : plusT;
+              const minW = Number((nom - (minusT * q)).toFixed(3));
+              const maxW = Number((nom + (plusT * q)).toFixed(3));
+              return actualWt < minW || actualWt > maxW;
             }) ? (
               <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-orange-500/15 border-2 border-amber-400 dark:border-amber-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
                 <div className="flex items-center gap-3">

@@ -45,6 +45,7 @@ class Product(Base):
     size = Column(String)
     standard_weight = Column(Numeric, default=0, nullable=True)
     weight_tolerance = Column(Numeric, nullable=True)
+    weight_tolerance_minus = Column(Numeric, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
 class Order(Base):

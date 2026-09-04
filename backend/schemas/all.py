@@ -82,6 +82,7 @@ class ProductBase(BaseModel):
     size: Optional[str] = None
     standard_weight: Optional[float] = 0
     weight_tolerance: Optional[float] = None
+    weight_tolerance_minus: Optional[float] = None
 
 class ProductCreate(ProductBase):
     pass

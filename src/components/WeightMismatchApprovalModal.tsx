@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { api, type Dispatch } from '@/lib/api';
+import { api, type Dispatch, type Product } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import {
   AlertTriangle, CheckCircle2, XCircle, Mic, Play, Pause, Volume2, VolumeX, Truck, User, Scale, ArrowRight, Clock, RefreshCw
@@ -24,6 +24,7 @@ export default function WeightMismatchApprovalModal({
   const [submitting, setSubmitting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [products, setProducts] = useState<Product[]>([]);
   
   // Audio Player State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -33,6 +34,12 @@ export default function WeightMismatchApprovalModal({
   const [isMuted, setIsMuted] = useState(false);
   const [audioError, setAudioError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      api.get<Product[]>('/products').then(setProducts).catch(() => {});
+    }
+  }, [isModalOpen]);
 
   useEffect(() => {
     // Reset player state when dispatch changes
@@ -198,10 +205,30 @@ export default function WeightMismatchApprovalModal({
               </span>
             </div>
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900/60 max-h-48 overflow-y-auto">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900/60 max-h-56 overflow-y-auto">
               {dispatch.items.map((it) => {
                 const itemDraft = dispatch.phase1_draft?.item_verification?.[it.id];
                 const enteredWeight = itemDraft?.weight ? `${itemDraft.weight} ${itemDraft.weightUnit || 'kg'}` : null;
+                const prod = products.find(p => p.id === it.product_id);
+                const q = Number(it.quantity) || 1;
+                const stdW = Number(prod?.standard_weight) || 0;
+                const hasStd = stdW > 0;
+                const nominal = Number((stdW * q).toFixed(3));
+                const plusT = prod?.weight_tolerance != null ? Number(prod.weight_tolerance) : 0;
+                const minusT = prod?.weight_tolerance_minus != null ? Number(prod.weight_tolerance_minus) : plusT;
+                const minW = Number((nominal - (minusT * q)).toFixed(3));
+                const maxW = Number((nominal + (plusT * q)).toFixed(3));
+
+                let actualNum = 0;
+                let isOut = false;
+                if (enteredWeight && itemDraft?.weight) {
+                  let wt = Number(itemDraft.weight);
+                  if (itemDraft.weightUnit === 'g') wt /= 1000;
+                  actualNum = Number(wt.toFixed(3));
+                  if (hasStd && (actualNum < minW || actualNum > maxW)) {
+                    isOut = true;
+                  }
+                }
 
                 return (
                   <div key={it.id} className="p-3 flex flex-wrap items-center justify-between gap-2 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
@@ -209,16 +236,25 @@ export default function WeightMismatchApprovalModal({
                       <p className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
                         {it.product_name}
                       </p>
-                      <span className="text-xs text-slate-500">
-                        Qty: <strong className="text-slate-700 dark:text-slate-300">{it.quantity} {it.unit || 'nos'}</strong>
-                      </span>
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 flex-wrap">
+                        <span>Qty: <strong className="text-slate-700 dark:text-slate-300">{it.quantity} {it.unit || 'nos'}</strong></span>
+                        {hasStd && (
+                          <span className="font-mono text-[11px] text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.5 rounded">
+                            Range: {minW.toFixed(3)}–{maxW.toFixed(3)} kg
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
                       {enteredWeight ? (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-black text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 px-2.5 py-1 rounded-lg shadow-sm">
-                            Entered: {enteredWeight}
+                          <span className={`text-xs font-black px-2.5 py-1 rounded-lg shadow-sm ${
+                            isOut
+                              ? 'text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800'
+                              : 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800'
+                          }`}>
+                            Scale: {enteredWeight} {isOut && hasStd ? (actualNum < minW ? `(${Number((minW - actualNum).toFixed(3))}kg < min)` : `(${Number((actualNum - maxW).toFixed(3))}kg > max)`) : '✓'}
                           </span>
                         </div>
                       ) : (

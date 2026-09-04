@@ -88,6 +88,7 @@ export type Product = {
   size: string | null;
   standard_weight?: number;
   weight_tolerance?: number | null;
+  weight_tolerance_minus?: number | null;
   created_at: string;
 };
 
