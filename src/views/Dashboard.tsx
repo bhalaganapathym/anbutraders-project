@@ -323,7 +323,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         allQuickAccessMap.dispatches,
         allQuickAccessMap.delivery,
         allQuickAccessMap.products,
-        allQuickAccessMap.pricelist,
       ];
     }
     if (role === 'billing' || role === 'cashier') {
