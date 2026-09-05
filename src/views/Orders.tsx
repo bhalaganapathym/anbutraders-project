@@ -11,6 +11,7 @@ import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice, round2 } from '@/lib/pricing';
 import html2canvas from 'html2canvas';
 import { openWhatsApp } from '@/lib/whatsapp';
+import { EstimateBillImage } from '@/components/EstimateBillImage';
 
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type OrderItemWithProduct = OrderItem & { product: Product | null };
@@ -196,6 +197,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
         totalAmount += pricing.totalPrice;
         totalWeight += pricing.totalWeight;
       });
+      totalAmount = round2(totalAmount + Number(order.unloading_charge || 0) + Number(order.transport_charge || 0));
 
       return new Promise((resolve) => {
         canvas.toBlob((blob) => {
@@ -1441,123 +1443,12 @@ _Please find attached the official estimate bill image._
 
         return (
           <div className="fixed top-[-9999px] left-[-9999px]">
-            <div ref={estimatePrintRef} className="w-[794px] bg-white text-black p-8 text-xs font-sans border-2 border-black space-y-4">
-              {/* Header */}
-              <div className="flex justify-between items-start border-b-2 border-black pb-3">
-                <div className="flex items-center gap-3.5">
-                  <img
-                    src="/pwa-192x192.png"
-                    alt="Anbu Traders Logo"
-                    className="h-16 w-16 object-contain rounded-lg border border-black/20 p-0.5"
-                    crossOrigin="anonymous"
-                  />
-                  <div>
-                    <h1 className="text-2xl font-black tracking-wide text-black uppercase">ANBU TRADERS</h1>
-                    <p className="text-[11px] font-semibold text-gray-800">No.4/5 Pondy Mailam Road, T.C.Kootroad</p>
-                    <p className="text-[11px] font-semibold text-gray-800">Vanur T.K 605 111 | Ph: 0413-2964204, 9626325204</p>
-                    <p className="text-[11px] font-semibold text-gray-800">State Name : Tamil Nadu, Code : 33</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <h2 className="text-lg font-black border-2 border-black px-3 py-0.5 inline-block uppercase">ESTIMATE</h2>
-                  <p className="text-[10px] italic mt-1 text-gray-700">(CUSTOMER ESTIMATE COPY)</p>
-                  <p className="text-[11px] mt-2 font-bold"><strong>Estimate No:</strong> {targetEstimate?.order_no || targetEstimate?.id?.substring(0, 8).toUpperCase() || 'EST'}</p>
-                  <p className="text-[11px] font-bold"><strong>Date:</strong> {targetEstimate?.created_at ? new Date(targetEstimate.created_at).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}</p>
-                </div>
-              </div>
-
-              {/* Customer & Delivery Info */}
-              <div className="grid grid-cols-2 gap-4 border-b-2 border-black pb-3 text-[11px]">
-                <div className="pr-2 border-r border-gray-400">
-                  <p className="font-bold uppercase tracking-wider text-[10px] border-b border-gray-300 pb-1 mb-1 text-gray-700">Buyer (Bill to)</p>
-                  <p className="font-extrabold text-sm text-black">{targetEstimate?.customer?.name || 'Customer'}</p>
-                  <p className="font-semibold">{targetEstimate?.delivery_address || '—'}</p>
-                  <p className="font-semibold">Ph: {targetEstimate?.customer?.phone || '—'}</p>
-                </div>
-                <div className="pl-2">
-                  <p className="font-bold uppercase tracking-wider text-[10px] border-b border-gray-300 pb-1 mb-1 text-gray-700">Delivery & Site Info</p>
-                  <p className="font-semibold"><strong>Site:</strong> {targetEstimate?.delivery_address || 'Site Delivery'}</p>
-                  {targetEstimate?.notes && <p className="font-medium text-gray-700 italic mt-0.5">Note: {targetEstimate.notes}</p>}
-                  {targetEstimate?.is_advance_order && (
-                    <div className="mt-1.5 text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 rounded p-1.5 text-[10.5px]">
-                      <span>📦 Advance Booking — Scheduled Date: {targetEstimate.scheduled_delivery_date ? new Date(targetEstimate.scheduled_delivery_date).toLocaleDateString('en-IN') : '—'}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <table className="w-full border-collapse border-2 border-black text-[11px]">
-                <thead>
-                  <tr className="bg-gray-100 border-b-2 border-black font-extrabold">
-                    <th className="border border-black p-1.5 text-center w-10">SI</th>
-                    <th className="border border-black p-1.5 text-left">Description of Goods</th>
-                    <th className="border border-black p-1.5 text-center w-28">Quantity</th>
-                    <th className="border border-black p-1.5 text-center w-24">Weight (kg)</th>
-                    <th className="border border-black p-1.5 text-right w-24">Rate (₹)</th>
-                    <th className="border border-black p-1.5 text-right w-28">Amount (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {targetItems.map((it, idx) => {
-                    const prod = it.product || products.find((p) => p.id === it.product_id);
-                    const pricing = calculateProductPrice(prod, it.quantity || 1);
-                    return (
-                      <tr key={it.id || idx}>
-                        <td className="border border-black p-1.5 text-center font-medium">{idx + 1}</td>
-                        <td className="border border-black p-1.5 font-bold uppercase">{prod?.name ?? 'Item'}</td>
-                        <td className="border border-black p-1.5 text-center font-semibold">{it.quantity} {it.unit ?? prod?.unit ?? 'nos'}</td>
-                        <td className="border border-black p-1.5 text-center font-semibold">{pricing.isSteel && pricing.totalWeight > 0 ? pricing.totalWeight.toFixed(2) : '—'}</td>
-                        <td className="border border-black p-1.5 text-right font-medium">
-                          {pricing.isSteel ? `${pricing.ratePerKg.toFixed(2)}/kg` : pricing.unitPrice.toFixed(2)}
-                        </td>
-                        <td className="border border-black p-1.5 text-right font-black">{pricing.totalPrice.toFixed(2)}</td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="font-extrabold border-t-2 border-black bg-gray-100">
-                    <td colSpan={3} className="border border-black p-2 text-right uppercase text-xs">Total:</td>
-                    <td className="border border-black p-2 text-center text-xs font-bold">{targetTotalWeight > 0 ? `${targetTotalWeight.toFixed(2)} kg` : '—'}</td>
-                    <td className="border border-black p-2 text-right uppercase text-xs">Grand Total:</td>
-                    <td className="border border-black p-2 text-right text-sm font-black">₹{targetTotalAmount.toFixed(2)}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Amount in words & Advance Info */}
-              <div className="space-y-2 pt-1 text-[11px]">
-                <p className="font-semibold"><strong>Amount Chargeable (in words):</strong> {numberToWords(targetTotalAmount)}</p>
-
-                {targetEstimate?.is_advance_order && (
-                  <div className="grid grid-cols-3 gap-2 border-2 border-black p-2.5 my-2 bg-gray-50 text-[11px]">
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-600 uppercase">Estimated Total</p>
-                      <p className="font-black text-sm text-black">₹{targetTotalAmount.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-600 uppercase">Advance Paid</p>
-                      <p className="font-black text-sm text-emerald-800">₹{Number(targetEstimate.advance_paid_amount || 0).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-600 uppercase">Balance Due</p>
-                      <p className="font-black text-sm text-rose-800">₹{Math.max(0, targetTotalAmount - Number(targetEstimate.advance_paid_amount || 0)).toFixed(2)}</p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-between items-end pt-4 border-t border-black text-[10px]">
-                  <div>
-                    <p className="italic text-gray-600">Declaration: We declare that this estimate shows the actual estimated price of</p>
-                    <p className="italic text-gray-600">the goods described and that all particulars are true and correct.</p>
-                  </div>
-                  <div className="text-center font-bold">
-                    <p className="uppercase text-black">for ANBU TRADERS</p>
-                    <div className="h-10"></div>
-                    <p className="border-t border-black pt-1">Authorised Signatory</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <EstimateBillImage
+              ref={estimatePrintRef}
+              order={targetEstimate}
+              items={targetItems}
+              products={products}
+            />
           </div>
         );
       })()}

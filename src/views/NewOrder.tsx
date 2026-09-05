@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { api, type Customer, type Product, type Order } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import {
   ArrowLeft, Search, Plus, Trash2, CheckCircle2, User, Phone, MapPin, 
   Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText, Mic, MicOff, Zap,
-  Calendar, DollarSign, Clock, Sparkles, Navigation
+  Calendar, DollarSign, Clock, Sparkles, Navigation, Image as ImageIcon, Download
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice, round2 } from '@/lib/pricing';
 import { parseAndCategorizeAddresses } from '@/lib/address';
+import { EstimateBillImage } from '@/components/EstimateBillImage';
+import html2canvas from 'html2canvas';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
 
@@ -469,6 +471,84 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     }
     const finalPhone = phone.length === 10 ? `91${phone}` : phone;
     window.open(`https://wa.me/${finalPhone}?text=${generateWhatsAppMessage()}`, '_blank');
+  };
+
+  const estimatePrintRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  const handleShareEstimateImage = async () => {
+    if (!selectedCustomer) {
+      toast('Please select a customer first', 'error');
+      return;
+    }
+    if (lines.length === 0) {
+      toast('Please add items to generate an estimate image', 'error');
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    try {
+      if (!estimatePrintRef.current) {
+        toast('Estimate preview not ready', 'error');
+        setIsGeneratingImage(false);
+        return;
+      }
+
+      const canvas = await html2canvas(estimatePrintRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+
+      const blob: Blob | null = await new Promise((resolve) => {
+        canvas.toBlob((b) => resolve(b), 'image/png', 1.0);
+      });
+
+      if (!blob) {
+        toast('Failed to render estimate image', 'error');
+        setIsGeneratingImage(false);
+        return;
+      }
+
+      const estNo = nextOrderId || 'EST';
+      const fileName = `Estimate_${estNo}.png`;
+      const imageFile = new File([blob], fileName, { type: 'image/png' });
+
+      // If Web Share API is available with file support (mobile Android/iOS)
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+        try {
+          await navigator.share({
+            title: `Estimate ${estNo} — Anbu Traders`,
+            text: `🧾 Estimate Bill ${estNo} for ${selectedCustomer.name}\nTotal: ₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\nANBU TRADERS`,
+            files: [imageFile],
+          });
+          toast('Estimate image shared successfully', 'success');
+          setIsGeneratingImage(false);
+          return;
+        } catch (e: any) {
+          if (e.name !== 'AbortError') {
+            console.warn('Share error fallback:', e);
+          }
+        }
+      }
+
+      // Fallback: Download file directly
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('Estimate image downloaded! You can attach it in WhatsApp.', 'success');
+    } catch (err: any) {
+      console.error('Error generating estimate image:', err);
+      toast('Failed to generate estimate image', 'error');
+    } finally {
+      setIsGeneratingImage(false);
+    }
   };
 
   const handleSaveOrder = async () => {
@@ -1454,28 +1534,60 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
              <div className="text-lg font-bold text-blue-600">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           </div>
 
-          <div className="flex w-full sm:w-auto items-center gap-3">
+          <div className="flex w-full sm:w-auto items-center gap-2.5 flex-wrap">
+            <button 
+              type="button"
+              onClick={handleShareEstimateImage}
+              disabled={isGeneratingImage || !selectedCustomer || lines.length === 0}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
+              title="Share or Download Official Estimate Image"
+            >
+              <ImageIcon size={18} />
+              <span>{isGeneratingImage ? 'Rendering...' : 'Estimate Image'}</span>
+            </button>
             <button 
               type="button"
               onClick={handleWhatsApp}
               disabled={!selectedCustomer || lines.length === 0}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl border border-[#25D366]/30 bg-[#25D366]/10 px-5 py-3 font-bold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl border border-[#25D366]/30 bg-[#25D366]/10 px-4 py-3 font-bold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
               title="Share estimate via WhatsApp"
             >
-              <MessageCircle size={20} />
+              <MessageCircle size={18} />
               <span>WhatsApp</span>
             </button>
             <button 
               type="button"
               onClick={handleSaveOrder}
               disabled={saving || !selectedCustomer || lines.length === 0}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-3 font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save Order'}
             </button>
           </div>
 
         </div>
+      </div>
+
+      {/* Hidden container for rendering crisp estimate image */}
+      <div className="fixed top-[-9999px] left-[-9999px]">
+        <EstimateBillImage
+          ref={estimatePrintRef}
+          order={{
+            order_no: nextOrderId,
+            created_at: new Date().toISOString(),
+            customer: selectedCustomer,
+            delivery_address: deliveryAddress,
+            unloading_charge: unloadingNum,
+            transport_charge: transportNum,
+            is_advance_order: isAdvanceOrder,
+            advance_paid_amount: parseFloat(advancePaidAmount) || 0,
+            advance_payment_method: advancePaymentMethod,
+            scheduled_delivery_date: scheduledDeliveryDate,
+            advance_notes: advanceNotes
+          }}
+          items={lines}
+          products={products}
+        />
       </div>
     </div>
   );
