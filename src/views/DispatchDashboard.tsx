@@ -1432,30 +1432,19 @@ export default function DispatchDashboard({
                 <div className="col-span-2">
                   <div className="flex items-center justify-between mb-1">
                     <label className="label mb-0">Remarks / Delivery Instructions</label>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={startSpeechDictation}
-                        disabled={isCompleted || isListeningSpeech}
-                        className={`text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 transition ${
-                          isListeningSpeech
-                            ? 'bg-rose-100 text-rose-600 animate-pulse'
-                            : 'text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50'
-                        }`}
-                        title="Dictate in Tamil or English (Speech to Text)"
-                      >
-                        <Mic size={13} /> {isListeningSpeech ? 'Listening...' : 'Voice Type'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setVoiceModalOpen(true)}
-                        disabled={isCompleted}
-                        className="text-xs font-bold px-2.5 py-1 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 flex items-center gap-1 transition"
-                        title="Record a voice note"
-                      >
-                        <Volume2 size={13} /> Voice Note
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={startSpeechDictation}
+                      disabled={isCompleted || isListeningSpeech}
+                      className={`text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 transition ${
+                        isListeningSpeech
+                          ? 'bg-rose-100 text-rose-600 animate-pulse'
+                          : 'text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50'
+                      }`}
+                      title="Dictate in Tamil or English (Speech to Text)"
+                    >
+                      <Mic size={13} /> {isListeningSpeech ? 'Listening...' : 'Voice Type'}
+                    </button>
                   </div>
                   <textarea 
                     value={remarks}
