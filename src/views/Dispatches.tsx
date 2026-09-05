@@ -18,6 +18,7 @@ import WeightMismatchApprovalModal from '@/components/WeightMismatchApprovalModa
 import { openWhatsApp, buildDispatchWhatsAppMessage } from '@/lib/whatsapp';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice, round2 } from '@/lib/pricing';
+import { useBackTrap } from '@/lib/useBackTrap';
 
 type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string; order_no?: string } };
 type ConfirmedOrder = Order & { customer: { name: string; phone: string | null; address?: string | null } | null };
@@ -270,6 +271,8 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
       toast('Failed to delete estimate', 'error');
     }
   };
+
+  useBackTrap(!!detail, () => setDetail(null), 'dispatch_dashboard');
 
   if (detail) {
     return <DispatchDashboard detail={detail} onClose={() => setDetail(null)} onRefresh={load} />;

@@ -189,28 +189,33 @@ function AppContent() {
     } catch {}
     setSidebarOpen(false);
     if (pushHistory && typeof window !== 'undefined') {
-      window.history.pushState({ view: v }, '', `#${v}`);
+      window.history.pushState({ view: v, isAppView: true }, '', `#${v}`);
     }
   };
 
-  // Handle hardware Back button and PopState for seamless PWA navigation
+  // Handle hardware Back button and PopState for seamless PWA navigation & Exit Trap
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    if (!window.history.state?.view) {
-      window.history.replaceState({ view: activeView }, '', `#${activeView}`);
+    // Ensure root anchor base is established on mount
+    if (!window.history.state || (!window.history.state.isAppView && !window.history.state.isTrap)) {
+      window.history.replaceState({ isRootBase: true }, '', window.location.pathname + window.location.search);
+      window.history.pushState({ view: activeView, isAppView: true }, '', `#${activeView}`);
     }
 
     const handlePopState = (e: PopStateEvent) => {
-      if (e.state?.view) {
+      // If event was an overlay/modal back-trap, let the trap handler process it
+      if (e.state?.isTrap) return;
+
+      if (e.state?.view && e.state.isAppView) {
         setView(e.state.view);
         try {
           localStorage.setItem('current_view', e.state.view);
         } catch {}
       } else {
-        // At the root/bottom of the navigation stack -> prompt exit confirmation
+        // We reached the root base / boundary -> prompt exit confirmation and keep user in app
         setShowExitModal(true);
-        window.history.pushState({ view: activeView }, '', `#${activeView}`);
+        window.history.pushState({ view: activeView, isAppView: true }, '', `#${activeView}`);
       }
     };
 
@@ -249,6 +254,7 @@ function AppContent() {
         onClose={() => setShowExitModal(false)}
         title={lang === 'ta' ? 'செயலியிலிருந்து வெளியேறவா?' : 'Exit Anbu Traders?'}
         size="sm"
+        disableBackTrap={true}
       >
         <div className="space-y-4 py-2">
           <div className="flex items-start gap-3 p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/60 text-amber-950 dark:text-amber-200">

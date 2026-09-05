@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useBackTrap } from '@/lib/useBackTrap';
 
 type ModalProps = {
   open: boolean;
@@ -7,6 +8,7 @@ type ModalProps = {
   title: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  disableBackTrap?: boolean;
 };
 
 const sizeClasses: Record<NonNullable<ModalProps['size']>, string> = {
@@ -16,7 +18,9 @@ const sizeClasses: Record<NonNullable<ModalProps['size']>, string> = {
   xl: 'max-w-4xl',
 };
 
-export default function Modal({ open, onClose, title, children, size = 'md' }: ModalProps) {
+export default function Modal({ open, onClose, title, children, size = 'md', disableBackTrap = false }: ModalProps) {
+  useBackTrap(open && !disableBackTrap, onClose, 'modal');
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
