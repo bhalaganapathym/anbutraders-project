@@ -314,19 +314,32 @@ def adjust_brand_prices(
         raise HTTPException(status_code=404, detail=f"No products found for brand '{req.brand}'")
     
     from decimal import Decimal
-    delta = Decimal(str(req.price_delta))
     updated_count = 0
-    for p in brand_products:
-        curr_price = p.price or Decimal("0")
-        cat = (p.category or "").lower()
-        if ("steel" in cat or "tmt" in cat) and p.standard_weight and p.standard_weight > 0:
-            std_weight = Decimal(str(p.standard_weight))
-            price_change = delta * std_weight
-        else:
-            price_change = delta
-            
-        p.price = max(Decimal("0"), curr_price + price_change)
-        updated_count += 1
+
+    if req.todays_rate_per_kg is not None and req.todays_rate_per_kg > 0:
+        rate = Decimal(str(req.todays_rate_per_kg))
+        for p in brand_products:
+            cat = (p.category or "").lower()
+            if ("steel" in cat or "tmt" in cat) and p.standard_weight and p.standard_weight > 0:
+                std_weight = Decimal(str(p.standard_weight))
+                p.price = max(Decimal("0"), round(rate * std_weight, 2))
+            else:
+                p.price = rate
+            updated_count += 1
+    elif req.price_delta is not None and req.price_delta != 0:
+        delta = Decimal(str(req.price_delta))
+        for p in brand_products:
+            curr_price = p.price or Decimal("0")
+            cat = (p.category or "").lower()
+            if ("steel" in cat or "tmt" in cat) and p.standard_weight and p.standard_weight > 0:
+                std_weight = Decimal(str(p.standard_weight))
+                price_change = delta * std_weight
+            else:
+                price_change = delta
+            p.price = max(Decimal("0"), curr_price + price_change)
+            updated_count += 1
+    else:
+        raise HTTPException(status_code=400, detail="Either todays_rate_per_kg or price_delta must be provided")
         
     db.commit()
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "products"})
@@ -402,20 +415,27 @@ def create_order(
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
         
-    # Auto-save delivery address to customer profile & recommended list
+    # Auto-save delivery address and default charges to customer profile
     customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
     cust_name = customer.name if customer else "Unknown Customer"
     
-    if customer and order.delivery_address and order.delivery_address.strip():
-        clean_addr = order.delivery_address.strip()
-        curr_addrs = list(customer.delivery_addresses or [])
-        if customer.address and customer.address.strip() and customer.address.strip() not in curr_addrs:
-            curr_addrs.insert(0, customer.address.strip())
-        if clean_addr not in curr_addrs:
-            curr_addrs.append(clean_addr)
-            customer.delivery_addresses = curr_addrs
-            if not customer.address or not customer.address.strip():
-                customer.address = clean_addr
+    if customer:
+        if order.delivery_address and order.delivery_address.strip():
+            clean_addr = order.delivery_address.strip()
+            curr_addrs = list(customer.delivery_addresses or [])
+            if customer.address and customer.address.strip() and customer.address.strip() not in curr_addrs:
+                curr_addrs.insert(0, customer.address.strip())
+            if clean_addr not in curr_addrs:
+                curr_addrs.append(clean_addr)
+                customer.delivery_addresses = curr_addrs
+                if not customer.address or not customer.address.strip():
+                    customer.address = clean_addr
+        if order_in.unloading_charge is not None:
+            customer.default_unloading_charge = order_in.unloading_charge
+        if order_in.transport_charge is not None:
+            customer.default_transport_charge = order_in.transport_charge
+        if order_in.transport_charge_type:
+            customer.default_transport_charge_type = order_in.transport_charge_type
 
     # Build item summary and total estimate value for push notification
     items_desc = []
@@ -588,16 +608,23 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
     for item in order_in.items:
         db.add(OrderItem(order_id=order.id, **item.model_dump()))
         
-    # Auto-save delivery address to customer profile & recommended list
+    # Auto-save delivery address and default charges to customer profile
     customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
-    if customer and order.delivery_address and order.delivery_address.strip():
-        clean_addr = order.delivery_address.strip()
-        curr_addrs = list(customer.delivery_addresses or [])
-        if customer.address and customer.address.strip() and customer.address.strip() not in curr_addrs:
-            curr_addrs.insert(0, customer.address.strip())
-        if clean_addr not in curr_addrs:
-            curr_addrs.append(clean_addr)
-            customer.delivery_addresses = curr_addrs
+    if customer:
+        if order.delivery_address and order.delivery_address.strip():
+            clean_addr = order.delivery_address.strip()
+            curr_addrs = list(customer.delivery_addresses or [])
+            if customer.address and customer.address.strip() and customer.address.strip() not in curr_addrs:
+                curr_addrs.insert(0, customer.address.strip())
+            if clean_addr not in curr_addrs:
+                curr_addrs.append(clean_addr)
+                customer.delivery_addresses = curr_addrs
+        if order_in.unloading_charge is not None:
+            customer.default_unloading_charge = order_in.unloading_charge
+        if order_in.transport_charge is not None:
+            customer.default_transport_charge = order_in.transport_charge
+        if order_in.transport_charge_type:
+            customer.default_transport_charge_type = order_in.transport_charge_type
 
     if old_status != "confirmed" and order.status == "confirmed":
         customer_name = customer.name if customer else "Unknown"

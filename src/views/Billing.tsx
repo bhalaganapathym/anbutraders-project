@@ -177,16 +177,29 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     selectedDispatch?.discount_approval_status === 'approved' &&
     Number(selectedDispatch?.discount_amount || 0) > 0;
 
+  // Auto-fill charges from dispatch order or customer defaults
+  useEffect(() => {
+    if (!selectedDispatch) return;
+    const cust = customers.find(c => c.id === selectedDispatch.customer_id) || selectedDispatch.customer;
+    const orderUnloading = (selectedDispatch as any).order?.unloading_charge ?? cust?.default_unloading_charge ?? 0;
+    const orderTransport = (selectedDispatch as any).order?.transport_charge ?? cust?.default_transport_charge ?? 0;
+    if (orderUnloading > 0 && !unloadingCharge) setUnloadingCharge(String(orderUnloading));
+    if (orderTransport > 0 && !deliveryCharge) setDeliveryCharge(String(orderTransport));
+  }, [selectedDispatch, customers]);
+
   // Auto-calculate amounts when selectedDispatch or paymentMethod changes
   useEffect(() => {
     if (!selectedDispatch) return;
     const isApproved = selectedDispatch.discount_approval_status === 'approved' && Number(selectedDispatch.discount_amount || 0) > 0;
-    const total = round2(
+    const uChargeVal = parseFloat(unloadingCharge) || 0;
+    const dChargeVal = parseFloat(deliveryCharge) || 0;
+    const itemsTotal = round2(
       selectedDispatch.items?.reduce((sum, item) => {
         const p = isApproved ? (item.price ?? (item.original_price ?? 0)) : (item.original_price ?? (item.price ?? 0));
         return sum + round2(p * (item.quantity || 1));
       }, 0) || 0
     );
+    const total = round2(itemsTotal + uChargeVal + dChargeVal);
     
     if (paymentMethod === 'full payment done') {
       setPaidAmount(total.toFixed(2));
@@ -209,7 +222,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         setToCollectAmount(total.toFixed(2));
       }
     }
-  }, [selectedDispatch, paymentMethod]);
+  }, [selectedDispatch, paymentMethod, unloadingCharge, deliveryCharge]);
 
   const handlePaidAmountChange = (val: string) => {
     setPaidAmount(val);

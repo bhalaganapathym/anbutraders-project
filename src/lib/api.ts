@@ -74,6 +74,9 @@ export type Customer = {
   credit_days?: number | null;
   credit_days_remaining?: number | null;
   credit_status?: 'overdue' | 'due_today' | 'active' | 'clear' | 'dues_no_date' | string;
+  default_unloading_charge?: number | null;
+  default_transport_charge?: number | null;
+  default_transport_charge_type?: string | null;
   created_at: string;
 };
 
@@ -89,6 +92,9 @@ export type Product = {
   standard_weight?: number;
   weight_tolerance?: number | null;
   weight_tolerance_minus?: number | null;
+  bundle_conversion_qty?: number | null;
+  is_aac_block?: boolean | null;
+  piece_weight_kg?: number | null;
   created_at: string;
 };
 
@@ -105,6 +111,10 @@ export type Order = {
   advance_payment_method?: string | null;
   advance_notes?: string | null;
   advance_status?: 'pending' | 'ready_for_dispatch' | 'dispatched' | string;
+  unloading_charge?: number | null;
+  transport_charge?: number | null;
+  transport_charge_type?: string | null;
+  total_weight_kg?: number | null;
   created_at: string;
   confirmed_at?: string | null;
   items?: OrderItem[];

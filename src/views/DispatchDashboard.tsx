@@ -8,7 +8,7 @@ import {
   Mic, MicOff, Play, Pause, RotateCcw, Volume2, Clock, AlertTriangle, Upload, Eye
 } from 'lucide-react';
 import Modal from '@/components/Modal';
-import { round2 } from '@/lib/pricing';
+import { round2, formatBundleQuantity } from '@/lib/pricing';
 
 type DispatchRow = Dispatch & { customer: { name: string; phone: string | null } | null; order?: { confirmed_at?: string; order_no?: string } };
 
@@ -74,6 +74,14 @@ const isCementProduct = (prod: Product | undefined, item: DispatchItem) => {
   const name = (item.product_name || '').toLowerCase();
   const unit = (item.unit || '').toLowerCase();
   return cat === 'CEMENT' || name.includes('cement');
+};
+
+const isAacBlockProduct = (prod: Product | undefined, item: DispatchItem) => {
+  return (
+    prod?.is_aac_block === true ||
+    (prod?.category || '').toUpperCase().includes('AAC') ||
+    (item.product_name || '').toLowerCase().includes('aac')
+  );
 };
 
 const isCementMatch = (enteredText: string | undefined, expectedQty: number) => {
@@ -359,7 +367,8 @@ export default function DispatchDashboard({
       const isWeightDiff = isWeightWarning || detail.mismatch_approval_status === 'pending' || detailItems.some(item => {
         const ivItem = itemVerification[item.id];
         const prod = products.find(p => p.id === item.product_id);
-        if (!prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
+        const isAac = isAacBlockProduct(prod, item);
+        if (isAac || !prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
         let actualWt = Number(ivItem.weight);
         if (ivItem.weightUnit === 'g') actualWt /= 1000;
         const q = Number(item.quantity) || 1;
@@ -521,13 +530,14 @@ export default function DispatchDashboard({
 
   detailItems.forEach(item => {
     const prod = products.find(p => p.id === item.product_id);
-    if (prod && prod.standard_weight) {
+    const isAac = isAacBlockProduct(prod, item);
+    if (prod && prod.standard_weight && !isAac) {
       estimatedTotal += round2(prod.standard_weight * item.quantity);
     }
     
     if (itemVerification[item.id]) {
       const iv = itemVerification[item.id];
-      if (iv.weight) {
+      if (iv.weight && !isAac) {
         let wt = Number(iv.weight);
         if (iv.weightUnit === 'g') wt = wt / 1000;
         actualTotal += round2(wt);
@@ -562,7 +572,8 @@ export default function DispatchDashboard({
   const allVerified = detailItems.every(item => {
     const iv = itemVerification[item.id];
     const prod = products.find(p => p.id === item.product_id);
-    const requiresWeight = prod?.standard_weight ? prod.standard_weight > 0 : false;
+    const isAac = isAacBlockProduct(prod, item);
+    const requiresWeight = !isAac && (prod?.standard_weight ? prod.standard_weight > 0 : false);
     const isCement = isCementProduct(prod, item);
 
     if (requiresWeight) {
@@ -771,7 +782,8 @@ export default function DispatchDashboard({
             {detailItems.map((item) => {
               const iv = itemVerification[item.id] || { weight: '', weightUnit: 'kg', photoFile: null, photoPreview: null, verified: false };
               const prod = products.find(p => p.id === item.product_id);
-              const requiresWeight = prod?.standard_weight ? prod.standard_weight > 0 : false;
+              const isAac = isAacBlockProduct(prod, item);
+              const requiresWeight = !isAac && (prod?.standard_weight ? prod.standard_weight > 0 : false);
               const isCement = isCementProduct(prod, item);
               const cementQty = Math.round(Number(item.quantity) || 1);
               const isCementCorrect = isCement && isCementMatch(iv.cementText, cementQty);
@@ -832,9 +844,27 @@ export default function DispatchDashboard({
                   
                   {/* Left: Info (3 cols) */}
                   <div className="lg:col-span-3 flex flex-col justify-center">
-                    <p className="font-bold text-slate-800 dark:text-white text-base">{item.product_name}</p>
-                    <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
-                      <span>Qty: <strong className="text-slate-700 dark:text-slate-300">{item.quantity} {item.unit}</strong></span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-bold text-slate-800 dark:text-white text-base">{item.product_name}</p>
+                      {isAac && (
+                        <span className="badge bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                          🧱 AAC Block
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-slate-500 flex-wrap">
+                      {prod?.bundle_conversion_qty && prod.bundle_conversion_qty > 1 ? (
+                        <div className="flex flex-col">
+                          <span className="font-black text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 text-xs">
+                            📦 {formatBundleQuantity(Number(item.quantity) || 0, prod.bundle_conversion_qty).formatted}
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-0.5">
+                            (1 bundle = {prod.bundle_conversion_qty} nos)
+                          </span>
+                        </div>
+                      ) : (
+                        <span>Qty: <strong className="text-slate-700 dark:text-slate-300">{item.quantity} {item.unit}</strong></span>
+                      )}
                       {prod?.brand && <span className="badge bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs">{prod.brand}</span>}
                     </div>
                   </div>
@@ -1224,7 +1254,8 @@ export default function DispatchDashboard({
           ) : isWeightWarning || detailItems.some(item => {
             const ivItem = itemVerification[item.id];
             const prod = products.find(p => p.id === item.product_id);
-            if (!prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
+            const isAac = isAacBlockProduct(prod, item);
+            if (isAac || !prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
             let actualWt = Number(ivItem.weight);
             if (ivItem.weightUnit === 'g') actualWt /= 1000;
             const q = Number(item.quantity) || 1;

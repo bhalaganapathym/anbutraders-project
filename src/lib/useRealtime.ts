@@ -24,7 +24,7 @@ export function useRealtime(table: string, onChange: () => void) {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.event === 'postgres_changes' && data.table === table) {
+          if (table === '*' || (data.event === 'postgres_changes' && data.table === table)) {
             onChangeRef.current();
           }
         } catch (e) {

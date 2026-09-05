@@ -73,6 +73,17 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     orderToEdit?.advance_notes || ''
   );
   
+  // Unloading & Transport Charges State
+  const [unloadingCharge, setUnloadingCharge] = useState<string>(
+    orderToEdit?.unloading_charge ? String(orderToEdit.unloading_charge) : ''
+  );
+  const [transportCharge, setTransportCharge] = useState<string>(
+    orderToEdit?.transport_charge ? String(orderToEdit.transport_charge) : ''
+  );
+  const [transportChargeType, setTransportChargeType] = useState<string>(
+    orderToEdit?.transport_charge_type || 'fixed'
+  );
+
   // Order Items
   const [lines, setLines] = useState<Line[]>([]);
   const [draftStatus, setDraftStatus] = useState<'Saved' | 'Saving...'>('Saved');
@@ -95,10 +106,30 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       if (orderToEdit) {
         if (orderToEdit.customer_id) {
           const cust = (c as Customer[]).find(x => x.id === orderToEdit.customer_id);
-          if (cust) setSelectedCustomer(cust);
+          if (cust) {
+            setSelectedCustomer(cust);
+            if (cust.default_unloading_charge && !orderToEdit.unloading_charge) {
+              setUnloadingCharge(String(cust.default_unloading_charge));
+            }
+            if (cust.default_transport_charge && !orderToEdit.transport_charge) {
+              setTransportCharge(String(cust.default_transport_charge));
+            }
+            if (cust.default_transport_charge_type && !orderToEdit.transport_charge_type) {
+              setTransportChargeType(cust.default_transport_charge_type);
+            }
+          }
         }
         if (orderToEdit.delivery_address) {
           setDeliveryAddress(orderToEdit.delivery_address);
+        }
+        if (orderToEdit.unloading_charge) {
+          setUnloadingCharge(String(orderToEdit.unloading_charge));
+        }
+        if (orderToEdit.transport_charge) {
+          setTransportCharge(String(orderToEdit.transport_charge));
+        }
+        if (orderToEdit.transport_charge_type) {
+          setTransportChargeType(orderToEdit.transport_charge_type);
         }
         if (orderToEdit.is_advance_order) {
           setIsAdvanceOrder(true);
@@ -307,6 +338,24 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     setLines(lines.filter(l => l.product_id !== pid));
   };
 
+  const selectCustomer = (c: Customer) => {
+    setSelectedCustomer(c);
+    setCustomerSearch('');
+    setIsCustomerSearchFocused(false);
+    if (c.address && (!deliveryAddress || useCustomerAddress)) {
+      setDeliveryAddress(c.address);
+    }
+    if (c.default_unloading_charge !== undefined && c.default_unloading_charge !== null && Number(c.default_unloading_charge) > 0) {
+      setUnloadingCharge(String(c.default_unloading_charge));
+    }
+    if (c.default_transport_charge !== undefined && c.default_transport_charge !== null && Number(c.default_transport_charge) > 0) {
+      setTransportCharge(String(c.default_transport_charge));
+    }
+    if (c.default_transport_charge_type) {
+      setTransportChargeType(c.default_transport_charge_type);
+    }
+  };
+
   const handleCreateCustomer = async () => {
     if (!newCustomerName || !newCustomerPhone) {
       toast('Name and phone are required', 'error');
@@ -316,10 +365,13 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       const cust: any = await api.post('/customers', {
         name: newCustomerName,
         phone: newCustomerPhone,
-        address: newCustomerAddress
+        address: newCustomerAddress,
+        default_unloading_charge: round2(parseFloat(unloadingCharge) || 0),
+        default_transport_charge: round2(parseFloat(transportCharge) || 0),
+        default_transport_charge_type: transportChargeType
       });
       setCustomers([cust, ...customers]);
-      setSelectedCustomer(cust);
+      selectCustomer(cust);
       setIsCreatingCustomer(false);
       setNewCustomerName('');
       setNewCustomerPhone('');
@@ -337,10 +389,13 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     const p = calculateProductPrice(l.product, l.quantity);
     return acc + p.totalWeight;
   }, 0));
-  const grandTotal = round2(lines.reduce((acc, l) => {
+  const itemSubtotal = round2(lines.reduce((acc, l) => {
     const p = calculateProductPrice(l.product, l.quantity);
     return acc + p.totalPrice;
   }, 0));
+  const unloadingNum = round2(parseFloat(unloadingCharge) || 0);
+  const transportNum = round2(parseFloat(transportCharge) || 0);
+  const grandTotal = round2(itemSubtotal + unloadingNum + transportNum);
 
   // WhatsApp Integration
   const generateWhatsAppMessage = () => {
@@ -367,6 +422,19 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         msg += `   ${l.quantity} ${l.unit || l.product.unit} × ₹${p.unitPrice.toFixed(2)} = *₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
       }
     });
+    msg += `─────────────────────────────\n`;
+    msg += `*Items Subtotal:* ₹${itemSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+    if (unloadingNum > 0) {
+      msg += `📦 *Unloading Charge:* ₹${unloadingNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+    }
+    if (transportNum > 0) {
+      msg += `🚚 *Transport Charge:* ₹${transportNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+    }
+    if (estimatedWeight > 0) {
+      msg += `⚖️ *Est. Total Weight:* ${estimatedWeight.toFixed(2)} kg\n`;
+    }
+    msg += `💰 *Grand Total:* *₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
+
     if (isAdvanceOrder) {
       const advNum = parseFloat(advancePaidAmount) || 0;
       const balNum = Math.max(0, grandTotal - advNum);
@@ -425,6 +493,10 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         advance_payment_method: isAdvanceOrder ? advancePaymentMethod : null,
         advance_notes: isAdvanceOrder ? advanceNotes : null,
         advance_status: isAdvanceOrder ? 'pending' : null,
+        unloading_charge: unloadingNum,
+        transport_charge: transportNum,
+        transport_charge_type: transportChargeType,
+        total_weight_kg: estimatedWeight,
         items: lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, unit: l.unit }))
       };
       
@@ -581,11 +653,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                           <button
                             key={c.id}
                             className="flex w-full items-center justify-between p-3 text-left transition hover:bg-slate-50"
-                            onClick={() => {
-                              setSelectedCustomer(c);
-                              setCustomerSearch('');
-                              setIsCustomerSearchFocused(false);
-                            }}
+                            onClick={() => selectCustomer(c)}
                           >
                             <div>
                               <p className="text-sm font-medium text-slate-900">{c.name}</p>
@@ -1219,7 +1287,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             <div className="sticky top-24 rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
               <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">Order Summary</h2>
               
-              <div className="space-y-3 text-sm font-medium text-slate-600">
+              <div className="space-y-2.5 text-sm font-medium text-slate-600">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Total Items</span>
                   <span className="text-slate-900 font-bold">{totalItems}</span>
@@ -1231,6 +1299,45 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                 <div className="flex justify-between">
                   <span className="text-slate-500">Total Weight</span>
                   <span className="text-slate-900 font-bold">{estimatedWeight.toFixed(2)} kg</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-slate-100">
+                  <span className="text-slate-500">Items Subtotal</span>
+                  <span className="text-slate-900 font-bold">₹{itemSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+
+                {/* Unloading & Transport Charges Inputs */}
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <span className="flex items-center gap-1 text-slate-600">📦 Unloading Charge</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="10"
+                        placeholder="0.00"
+                        value={unloadingCharge}
+                        onChange={(e) => setUnloadingCharge(e.target.value)}
+                        className="w-20 text-right rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <span className="flex items-center gap-1 text-slate-600">🚚 Transport Charge</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="50"
+                        placeholder="0.00"
+                        value={transportCharge}
+                        onChange={(e) => setTransportCharge(e.target.value)}
+                        className="w-20 text-right rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
               

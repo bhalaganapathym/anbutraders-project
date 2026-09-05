@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ToastProvider } from '@/components/Toast';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import {
-  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut, Sun, Moon, Receipt, UserSquare, Settings as SettingsIcon, MapPin, DollarSign, Globe
+  LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut, Sun, Moon, Receipt, UserSquare, Settings as SettingsIcon, MapPin, DollarSign, Globe, RefreshCw, AlertTriangle, Power
 } from 'lucide-react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api } from '@/lib/api';
 import { useTranslation, translations } from '@/lib/i18n';
+import Modal from '@/components/Modal';
 import Dashboard from '@/views/Dashboard';
 import Customers from '@/views/Customers';
 import Products from '@/views/Products';
@@ -43,10 +44,17 @@ const navConfigs: NavConfig[] = [
 
 function AppContent() {
   const { user, logout } = useAuth();
-  const [view, setView] = useState('dashboard');
+  const [view, setView] = useState(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('current_view') : null;
+    return saved || 'dashboard';
+  });
   const [orderToEdit, setOrderToEdit] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncLabel, setSyncLabel] = useState('Just now');
   const [isPublicTrack, setIsPublicTrack] = useState(() => 
     typeof window !== 'undefined' && (window.location.hash.startsWith('#/track/') || window.location.hash.startsWith('#/receipt/'))
   );
@@ -78,6 +86,34 @@ function AppContent() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Live Sync ticker & Realtime updates
+  const handleRealtimeSync = useCallback(() => {
+    setLastSyncTime(new Date());
+    setIsSyncing(true);
+    setTimeout(() => setIsSyncing(false), 800);
+  }, []);
+
+  useRealtime('*', handleRealtimeSync);
+
+  useEffect(() => {
+    const updateSyncLabel = () => {
+      const diffSecs = Math.floor((Date.now() - lastSyncTime.getTime()) / 1000);
+      if (diffSecs < 10) {
+        setSyncLabel(lang === 'ta' ? 'இப்போது' : 'Just now');
+      } else if (diffSecs < 60) {
+        setSyncLabel(`${diffSecs}s ${lang === 'ta' ? 'முன்' : 'ago'}`);
+      } else if (diffSecs < 3600) {
+        const mins = Math.floor(diffSecs / 60);
+        setSyncLabel(`${mins}m ${lang === 'ta' ? 'முன்' : 'ago'}`);
+      } else {
+        setSyncLabel(lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      }
+    };
+    updateSyncLabel();
+    const interval = setInterval(updateSyncLabel, 5000);
+    return () => clearInterval(interval);
+  }, [lastSyncTime, lang]);
+
   const fetchUnread = async () => {
     try {
       if (!user) return;
@@ -101,6 +137,7 @@ function AppContent() {
         return true;
       });
       setUnreadCount(applicable.filter((n: any) => !n.read).length);
+      setLastSyncTime(new Date());
     } catch { }
   };
 
@@ -142,6 +179,45 @@ function AppContent() {
     }));
   }, [user, t]);
 
+  const defaultViewForRole = user?.role === 'driver' ? 'delivery' : 'dashboard';
+  const activeView = view === 'new_order' ? 'new_order' : (navItems.find((n) => n.id === view)?.id || navItems[0]?.id || defaultViewForRole);
+
+  const navigate = (v: string, pushHistory = true) => {
+    setView(v);
+    try {
+      localStorage.setItem('current_view', v);
+    } catch {}
+    setSidebarOpen(false);
+    if (pushHistory && typeof window !== 'undefined') {
+      window.history.pushState({ view: v }, '', `#${v}`);
+    }
+  };
+
+  // Handle hardware Back button and PopState for seamless PWA navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (!window.history.state?.view) {
+      window.history.replaceState({ view: activeView }, '', `#${activeView}`);
+    }
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state?.view) {
+        setView(e.state.view);
+        try {
+          localStorage.setItem('current_view', e.state.view);
+        } catch {}
+      } else {
+        // At the root/bottom of the navigation stack -> prompt exit confirmation
+        setShowExitModal(true);
+        window.history.pushState({ view: activeView }, '', `#${activeView}`);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeView]);
+
   // If customer is on public tracking URL, show PublicReceipt without login
   if (isPublicTrack) {
     return <PublicReceipt />;
@@ -150,14 +226,6 @@ function AppContent() {
   if (!user) {
     return <Login />;
   }
-
-  const defaultViewForRole = user.role === 'driver' ? 'delivery' : 'dashboard';
-  const activeView = view === 'new_order' ? 'new_order' : (navItems.find((n) => n.id === view)?.id || navItems[0]?.id || defaultViewForRole);
-
-  const navigate = (v: string) => {
-    setView(v);
-    setSidebarOpen(false);
-  };
 
   if (activeView === 'new_order') {
     return <NewOrder onBack={() => navigate('orders')} orderToEdit={orderToEdit} />;
@@ -174,6 +242,58 @@ function AppContent() {
   return (
     <div className="flex min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
       <GlobalNotificationAlert />
+      
+      {/* Exit App Confirmation Modal */}
+      <Modal
+        open={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        title={lang === 'ta' ? 'செயலியிலிருந்து வெளியேறவா?' : 'Exit Anbu Traders?'}
+        size="sm"
+      >
+        <div className="space-y-4 py-2">
+          <div className="flex items-start gap-3 p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/60 text-amber-950 dark:text-amber-200">
+            <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={22} />
+            <div className="space-y-1 text-xs sm:text-sm">
+              <p className="font-bold">
+                {lang === 'ta'
+                  ? 'நீங்கள் செயலியை விட்டு வெளியேற விரும்புகிறீர்களா?'
+                  : 'Are you sure you want to exit Anbu Traders?'}
+              </p>
+              <p className="text-amber-800 dark:text-amber-300 text-xs">
+                {lang === 'ta'
+                  ? 'உங்கள் மாற்றங்கள் அனைத்தும் சர்வரில் தானாக சேமிக்கப்பட்டுள்ளன.'
+                  : 'All your work and recent data are safely synchronized.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-2">
+            <button
+              onClick={() => setShowExitModal(false)}
+              className="btn-secondary px-4 py-2 text-xs sm:text-sm font-bold"
+            >
+              {lang === 'ta' ? 'தொடர்க (Stay)' : 'Stay in App'}
+            </button>
+            <button
+              onClick={() => {
+                setShowExitModal(false);
+                if (typeof window !== 'undefined') {
+                  if (window.history.length > 2) {
+                    window.history.go(-2);
+                  } else {
+                    window.location.href = 'about:blank';
+                  }
+                }
+              }}
+              className="btn-danger px-4 py-2 text-xs sm:text-sm font-bold flex items-center gap-1.5"
+            >
+              <Power size={15} />
+              {lang === 'ta' ? 'வெளியேறு (Exit)' : 'Exit App'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-transform duration-200 lg:static lg:translate-x-0 ${
@@ -215,19 +335,28 @@ function AppContent() {
           })}
         </nav>
         
-        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-4">
+        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-4 space-y-2">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user.username}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
             </div>
-            <button 
-              onClick={logout}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-rose-600 transition"
-              title={t('logout')}
-            >
-              <LogOut size={18} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowExitModal(true)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-amber-600 transition"
+                title="Exit Anbu Traders"
+              >
+                <Power size={18} />
+              </button>
+              <button 
+                onClick={logout}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-rose-600 transition"
+                title={t('logout')}
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -241,7 +370,7 @@ function AppContent() {
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
-        <header className="sticky top-0 z-20 flex shrink-0 h-14 sm:h-16 items-center gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 sm:px-4 backdrop-blur lg:px-8">
+        <header className="sticky top-0 z-20 flex shrink-0 h-14 sm:h-16 items-center gap-2 sm:gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 sm:px-4 backdrop-blur lg:px-8">
           <button
             onClick={() => setSidebarOpen(true)}
             className="btn-ghost p-2 lg:hidden text-slate-700 dark:text-slate-200"
@@ -250,30 +379,62 @@ function AppContent() {
             <Menu size={22} />
           </button>
           
-          <div className="flex items-center gap-2">
-            <h1 className="text-base sm:text-lg font-bold capitalize text-slate-800 dark:text-slate-100">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-sm sm:text-base lg:text-lg font-bold capitalize text-slate-800 dark:text-slate-100 truncate">
               {navItems.find((n) => n.id === activeView)?.label ?? t('dashboard')}
             </h1>
           </div>
 
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          {/* Real-time Last Sync Indicator */}
+          <div 
+            className="flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1 rounded-full bg-slate-100/90 dark:bg-slate-800/90 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-xs"
+            title={`Last sync with server: ${lastSyncTime.toLocaleTimeString()}`}
+          >
+            <span className={`h-2 w-2 rounded-full shrink-0 ${isSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
+            <span className="hidden md:inline text-slate-400 dark:text-slate-500">Sync:</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-200">{syncLabel}</span>
+            <button
+              onClick={() => {
+                setLastSyncTime(new Date());
+                setIsSyncing(true);
+                fetchUnread();
+                setTimeout(() => setIsSyncing(false), 800);
+              }}
+              className="ml-0.5 p-0.5 text-slate-400 hover:text-amber-600 transition rounded"
+              title="Click to Refresh Sync"
+            >
+              <RefreshCw size={11} className={isSyncing ? 'animate-spin text-amber-600' : ''} />
+            </button>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
             {/* Tamil / English Switch */}
             <button
               onClick={() => changeLanguage(lang === 'en' ? 'ta' : 'en')}
-              className="flex items-center gap-1.5 text-xs font-bold bg-amber-50 hover:bg-amber-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-900 dark:text-amber-300 px-3 py-1.5 rounded-lg border border-amber-300/80 dark:border-slate-700 shadow-sm transition"
+              className="flex items-center gap-1 text-[11px] sm:text-xs font-bold bg-amber-50 hover:bg-amber-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-900 dark:text-amber-300 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-amber-300/80 dark:border-slate-700 shadow-sm transition"
               title="Toggle Tamil / English"
             >
-              <Globe size={14} className="text-amber-600" />
-              <span>{lang === 'en' ? 'தமிழ்' : 'English'}</span>
+              <Globe size={13} className="text-amber-600" />
+              <span>{lang === 'en' ? 'தமிழ்' : 'Eng'}</span>
+            </button>
+
+            {/* Quick Exit Header Button for Mobile / Tablets */}
+            <button
+              onClick={() => setShowExitModal(true)}
+              className="p-1.5 sm:p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 transition"
+              title="Exit App"
+              aria-label="Exit App"
+            >
+              <Power size={18} />
             </button>
 
             {/* Quick Mobile Notification Bell */}
             <button
               onClick={() => navigate('notifications')}
-              className="relative p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
+              className="relative p-1.5 sm:p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
               aria-label={t('notifications')}
             >
-              <Bell size={20} />
+              <Bell size={18} />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
@@ -281,7 +442,7 @@ function AppContent() {
                 </span>
               )}
             </button>
-            <span className="badge bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 capitalize text-xs sm:text-sm font-semibold">{getRoleLabel()}</span>
+            <span className="badge hidden sm:inline-flex bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 capitalize text-xs sm:text-sm font-semibold">{getRoleLabel()}</span>
           </div>
         </header>
 

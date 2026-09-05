@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRealtime } from '@/lib/useRealtime';
 import { api, type Product } from '@/lib/api';
+import { round2 } from '@/lib/pricing';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box, Upload, TrendingUp } from 'lucide-react';
@@ -19,6 +20,9 @@ type Form = {
   standard_weight: string;
   weight_tolerance: string;
   weight_tolerance_minus: string;
+  bundle_conversion_qty: string;
+  is_aac_block: boolean;
+  piece_weight_kg: string;
 };
 
 const empty: Form = {
@@ -32,12 +36,15 @@ const empty: Form = {
   size: '',
   standard_weight: '0',
   weight_tolerance: '',
-  weight_tolerance_minus: ''
+  weight_tolerance_minus: '',
+  bundle_conversion_qty: '',
+  is_aac_block: false,
+  piece_weight_kg: ''
 };
 
-const categories = ['Steel', 'Cement', 'TMT Bars', 'Pipes', 'Other'];
-const knownBrands = ['Tata Steel', 'iSteel', 'Sumangala', 'Suryadev'];
-const knownSizes = ['8mm', '10mm', '12mm', '16mm', '20mm', '25mm', '32mm'];
+const categories = ['Steel', 'Cement', 'TMT Bars', 'AAC Blocks', 'Pipes', 'Other'];
+const knownBrands = ['Tata Steel', 'iSteel', 'Sumangala', 'Suryadev', 'Ultratech', 'Dalmia', 'Chettinad'];
+const knownSizes = ['8mm', '10mm', '12mm', '16mm', '20mm', '25mm', '32mm', '4 inch', '6 inch', '8 inch', '9 inch'];
 
 export default function Products() {
   const { t } = useTranslation();
@@ -56,7 +63,9 @@ export default function Products() {
   const [unitFilter, setUnitFilter] = useState<'all' | 'kg' | 'piece'>('all');
 
   const [brandAdjustOpen, setBrandAdjustOpen] = useState(false);
+  const [adjustMode, setAdjustMode] = useState<'rate' | 'delta'>('rate');
   const [selectedBrand, setSelectedBrand] = useState('iSteel');
+  const [todaysRateInput, setTodaysRateInput] = useState('62');
   const [priceDelta, setPriceDelta] = useState('0');
   const [adjustingBrand, setAdjustingBrand] = useState(false);
 
@@ -72,20 +81,34 @@ export default function Products() {
   );
 
   const handleBrandPriceAdjust = async () => {
-    const deltaNum = parseFloat(priceDelta);
-    if (isNaN(deltaNum) || deltaNum === 0) {
-      toast('Please enter a non-zero price difference (e.g. +3 or -3)', 'error');
-      return;
-    }
     setAdjustingBrand(true);
     try {
-      const res = await api.post('/products/adjust-brand-prices', {
-        brand: selectedBrand,
-        price_delta: deltaNum,
-      });
-      toast(res.message || `Updated prices for ${selectedBrand}`, 'success');
+      if (adjustMode === 'rate') {
+        const rateNum = parseFloat(todaysRateInput);
+        if (isNaN(rateNum) || rateNum <= 0) {
+          toast("Please enter a valid today's rate (e.g. 62)", 'error');
+          setAdjustingBrand(false);
+          return;
+        }
+        const res = await api.post('/products/adjust-brand-prices', {
+          brand: selectedBrand,
+          todays_rate_per_kg: rateNum,
+        });
+        toast(res.message || `Updated today's rate to ₹${rateNum}/kg for ${selectedBrand}`, 'success');
+      } else {
+        const deltaNum = parseFloat(priceDelta);
+        if (isNaN(deltaNum) || deltaNum === 0) {
+          toast('Please enter a non-zero price difference (e.g. +3 or -3)', 'error');
+          setAdjustingBrand(false);
+          return;
+        }
+        const res = await api.post('/products/adjust-brand-prices', {
+          brand: selectedBrand,
+          price_delta: deltaNum,
+        });
+        toast(res.message || `Updated prices for ${selectedBrand}`, 'success');
+      }
       setBrandAdjustOpen(false);
-      setPriceDelta('0');
       load();
     } catch (err: any) {
       toast(err?.message || 'Failed to update brand prices', 'error');
@@ -195,7 +218,7 @@ export default function Products() {
   const openEdit = (p: Product) => {
     setEditing(p);
     const pPrice = Number(p.price ?? 0);
-    const pStdWeight = Number(p.standard_weight ?? 0);
+    const pStdWeight = Number(p.standard_weight ?? p.piece_weight_kg ?? 0);
     setForm({
       name: p.name.toUpperCase(),
       category: p.category.toUpperCase(),
@@ -208,6 +231,9 @@ export default function Products() {
       standard_weight: String(pStdWeight),
       weight_tolerance: p.weight_tolerance != null ? String(p.weight_tolerance) : '',
       weight_tolerance_minus: p.weight_tolerance_minus != null ? String(p.weight_tolerance_minus) : '',
+      bundle_conversion_qty: p.bundle_conversion_qty != null ? String(p.bundle_conversion_qty) : '',
+      is_aac_block: !!p.is_aac_block,
+      piece_weight_kg: p.piece_weight_kg != null ? String(p.piece_weight_kg) : '',
     });
     setOpen(true);
   };
@@ -250,6 +276,9 @@ export default function Products() {
       standard_weight: parseFloat(form.standard_weight) || 0,
       weight_tolerance: form.weight_tolerance !== '' ? parseFloat(form.weight_tolerance) : null,
       weight_tolerance_minus: form.weight_tolerance_minus !== '' ? parseFloat(form.weight_tolerance_minus) : null,
+      bundle_conversion_qty: form.bundle_conversion_qty !== '' ? parseInt(form.bundle_conversion_qty, 10) : null,
+      is_aac_block: form.is_aac_block,
+      piece_weight_kg: form.piece_weight_kg !== '' ? parseFloat(form.piece_weight_kg) : (form.is_aac_block && form.standard_weight ? parseFloat(form.standard_weight) : null),
     };
     try {
       if (editing) {
@@ -526,6 +555,52 @@ export default function Products() {
             💡 If <strong>Minus Tol</strong> is blank, Plus Tol applies symmetrically (±). Enter both for asymmetric rolling margins (e.g. +300g / -200g).
           </p>
 
+          {/* Bundle Conversion & AAC Block Settings */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div>
+              <label className="label flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                <Box size={14} className="text-amber-600" /> Steel Bundle Conversion (nos / bundle)
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={form.bundle_conversion_qty}
+                onChange={(e) => setForm({ ...form, bundle_conversion_qty: e.target.value })}
+                className="input font-semibold"
+                placeholder="e.g. 7 (for 8mm steel)"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">1 bundle = {form.bundle_conversion_qty || '7'} pieces for dispatchers</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="label font-bold text-slate-800 dark:text-slate-200">AAC Block Settings</label>
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={form.is_aac_block}
+                  onChange={(e) => setForm({ ...form, is_aac_block: e.target.checked })}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                />
+                <span>🧱 This product is an AAC Block</span>
+              </label>
+              {form.is_aac_block && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Block Piece Weight (kg)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.piece_weight_kg}
+                    onChange={(e) => setForm({ ...form, piece_weight_kg: e.target.value, standard_weight: e.target.value })}
+                    className="input font-semibold text-xs py-1.5"
+                    placeholder="e.g. 12.5"
+                  />
+                  <p className="text-[10px] text-emerald-600 font-medium mt-0.5">Used for unloading weight; skips dispatch weighbridge lock.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Linked Rate per kg & Unit Price */}
           <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
             <div className="grid grid-cols-2 gap-4">
@@ -579,12 +654,34 @@ export default function Products() {
         </div>
       </Modal>
 
-      {/* Brand Steel Rate Adjuster Modal */}
-      <Modal open={brandAdjustOpen} onClose={() => setBrandAdjustOpen(false)} title="Brand Steel Rate Adjuster" size="lg">
+      {/* Brand Steel Rate Adjuster / Today's Rate Modal */}
+      <Modal open={brandAdjustOpen} onClose={() => setBrandAdjustOpen(false)} title="Today's Brand Rate & Price Adjuster" size="lg">
         <div className="space-y-5">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Adjust the rate per kg for all steel products of a brand simultaneously by entering a per-kg price difference (e.g. <strong className="text-emerald-600">+3</strong> or <strong className="text-amber-600">-3</strong> ₹/kg). Unit prices will be updated automatically based on standard weights.
-          </p>
+          {/* Mode Switcher */}
+          <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+            <button
+              type="button"
+              onClick={() => setAdjustMode('rate')}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+                adjustMode === 'rate'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              🎯 Set Today's Base Rate (₹/kg)
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdjustMode('delta')}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+                adjustMode === 'delta'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              📈 +/- Price Difference (₹/kg)
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -600,22 +697,42 @@ export default function Products() {
               </select>
             </div>
 
-            <div>
-              <label className="label">Per-Kg Rate Difference (₹/kg) *</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.5"
-                  value={priceDelta}
-                  onChange={(e) => setPriceDelta(e.target.value)}
-                  placeholder="e.g. +3 or -3"
-                  className="input font-bold text-lg text-indigo-700 dark:text-indigo-300"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
-                  {parseFloat(priceDelta) > 0 ? 'Increase (+)' : parseFloat(priceDelta) < 0 ? 'Decrease (-)' : 'No change'}
-                </span>
+            {adjustMode === 'rate' ? (
+              <div>
+                <label className="label">Today's Rate per kg (₹/kg) *</label>
+                <div className="relative">
+                  <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={todaysRateInput}
+                    onChange={(e) => setTodaysRateInput(e.target.value)}
+                    placeholder="e.g. 62.00"
+                    className="input pl-8 font-extrabold text-lg text-indigo-700 dark:text-indigo-300"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                    ₹/kg
+                  </span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="label">Per-Kg Rate Difference (₹/kg) *</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={priceDelta}
+                    onChange={(e) => setPriceDelta(e.target.value)}
+                    placeholder="e.g. +3 or -3"
+                    className="input font-bold text-lg text-indigo-700 dark:text-indigo-300"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                    {parseFloat(priceDelta) > 0 ? 'Increase (+)' : parseFloat(priceDelta) < 0 ? 'Decrease (-)' : 'No change'}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -630,11 +747,22 @@ export default function Products() {
             ) : (
               <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                 {brandProducts.map((p) => {
-                  const deltaNum = parseFloat(priceDelta) || 0;
                   const isSteel = (p.category || '').toLowerCase().includes('steel') || (p.category || '').toLowerCase().includes('tmt');
                   const stdWeight = p.standard_weight && p.standard_weight > 0 ? p.standard_weight : 1;
-                  const priceChange = isSteel && p.standard_weight && p.standard_weight > 0 ? deltaNum * stdWeight : deltaNum;
-                  const newPrice = Math.max(0, (p.price || 0) + priceChange);
+                  
+                  let newPrice = 0;
+                  let rateDisplay = '';
+
+                  if (adjustMode === 'rate') {
+                    const rateNum = parseFloat(todaysRateInput) || 0;
+                    newPrice = isSteel && p.standard_weight && p.standard_weight > 0 ? round2(rateNum * stdWeight) : rateNum;
+                    rateDisplay = `@ ₹${rateNum}/kg`;
+                  } else {
+                    const deltaNum = parseFloat(priceDelta) || 0;
+                    const priceChange = isSteel && p.standard_weight && p.standard_weight > 0 ? deltaNum * stdWeight : deltaNum;
+                    newPrice = Math.max(0, (p.price || 0) + priceChange);
+                    rateDisplay = deltaNum > 0 ? `(+₹${deltaNum}/kg)` : `(₹${deltaNum}/kg)`;
+                  }
                   
                   return (
                     <div key={p.id} className="p-3 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
@@ -642,18 +770,19 @@ export default function Products() {
                         <p className="font-bold text-slate-800 dark:text-slate-100">{p.name}</p>
                         <p className="text-xs text-slate-500">
                           Size: {p.size || 'N/A'} • Unit: {p.unit} • Std Weight: {p.standard_weight || 1} kg
+                          {p.bundle_conversion_qty && p.bundle_conversion_qty > 1 && (
+                            <span className="ml-2 font-semibold text-amber-600">({p.bundle_conversion_qty} nos/bdl)</span>
+                          )}
                         </p>
                       </div>
                       <div className="text-right">
                         <span className="text-xs text-slate-400 line-through mr-2">₹{(p.price || 0).toFixed(2)}</span>
-                        <span className={`font-extrabold text-base ${deltaNum > 0 ? 'text-emerald-600 dark:text-emerald-400' : deltaNum < 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                        <span className="font-extrabold text-base text-indigo-700 dark:text-indigo-300">
                           ₹{newPrice.toFixed(2)}
                         </span>
-                        {deltaNum !== 0 && (
-                          <span className={`text-xs ml-1.5 font-semibold ${deltaNum > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                            ({deltaNum > 0 ? `+₹${deltaNum}/kg` : `₹${deltaNum}/kg`})
-                          </span>
-                        )}
+                        <span className="text-xs ml-1.5 font-semibold text-emerald-600">
+                          {rateDisplay}
+                        </span>
                       </div>
                     </div>
                   );
@@ -666,11 +795,11 @@ export default function Products() {
             <button onClick={() => setBrandAdjustOpen(false)} className="btn-secondary">Cancel</button>
             <button
               onClick={handleBrandPriceAdjust}
-              disabled={adjustingBrand || brandProducts.length === 0 || parseFloat(priceDelta) === 0 || isNaN(parseFloat(priceDelta))}
+              disabled={adjustingBrand || brandProducts.length === 0}
               className="btn-primary flex items-center gap-1.5"
             >
               <TrendingUp size={16} />
-              {adjustingBrand ? 'Updating...' : `Apply ${parseFloat(priceDelta) > 0 ? `+₹${priceDelta}/kg` : `₹${priceDelta}/kg`} to ${brandProducts.length} Items`}
+              {adjustingBrand ? 'Updating...' : `Apply Today's Rate to ${brandProducts.length} Items`}
             </button>
           </div>
         </div>
@@ -741,6 +870,16 @@ function ProductTable({
                     {p.size && (
                       <span className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold">
                         {p.size}
+                      </span>
+                    )}
+                    {p.bundle_conversion_qty && p.bundle_conversion_qty > 1 && (
+                      <span className="badge bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-200 dark:border-amber-800">
+                        📦 1 Bdl = {p.bundle_conversion_qty} nos
+                      </span>
+                    )}
+                    {p.is_aac_block && (
+                      <span className="badge bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                        🧱 AAC Block
                       </span>
                     )}
                   </div>
@@ -830,8 +969,22 @@ function ProductTable({
                 <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                   <td className="td">
                     <div className="flex items-center gap-2">
-                      <Layers size={16} className="text-slate-400" />
-                      <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
+                      <Layers size={16} className="text-slate-400 shrink-0" />
+                      <div>
+                        <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {p.bundle_conversion_qty && p.bundle_conversion_qty > 1 && (
+                            <span className="badge bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[9px] font-bold border border-amber-200 dark:border-amber-800">
+                              📦 1 Bdl = {p.bundle_conversion_qty} nos
+                            </span>
+                          )}
+                          {p.is_aac_block && (
+                            <span className="badge bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold border border-emerald-200 dark:border-emerald-800">
+                              🧱 AAC Block
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td className="td">

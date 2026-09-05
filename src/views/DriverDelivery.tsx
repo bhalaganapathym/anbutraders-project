@@ -675,7 +675,15 @@ export default function DriverDelivery() {
                           <Volume2 size={15} className="text-indigo-600 animate-pulse" />
                           <span>குரல் குறிப்பு (POD Voice Note):</span>
                         </div>
-                        <audio controls src={d.pod_voice_note_url} className="w-full h-8 rounded" />
+                        <audio
+                          controls
+                          src={
+                            d.pod_voice_note_url.startsWith('data:') || d.pod_voice_note_url.startsWith('blob:')
+                              ? d.pod_voice_note_url
+                              : `${(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')}/dispatches/${d.id}/pod-voice-note`
+                          }
+                          className="w-full h-8 rounded"
+                        />
                       </div>
                     )}
 

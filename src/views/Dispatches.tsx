@@ -112,6 +112,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
   }, []);
   
   const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -584,6 +585,24 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                         >
                           {user?.role === 'admin' ? 'Review Voice Note' : 'Listen Voice Note'}
                         </button>
+                      </div>
+                    )}
+
+                    {d.pod_voice_note_url && (
+                      <div className="mt-2 p-2 bg-indigo-50/80 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800 flex flex-col gap-1">
+                        <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
+                          <Volume2 size={13} className="text-indigo-600 animate-pulse" />
+                          Driver POD Voice Note:
+                        </span>
+                        <audio
+                          controls
+                          src={
+                            d.pod_voice_note_url.startsWith('data:') || d.pod_voice_note_url.startsWith('blob:')
+                              ? d.pod_voice_note_url
+                              : `${(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')}/dispatches/${d.id}/pod-voice-note`
+                          }
+                          className="w-full h-8 rounded"
+                        />
                       </div>
                     )}
                   </div>

@@ -22,6 +22,9 @@ class Customer(Base):
     address = Column(String)
     delivery_addresses = Column(JSON, nullable=True, default=list)
     credit_due_date = Column(DateTime(timezone=True), nullable=True)
+    default_unloading_charge = Column(Numeric, default=0, nullable=True)
+    default_transport_charge = Column(Numeric, default=0, nullable=True)
+    default_transport_charge_type = Column(String, default="fixed", nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
 class Supplier(Base):
@@ -46,6 +49,9 @@ class Product(Base):
     standard_weight = Column(Numeric, default=0, nullable=True)
     weight_tolerance = Column(Numeric, nullable=True)
     weight_tolerance_minus = Column(Numeric, nullable=True)
+    bundle_conversion_qty = Column(Integer, nullable=True)
+    is_aac_block = Column(Boolean, default=False, nullable=True)
+    piece_weight_kg = Column(Numeric, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
 class Order(Base):
@@ -62,6 +68,10 @@ class Order(Base):
     advance_payment_method = Column(String, nullable=True)
     advance_notes = Column(String, nullable=True)
     advance_status = Column(String, default="pending", nullable=True)
+    unloading_charge = Column(Numeric, default=0, nullable=True)
+    transport_charge = Column(Numeric, default=0, nullable=True)
+    transport_charge_type = Column(String, default="fixed", nullable=True)
+    total_weight_kg = Column(Numeric, default=0, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     confirmed_at = Column(DateTime(timezone=True), nullable=True)
     

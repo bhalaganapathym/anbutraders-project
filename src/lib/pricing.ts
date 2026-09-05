@@ -35,6 +35,9 @@ export function calculateProductPrice(
     name?: string | null;
     price?: number | string | null;
     standard_weight?: number | string | null;
+    piece_weight_kg?: number | string | null;
+    bundle_conversion_qty?: number | null;
+    is_aac_block?: boolean | null;
     unit?: string | null;
     brand?: string | null;
   } | null | undefined,
@@ -54,7 +57,7 @@ export function calculateProductPrice(
   }
 
   const pPrice = Number(product.price || 0);
-  const stdWeight = round2(product.standard_weight || 0);
+  const stdWeight = round2(product.standard_weight || product.piece_weight_kg || 0);
   const unit = (product.unit || 'nos').toLowerCase();
   const cat = (product.category || '').toLowerCase();
   const name = (product.name || '').toLowerCase();
@@ -216,5 +219,31 @@ export function calculateDiscountedProductPrice(
     discountedRatePerKg,
     discountedUnitPrice,
     finalTotalPrice
+  };
+}
+
+/**
+ * Converts a quantity of steel pieces into bundles + remaining pieces.
+ * e.g., 16 pieces of 8mm steel (where 1 bundle = 7 nos) -> "2 bundles + 2 nos (16 nos)"
+ */
+export function formatBundleQuantity(
+  quantity: number,
+  bundleConversionQty?: number | null
+): { bundles: number; remainingNos: number; formatted: string } {
+  if (!bundleConversionQty || bundleConversionQty <= 1) {
+    return { bundles: 0, remainingNos: quantity, formatted: `${quantity} nos` };
+  }
+  const bundles = Math.floor(quantity / bundleConversionQty);
+  const remainingNos = quantity % bundleConversionQty;
+  if (bundles === 0) {
+    return { bundles, remainingNos, formatted: `${quantity} nos` };
+  }
+  if (remainingNos === 0) {
+    return { bundles, remainingNos, formatted: `${bundles} bundle${bundles > 1 ? 's' : ''} (${quantity} nos)` };
+  }
+  return {
+    bundles,
+    remainingNos,
+    formatted: `${bundles} bundle${bundles > 1 ? 's' : ''} + ${remainingNos} nos (${quantity} nos)`
   };
 }

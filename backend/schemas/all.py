@@ -38,6 +38,9 @@ class CustomerBase(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     delivery_addresses: Optional[List[str]] = []
+    default_unloading_charge: Optional[float] = 0.0
+    default_transport_charge: Optional[float] = 0.0
+    default_transport_charge_type: Optional[str] = "fixed"
 
 class CustomerLocationIn(BaseModel):
     address: Optional[str] = ""
@@ -88,6 +91,9 @@ class ProductBase(BaseModel):
     standard_weight: Optional[float] = 0
     weight_tolerance: Optional[float] = None
     weight_tolerance_minus: Optional[float] = None
+    bundle_conversion_qty: Optional[int] = None
+    is_aac_block: Optional[bool] = False
+    piece_weight_kg: Optional[float] = None
 
 class ProductCreate(ProductBase):
     pass
@@ -101,7 +107,8 @@ class ProductResponse(ProductBase):
 
 class BrandPriceAdjustRequest(BaseModel):
     brand: str
-    price_delta: float
+    price_delta: Optional[float] = None
+    todays_rate_per_kg: Optional[float] = None
         
 # Sales
 class SaleItemCreate(BaseModel):
@@ -361,6 +368,10 @@ class OrderCreate(BaseModel):
     advance_payment_method: Optional[str] = None
     advance_notes: Optional[str] = None
     advance_status: Optional[str] = "pending"
+    unloading_charge: Optional[float] = 0.0
+    transport_charge: Optional[float] = 0.0
+    transport_charge_type: Optional[str] = "fixed"
+    total_weight_kg: Optional[float] = 0.0
     items: Optional[List[OrderItemCreate]] = []
 
 class OrderResponse(BaseModel):
@@ -376,6 +387,10 @@ class OrderResponse(BaseModel):
     advance_payment_method: Optional[str] = None
     advance_notes: Optional[str] = None
     advance_status: Optional[str] = "pending"
+    unloading_charge: Optional[float] = 0.0
+    transport_charge: Optional[float] = 0.0
+    transport_charge_type: Optional[str] = "fixed"
+    total_weight_kg: Optional[float] = 0.0
     created_at: datetime
     confirmed_at: Optional[datetime] = None
     
