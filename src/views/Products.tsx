@@ -4,7 +4,10 @@ import { api, type Product } from '@/lib/api';
 import { round2 } from '@/lib/pricing';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
-import { Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee, Scale, Box, Upload, TrendingUp } from 'lucide-react';
+import {
+  Pencil, Plus, Search, Trash2, Package, Layers, IndianRupee,
+  Scale, Box, Upload, TrendingUp, Sparkles, X, Check, Filter
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTranslation } from '@/lib/i18n';
 
@@ -46,6 +49,15 @@ const categories = ['Steel', 'Cement', 'TMT Bars', 'AAC Blocks', 'Pipes', 'Other
 const knownBrands = ['Tata Steel', 'iSteel', 'Sumangala', 'Suryadev', 'Ultratech', 'Dalmia', 'Chettinad'];
 const knownSizes = ['8mm', '10mm', '12mm', '16mm', '20mm', '25mm', '32mm', '4 inch', '6 inch', '8 inch', '9 inch'];
 
+const categoryColor: Record<string, string> = {
+  Steel: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700',
+  Cement: 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  'TMT Bars': 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+  'AAC Blocks': 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  Pipes: 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+  Other: 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+};
+
 export default function Products() {
   const { t } = useTranslation();
   const toast = useToast();
@@ -56,12 +68,15 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [unitFilter, setUnitFilter] = useState<'all' | 'kg' | 'piece'>('all');
+
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<Form>(empty);
   const [saving, setSaving] = useState(false);
-  const [unitFilter, setUnitFilter] = useState<'all' | 'kg' | 'piece'>('all');
 
+  // Brand Price Adjuster State
   const [brandAdjustOpen, setBrandAdjustOpen] = useState(false);
   const [adjustMode, setAdjustMode] = useState<'rate' | 'delta'>('rate');
   const [selectedBrand, setSelectedBrand] = useState('iSteel');
@@ -69,12 +84,38 @@ export default function Products() {
   const [priceDelta, setPriceDelta] = useState('0');
   const [adjustingBrand, setAdjustingBrand] = useState(false);
 
+  // Tolerance Inline Editing
+  const [editingTolId, setEditingTolId] = useState<string | null>(null);
+  const [tolValue, setTolValue] = useState<string>('');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.get('/products');
+      setProducts(data as Product[]);
+    } catch {
+      toast('Failed to load products', 'error');
+    }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useRealtime('products', load);
+
   const availableBrands = Array.from(
     new Set([
       ...knownBrands,
-      ...products.map(p => p.brand).filter(Boolean) as string[]
+      ...(products.map(p => p.brand).filter(Boolean) as string[])
     ])
   );
+
+  const availableCategories = ['All', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
   const brandProducts = products.filter(
     (p) => (p.brand || '').toLowerCase() === selectedBrand.toLowerCase()
@@ -116,26 +157,6 @@ export default function Products() {
       setAdjustingBrand(false);
     }
   };
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api.get('/products');
-      setProducts(data);
-    } catch {
-      toast('Failed to load products', 'error');
-    }
-    setLoading(false);
-  }, [toast]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useRealtime('products', load);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -199,15 +220,15 @@ export default function Products() {
     reader.readAsText(file);
   };
 
-  const filtered = products.filter((p) =>
-    [p.name, p.brand ?? '', p.size ?? '', p.category].join(' ').toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = products.filter((p) => {
+    const matchesQuery = [p.name, p.brand ?? '', p.size ?? '', p.category].join(' ').toLowerCase().includes(query.toLowerCase());
+    const matchesCategory = selectedCategory === 'All' || p.category?.toUpperCase() === selectedCategory.toUpperCase();
+    const matchesUnit = unitFilter === 'all' ? true : unitFilter === 'kg' ? p.unit?.toLowerCase() === 'kg' : p.unit?.toLowerCase() === 'piece';
+    return matchesQuery && matchesCategory && matchesUnit;
+  });
 
-  const kgProducts = filtered.filter(p => p.unit.toLowerCase() === 'kg');
-  const pieceProducts = filtered.filter(p => p.unit.toLowerCase() === 'piece');
-  const otherProducts = filtered.filter(p => p.unit.toLowerCase() !== 'kg' && p.unit.toLowerCase() !== 'piece');
-
-  const visible = unitFilter === 'kg' ? kgProducts : unitFilter === 'piece' ? pieceProducts : filtered;
+  const kgCount = products.filter(p => p.unit?.toLowerCase() === 'kg').length;
+  const pieceCount = products.filter(p => p.unit?.toLowerCase() === 'piece').length;
 
   const openNew = () => {
     setEditing(null);
@@ -321,27 +342,43 @@ export default function Products() {
     }
   };
 
-  const categoryColor: Record<string, string> = {
-    Steel: 'bg-white/20 dark:bg-slate-800/40 text-slate-700 dark:text-slate-200',
-    Cement: 'bg-blue-100 text-blue-700',
-    'TMT Bars': 'bg-indigo-100/50 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300',
-    Pipes: 'bg-emerald-100/50 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300',
-    Other: 'bg-violet-100 text-violet-700',
+  const startEditTol = (p: Product) => {
+    if (!canEditTolerance) return;
+    setEditingTolId(p.id);
+    setTolValue(p.weight_tolerance != null ? String(p.weight_tolerance) : '');
+  };
+
+  const finishEditTol = (p: Product) => {
+    setEditingTolId(null);
+    const parsed = tolValue.trim() === '' ? null : parseFloat(tolValue);
+    if (parsed !== p.weight_tolerance) {
+      updateTolerance(p, isNaN(parsed as number) ? null : parsed);
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Top Header & Quick Action Buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('products')}</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t('company_tagline')}</p>
+          <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight flex items-center gap-2">
+            {t('products')}
+          </h1>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+            {t('company_tagline')}
+          </p>
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex flex-wrap items-center gap-2">
           {canEditTolerance && (
-            <button onClick={() => setBrandAdjustOpen(true)} className="btn-secondary flex items-center gap-1.5 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50">
-              <TrendingUp size={16} /> {t('edit_brand_prices')}
+            <button
+              onClick={() => setBrandAdjustOpen(true)}
+              className="btn-secondary text-xs sm:text-sm font-bold border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl"
+            >
+              <TrendingUp size={16} className="text-indigo-600" /> {t('edit_brand_prices')}
             </button>
           )}
+
           {isAdmin && (
             <>
               <input 
@@ -351,10 +388,17 @@ export default function Products() {
                 onChange={handleFileUpload} 
                 className="hidden" 
               />
-              <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="btn-secondary">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="btn-secondary text-xs sm:text-sm font-bold rounded-xl"
+              >
                 <Upload size={16} /> {uploading ? t('loading') : t('export_csv')}
               </button>
-              <button onClick={openNew} className="btn-primary">
+              <button
+                onClick={openNew}
+                className="btn-primary text-xs sm:text-sm font-bold rounded-xl shadow-md"
+              >
                 <Plus size={16} /> {t('add_product')}
               </button>
             </>
@@ -362,113 +406,389 @@ export default function Products() {
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t('search')}
-          className="input pl-9"
-        />
-      </div>
+      {/* Unified Search & Multi-Filter Control Bar */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm space-y-3">
+        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          {/* Search Box */}
+          <div className="relative flex-1 max-w-md">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search product, brand, size or category..."
+              className="input pl-10 pr-8 py-2 font-medium"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => setUnitFilter('all')}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            unitFilter === 'all' ? 'bg-indigo-600 dark:bg-indigo-600 text-white' : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          <Package size={14} /> {t('all')} ({filtered.length})
-        </button>
-        <button
-          onClick={() => setUnitFilter('kg')}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            unitFilter === 'kg' ? 'bg-indigo-600 dark:bg-indigo-600 text-white' : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          <Scale size={14} /> Kg ({kgProducts.length})
-        </button>
-        <button
-          onClick={() => setUnitFilter('piece')}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            unitFilter === 'piece' ? 'bg-indigo-600 dark:bg-indigo-600 text-white' : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
-          }`}
-        >
-          <Box size={14} /> Piece ({pieceProducts.length})
-        </button>
+          {/* Unit Filter Segmented Control */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl self-start md:self-auto text-xs font-bold">
+            <button
+              onClick={() => setUnitFilter('all')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                unitFilter === 'all'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              All ({products.length})
+            </button>
+            <button
+              onClick={() => setUnitFilter('kg')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                unitFilter === 'kg'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Scale size={12} /> Kg ({kgCount})
+            </button>
+            <button
+              onClick={() => setUnitFilter('piece')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                unitFilter === 'piece'
+                  ? 'bg-white dark:bg-slate-700 text-amber-700 dark:text-amber-300 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Box size={12} /> Piece ({pieceCount})
+            </button>
+          </div>
+        </div>
+
+        {/* Category Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 text-xs">
+          {availableCategories.map((c) => {
+            const count = c === 'All' ? products.length : products.filter(p => p.category?.toUpperCase() === c.toUpperCase()).length;
+            const isActive = selectedCategory.toUpperCase() === c.toUpperCase();
+            return (
+              <button
+                key={c}
+                onClick={() => setSelectedCategory(c)}
+                className={`rounded-xl px-3 py-1.5 font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span>{c}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-slate-700 dark:bg-slate-300 text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400">{t('loading')}</p>
-      ) : visible.length === 0 ? (
-        <div className="card flex flex-col items-center gap-3 p-12 text-center">
-          <Package size={36} className="text-slate-300" />
-          <p className="text-slate-500 dark:text-slate-400">No {unitFilter === 'kg' ? 'kg' : unitFilter === 'piece' ? 'piece' : ''} products found.</p>
+        <div className="py-12 text-center text-sm font-semibold text-slate-400">Loading products...</div>
+      ) : filtered.length === 0 ? (
+        <div className="card flex flex-col items-center gap-3 p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div className="h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+            <Package size={24} />
+          </div>
+          <p className="text-base font-bold text-slate-700 dark:text-slate-200">No products found</p>
+          <p className="text-xs text-slate-400">No items match your active filters.</p>
           {isAdmin && (
-            <button onClick={openNew} className="btn-primary">
-              <Plus size={16} /> Add product
+            <button onClick={openNew} className="btn-primary text-xs mt-1">
+              <Plus size={14} /> Add First Product
             </button>
           )}
         </div>
       ) : (
-        <div className="space-y-6">
-          {unitFilter === 'all' ? (
-            <>
-              {kgProducts.length > 0 && (
-                <div>
-                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
-                    <Scale size={16} className="text-indigo-600 dark:text-indigo-400" /> Kg Products
-                    <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{kgProducts.length}</span>
-                  </h2>
-                  <ProductTable products={kgProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} canEditTolerance={canEditTolerance} onUpdateTolerance={updateTolerance} />
+        <>
+          {/* MOBILE CARDS VIEW (< 768px) */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {filtered.map((p) => {
+              const stdWt = Number(p.standard_weight || p.piece_weight_kg || 0);
+              const hasWeight = stdWt > 0;
+              const rateKg = hasWeight ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
+              const catClass = categoryColor[p.category] || categoryColor.Other;
+
+              return (
+                <div
+                  key={p.id}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3"
+                >
+                  {/* Card Header: Product Name & Category */}
+                  <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide">
+                        {p.name}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className={`badge text-[10px] font-bold border ${catClass}`}>
+                          {p.category}
+                        </span>
+                        {p.brand && (
+                          <span className="badge bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold border border-indigo-200 dark:border-indigo-800">
+                            {p.brand}
+                          </span>
+                        )}
+                        {p.size && (
+                          <span className="text-[11px] text-slate-600 dark:text-slate-400 font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                            {p.size}
+                          </span>
+                        )}
+                        {p.bundle_conversion_qty && p.bundle_conversion_qty > 1 && (
+                          <span className="badge bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-200 dark:border-amber-800">
+                            📦 1 Bdl = {p.bundle_conversion_qty} nos
+                          </span>
+                        )}
+                        {p.is_aac_block && (
+                          <span className="badge bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                            🧱 AAC Block
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Price Tag */}
+                    <div className="text-right shrink-0">
+                      <span className="text-base font-black text-amber-600 dark:text-amber-400 block leading-tight">
+                        ₹{(p.price ?? 0).toFixed(2)}
+                      </span>
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase">
+                        per {p.unit}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Metrics Grid */}
+                  <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl text-xs">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Std Weight</span>
+                      <p className="font-bold text-slate-700 dark:text-slate-200 mt-0.5">
+                        {hasWeight ? `${stdWt} kg` : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tolerance</span>
+                      <p className="font-bold text-amber-600 dark:text-amber-400 mt-0.5 truncate">
+                        {p.weight_tolerance != null ? (
+                          p.weight_tolerance_minus != null && Number(p.weight_tolerance_minus) !== Number(p.weight_tolerance) ? (
+                            `+${p.weight_tolerance}/-${p.weight_tolerance_minus}`
+                          ) : (
+                            `±${p.weight_tolerance}kg`
+                          )
+                        ) : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rate / Kg</span>
+                      <p className="font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
+                        {rateKg ? `₹${rateKg}` : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons for Mobile */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => openEdit(p)}
+                        className="btn-secondary flex-1 py-2 text-xs flex items-center justify-center gap-1.5 font-bold rounded-xl"
+                      >
+                        <Pencil size={13} className="text-indigo-600" /> Edit
+                      </button>
+                      <button
+                        onClick={() => remove(p)}
+                        className="btn-secondary px-3 py-2 text-xs flex items-center justify-center text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl"
+                        title="Delete Product"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-              {pieceProducts.length > 0 && (
-                <div>
-                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
-                    <Box size={16} className="text-indigo-600 dark:text-indigo-400" /> Piece Products
-                    <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{pieceProducts.length}</span>
-                  </h2>
-                  <ProductTable products={pieceProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} canEditTolerance={canEditTolerance} onUpdateTolerance={updateTolerance} />
-                </div>
-              )}
-              {otherProducts.length > 0 && (
-                <div>
-                  <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
-                    <Package size={16} className="text-indigo-600 dark:text-indigo-400" /> Other Products
-                    <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{otherProducts.length}</span>
-                  </h2>
-                  <ProductTable products={otherProducts} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} canEditTolerance={canEditTolerance} onUpdateTolerance={updateTolerance} />
-                </div>
-              )}
-            </>
-          ) : (
-            <ProductTable products={visible} categoryColor={categoryColor} onEdit={openEdit} onRemove={remove} isAdmin={isAdmin} canEditTolerance={canEditTolerance} onUpdateTolerance={updateTolerance} />
-          )}
-        </div>
+              );
+            })}
+          </div>
+
+          {/* DESKTOP TABLE VIEW (>= 768px) */}
+          <div className="hidden md:block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            <table className="w-full">
+              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
+                <tr>
+                  <th className="th py-3.5">Product & Details</th>
+                  <th className="th py-3.5">Brand</th>
+                  <th className="th py-3.5">Category</th>
+                  <th className="th py-3.5">Unit</th>
+                  <th className="th py-3.5">Std Wt</th>
+                  <th className="th py-3.5">Tolerance</th>
+                  <th className="th py-3.5">Price & Rate</th>
+                  {isAdmin && <th className="th py-3.5 text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-sm">
+                {filtered.map((p) => {
+                  const stdWt = Number(p.standard_weight || p.piece_weight_kg || 0);
+                  const hasWeight = stdWt > 0;
+                  const rateKg = hasWeight ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
+                  const catClass = categoryColor[p.category] || categoryColor.Other;
+
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
+                      <td className="td py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0">
+                            <Layers size={16} />
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide">
+                              {p.name}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {p.size && (
+                                <span className="text-[11px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded">
+                                  {p.size}
+                                </span>
+                              )}
+                              {p.bundle_conversion_qty && p.bundle_conversion_qty > 1 && (
+                                <span className="badge bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-200 dark:border-amber-800">
+                                  📦 1 Bdl = {p.bundle_conversion_qty} nos
+                                </span>
+                              )}
+                              {p.is_aac_block && (
+                                <span className="badge bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                                  🧱 AAC Block
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="td py-3.5">
+                        {p.brand ? (
+                          <span className="badge bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">
+                            {p.brand}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="td py-3.5">
+                        <span className={`badge border font-bold ${catClass}`}>
+                          {p.category}
+                        </span>
+                      </td>
+                      <td className="td py-3.5 font-bold text-slate-600 dark:text-slate-400 uppercase text-xs">
+                        {p.unit}
+                      </td>
+                      <td className="td py-3.5">
+                        {hasWeight ? (
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                            <Scale size={13} className="text-slate-400" />
+                            {stdWt} kg
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="td py-3.5">
+                        {editingTolId === p.id ? (
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={tolValue}
+                            onChange={(e) => setTolValue(e.target.value)}
+                            onBlur={() => finishEditTol(p)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') finishEditTol(p);
+                              if (e.key === 'Escape') setEditingTolId(null);
+                            }}
+                            className="input py-0.5 px-2 w-20 text-xs font-bold text-amber-600 border-amber-400"
+                            autoFocus
+                          />
+                        ) : (
+                          <span 
+                            onClick={() => startEditTol(p)}
+                            className={`font-semibold text-xs ${canEditTolerance ? 'cursor-pointer hover:underline text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}
+                            title={canEditTolerance ? 'Click to edit weight tolerance' : undefined}
+                          >
+                            {p.weight_tolerance != null ? (
+                              p.weight_tolerance_minus != null && Number(p.weight_tolerance_minus) !== Number(p.weight_tolerance) ? (
+                                `+${p.weight_tolerance}/-${p.weight_tolerance_minus} kg`
+                              ) : (
+                                `±${p.weight_tolerance} kg`
+                              )
+                            ) : (
+                              <span className="text-slate-400">Default</span>
+                            )}
+                          </span>
+                        )}
+                      </td>
+                      <td className="td py-3.5">
+                        <div>
+                          <div className="flex items-center gap-1.5 font-black text-base text-slate-900 dark:text-slate-100">
+                            <span>₹{(p.price ?? 0).toFixed(2)}</span>
+                            <span className="text-[11px] font-normal text-slate-400">/ {p.unit}</span>
+                          </div>
+                          {rateKg && (
+                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                              ₹{rateKg} / kg
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      {isAdmin && (
+                        <td className="td py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => openEdit(p)}
+                              className="btn-ghost p-1.5 text-slate-600 hover:text-indigo-600 rounded-lg"
+                              title="Edit Product"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              onClick={() => remove(p)}
+                              className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
+                              title="Delete Product"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Add / Edit Product Modal */}
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Product' : 'Add Product'} size="md">
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Product' : 'Add New Product'} size="md">
         <div className="space-y-4">
           <div>
-            <label className="label">Name * (SAVED IN UPPERCASE)</label>
+            <label className="label">Product Name * (SAVED IN UPPERCASE)</label>
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value.toUpperCase() })}
-              className="input font-semibold uppercase"
+              className="input font-bold uppercase"
               placeholder="e.g. TMT STEEL BAR 12MM"
               autoFocus
             />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Category</label>
               <select
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value.toUpperCase() })}
-                className="input uppercase font-medium"
+                className="input uppercase font-semibold"
               >
                 {categories.map((c) => (
                   <option key={c} value={c.toUpperCase()}>{c.toUpperCase()}</option>
@@ -480,11 +800,12 @@ export default function Products() {
               <input
                 value={form.unit}
                 onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase() })}
-                className="input uppercase"
+                className="input uppercase font-semibold"
                 placeholder="PIECE, KG, BAG..."
               />
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Brand</label>
@@ -492,7 +813,7 @@ export default function Products() {
                 value={form.brand}
                 onChange={(e) => setForm({ ...form, brand: e.target.value.toUpperCase() })}
                 className="input uppercase"
-                placeholder="e.g. TATA STEEL"
+                placeholder="e.g. ISTEEL"
                 list="brand-list"
               />
               <datalist id="brand-list">
@@ -513,14 +834,16 @@ export default function Products() {
               </datalist>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+          {/* Standard Weight & Tolerances */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
             <div>
-              <label className="label">Standard Weight (kg)</label>
+              <label className="label">Std Weight (kg)</label>
               <input
                 type="number"
                 value={form.standard_weight}
                 onChange={(e) => handleStdWeightChange(e.target.value)}
-                className="input font-semibold"
+                className="input font-bold"
                 min="0"
                 step="0.001"
                 placeholder="e.g. 7.3"
@@ -535,7 +858,7 @@ export default function Products() {
                 className="input"
                 min="0"
                 step="0.001"
-                placeholder="e.g. 0.3 (300g)"
+                placeholder="e.g. 0.3"
               />
             </div>
             <div>
@@ -547,19 +870,19 @@ export default function Products() {
                 className="input"
                 min="0"
                 step="0.001"
-                placeholder="e.g. 0.2 (200g)"
+                placeholder="e.g. 0.2"
               />
             </div>
+            <p className="col-span-full text-[10.5px] text-slate-500 dark:text-slate-400">
+              💡 If Minus Tol is left blank, Plus Tol applies symmetrically (±).
+            </p>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-2">
-            💡 If <strong>Minus Tol</strong> is blank, Plus Tol applies symmetrically (±). Enter both for asymmetric rolling margins (e.g. +300g / -200g).
-          </p>
 
           {/* Bundle Conversion & AAC Block Settings */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
             <div>
               <label className="label flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
-                <Box size={14} className="text-amber-600" /> Steel Bundle Conversion (nos / bundle)
+                <Box size={14} className="text-amber-600" /> Steel Bundle Conversion
               </label>
               <input
                 type="number"
@@ -567,7 +890,7 @@ export default function Products() {
                 value={form.bundle_conversion_qty}
                 onChange={(e) => setForm({ ...form, bundle_conversion_qty: e.target.value })}
                 className="input font-semibold"
-                placeholder="e.g. 7 (for 8mm steel)"
+                placeholder="e.g. 7 (for 8mm)"
               />
               <p className="text-[10px] text-slate-500 mt-1">1 bundle = {form.bundle_conversion_qty || '7'} pieces for dispatchers</p>
             </div>
@@ -585,7 +908,7 @@ export default function Products() {
               </label>
               {form.is_aac_block && (
                 <div>
-                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Block Piece Weight (kg)</label>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Piece Weight (kg)</label>
                   <input
                     type="number"
                     min="0"
@@ -595,7 +918,6 @@ export default function Products() {
                     className="input font-semibold text-xs py-1.5"
                     placeholder="e.g. 12.5"
                   />
-                  <p className="text-[10px] text-emerald-600 font-medium mt-0.5">Used for unloading weight; skips dispatch weighbridge lock.</p>
                 </div>
               )}
             </div>
@@ -685,7 +1007,7 @@ export default function Products() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="label">Select Brand *</label>
+              <label className="label font-bold">Select Brand *</label>
               <select
                 value={selectedBrand}
                 onChange={(e) => setSelectedBrand(e.target.value)}
@@ -699,7 +1021,7 @@ export default function Products() {
 
             {adjustMode === 'rate' ? (
               <div>
-                <label className="label">Today's Rate per kg (₹/kg) *</label>
+                <label className="label font-bold">Today's Rate per kg (₹/kg) *</label>
                 <div className="relative">
                   <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -717,7 +1039,7 @@ export default function Products() {
               </div>
             ) : (
               <div>
-                <label className="label">Per-Kg Rate Difference (₹/kg) *</label>
+                <label className="label font-bold">Per-Kg Rate Difference (₹/kg) *</label>
                 <div className="relative">
                   <input
                     type="number"
@@ -741,11 +1063,11 @@ export default function Products() {
               <span className="text-xs font-normal text-slate-400">Brand: <strong>{selectedBrand}</strong></span>
             </h3>
             {brandProducts.length === 0 ? (
-              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg text-center text-sm text-slate-400">
+              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl text-center text-sm text-slate-400 border border-slate-200 dark:border-slate-800">
                 No products currently listed under brand "{selectedBrand}".
               </div>
             ) : (
-              <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+              <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                 {brandProducts.map((p) => {
                   const isSteel = (p.category || '').toLowerCase().includes('steel') || (p.category || '').toLowerCase().includes('tmt');
                   const stdWeight = p.standard_weight && p.standard_weight > 0 ? p.standard_weight : 1;
@@ -805,264 +1127,5 @@ export default function Products() {
         </div>
       </Modal>
     </div>
-  );
-}
-
-function ProductTable({
-  products,
-  categoryColor,
-  onEdit,
-  onRemove,
-  isAdmin,
-  canEditTolerance,
-  onUpdateTolerance,
-}: {
-  products: Product[];
-  categoryColor: Record<string, string>;
-  onEdit: (p: Product) => void;
-  onRemove: (p: Product) => void;
-  isAdmin: boolean;
-  canEditTolerance: boolean;
-  onUpdateTolerance: (p: Product, newTol: number | null) => void;
-}) {
-  const [editingTolId, setEditingTolId] = useState<string | null>(null);
-  const [tolValue, setTolValue] = useState<string>('');
-
-  const startEditTol = (p: Product) => {
-    if (!canEditTolerance) return;
-    setEditingTolId(p.id);
-    setTolValue(p.weight_tolerance != null ? String(p.weight_tolerance) : '');
-  };
-
-  const finishEditTol = (p: Product) => {
-    setEditingTolId(null);
-    const parsed = tolValue.trim() === '' ? null : parseFloat(tolValue);
-    if (parsed !== p.weight_tolerance) {
-      onUpdateTolerance(p, isNaN(parsed as number) ? null : parsed);
-    }
-  };
-
-  return (
-    <>
-      {/* MOBILE CARD VIEW (< 768px) */}
-      <div className="grid grid-cols-1 gap-3 md:hidden">
-        {products.map((p) => {
-          const hasWeight = p.standard_weight && p.standard_weight > 0;
-          const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
-
-          return (
-            <div key={p.id} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-              {/* Header: Product Name & Category */}
-              <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="font-black text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide truncate">
-                    {p.name}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    <span className={`badge text-[10px] font-bold ${categoryColor[p.category] ?? categoryColor.Other}`}>
-                      {p.category}
-                    </span>
-                    {p.brand && (
-                      <span className="badge bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
-                        {p.brand}
-                      </span>
-                    )}
-                    {p.size && (
-                      <span className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold">
-                        {p.size}
-                      </span>
-                    )}
-                    {p.bundle_conversion_qty && p.bundle_conversion_qty > 1 && (
-                      <span className="badge bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-200 dark:border-amber-800">
-                        📦 1 Bdl = {p.bundle_conversion_qty} nos
-                      </span>
-                    )}
-                    {p.is_aac_block && (
-                      <span className="badge bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
-                        🧱 AAC Block
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <span className="text-base font-black text-amber-600 dark:text-amber-400">
-                    ₹{(p.price ?? 0).toFixed(2)}
-                  </span>
-                  <p className="text-[10px] font-medium text-slate-400">per {p.unit}</p>
-                </div>
-              </div>
-
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl text-xs">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Std Weight</span>
-                  <p className="font-bold text-slate-700 dark:text-slate-200">
-                    {hasWeight ? `${p.standard_weight} kg` : '—'}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Tolerance</span>
-                  <p className="font-bold text-amber-600 dark:text-amber-400 truncate" title={p.weight_tolerance != null ? `+${p.weight_tolerance} / -${p.weight_tolerance_minus ?? p.weight_tolerance}` : undefined}>
-                    {p.weight_tolerance != null ? (
-                      p.weight_tolerance_minus != null && Number(p.weight_tolerance_minus) !== Number(p.weight_tolerance) ? (
-                        `+${p.weight_tolerance}/-${p.weight_tolerance_minus}`
-                      ) : (
-                        `±${p.weight_tolerance}kg`
-                      )
-                    ) : '—'}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Rate / Kg</span>
-                  <p className="font-extrabold text-indigo-600 dark:text-indigo-400">
-                    {rateKg ? `₹${rateKg} / kg` : '—'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons for Mobile */}
-              {isAdmin && (
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={() => onEdit(p)}
-                    className="btn-secondary flex-1 py-2 text-xs flex items-center justify-center gap-1.5 font-bold rounded-xl"
-                  >
-                    <Pencil size={13} className="text-indigo-600" /> Edit
-                  </button>
-                  <button
-                    onClick={() => onRemove(p)}
-                    className="btn-secondary px-3 py-2 text-xs flex items-center justify-center text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl"
-                    title="Delete Product"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* DESKTOP TABLE VIEW (>= 768px) */}
-      <div className="hidden md:block table-wrap">
-        <table className="w-full">
-          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-            <tr>
-              <th className="th">Product</th>
-              <th className="th">Brand</th>
-              <th className="th">Size</th>
-              <th className="th">Category</th>
-              <th className="th">Unit</th>
-              <th className="th">Std Wt (kg)</th>
-              <th className="th">Est. Diff (kg)</th>
-              <th className="th">Price / Rate</th>
-              {isAdmin && <th className="th text-right">Actions</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {products.map((p) => {
-              const hasWeight = p.standard_weight && p.standard_weight > 0;
-              const rateKg = hasWeight ? ((p.price ?? 0) / p.standard_weight!).toFixed(2) : null;
-
-              return (
-                <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="td">
-                    <div className="flex items-center gap-2">
-                      <Layers size={16} className="text-slate-400 shrink-0" />
-                      <div>
-                        <span className="font-medium text-slate-800 dark:text-slate-100">{p.name}</span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {p.bundle_conversion_qty && p.bundle_conversion_qty > 1 && (
-                            <span className="badge bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[9px] font-bold border border-amber-200 dark:border-amber-800">
-                              📦 1 Bdl = {p.bundle_conversion_qty} nos
-                            </span>
-                          )}
-                          {p.is_aac_block && (
-                            <span className="badge bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold border border-emerald-200 dark:border-emerald-800">
-                              🧱 AAC Block
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="td">
-                    {p.brand ? <span className="badge bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{p.brand}</span> : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td className="td">
-                    {p.size ? <span className="font-medium text-slate-600 dark:text-slate-300">{p.size}</span> : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td className="td">
-                    <span className={`badge ${categoryColor[p.category] ?? categoryColor.Other}`}>
-                      {p.category}
-                    </span>
-                  </td>
-                  <td className="td">{p.unit}</td>
-                  <td className="td">
-                    <span className="font-medium text-slate-600 dark:text-slate-300">
-                      {p.standard_weight ? `${p.standard_weight} kg` : '—'}
-                    </span>
-                  </td>
-                  <td className="td">
-                    {editingTolId === p.id ? (
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={tolValue}
-                        onChange={(e) => setTolValue(e.target.value)}
-                        onBlur={() => finishEditTol(p)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') finishEditTol(p);
-                          if (e.key === 'Escape') setEditingTolId(null);
-                        }}
-                        className="input py-0.5 px-2 w-20 text-xs font-bold text-amber-600 border-amber-400"
-                        autoFocus
-                      />
-                    ) : (
-                      <span 
-                        onClick={() => startEditTol(p)}
-                        className={`font-medium ${canEditTolerance ? 'cursor-pointer hover:underline text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}
-                        title={canEditTolerance ? 'Click to edit weight tolerance' : undefined}
-                      >
-                        {p.weight_tolerance != null ? (
-                          p.weight_tolerance_minus != null && Number(p.weight_tolerance_minus) !== Number(p.weight_tolerance) ? (
-                            `+${p.weight_tolerance} / -${p.weight_tolerance_minus} kg`
-                          ) : (
-                            `±${p.weight_tolerance} kg`
-                          )
-                        ) : 'Default'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="td">
-                    <div>
-                      <span className="flex items-center font-bold text-slate-800 dark:text-slate-200">
-                        <IndianRupee size={13} className="text-slate-400" />{(p.price ?? 0).toFixed(2)}
-                      </span>
-                      {rateKg && (
-                        <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
-                          (₹{rateKg}/kg)
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  {isAdmin && (
-                    <td className="td text-right">
-                      <button onClick={() => onEdit(p)} className="btn-ghost p-1.5" aria-label="Edit">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => onRemove(p)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Delete">
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </>
   );
 }

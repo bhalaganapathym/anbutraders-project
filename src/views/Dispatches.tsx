@@ -111,9 +111,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
     }
   }, []);
   
-  const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [selectedOrder, setSelectedOrder] = useState('');
   const [creating, setCreating] = useState(false);
 
   const [detail, setDetail] = useState<DispatchRow | null>(null);
@@ -227,11 +225,6 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
     }
   };
 
-  const openCreate = () => {
-    setSelectedOrder('');
-    setCreateOpen(true);
-  };
-
   const filteredDispatches = dispatches.filter((d) => {
     const isCompleted = d.status === 'completed';
     const matchesTab = activeTab === 'completed' ? isCompleted : !isCompleted;
@@ -242,18 +235,6 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
   const filteredNewDeliveries = confirmedOrders.filter((o) => {
     return [o.order_no ?? '', o.customer?.name ?? '', o.delivery_address ?? '', o.customer?.phone ?? ''].join(' ').toLowerCase().includes(query.toLowerCase());
   });
-
-  const createDispatch = async () => {
-    if (!selectedOrder) {
-      toast('Select a confirmed estimate', 'error');
-      return;
-    }
-    const order = confirmedOrders.find((o) => o.id === selectedOrder);
-    if (order) {
-      await handleStartDispatch(order);
-      setCreateOpen(false);
-    }
-  };
 
   const handleWhatsAppAlert = (d: DispatchRow) => {
     const phone = d.customer?.phone || '';
@@ -305,9 +286,6 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t('dispatches')}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">{t('company_tagline')}</p>
         </div>
-        <button onClick={openCreate} className="btn-primary">
-          <Plus size={16} /> {t('new_dispatch')}
-        </button>
       </div>
 
       {/* 3-Tab Navigation */}
@@ -784,38 +762,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
         </>
       )}
 
-      {/* Manual New Dispatch Modal */}
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create Dispatch" size="md">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Select a confirmed estimate to generate a dispatch list.
-          </p>
-          {confirmedOrders.length === 0 ? (
-            <div className="rounded-lg bg-amber-50 dark:bg-amber-900/30 p-4 text-sm text-amber-700 dark:text-amber-300">
-              <AlertCircle size={16} className="mr-1 inline" />
-              No fresh confirmed estimates available. Confirm an estimate first in the Estimate page.
-            </div>
-          ) : (
-            <div>
-              <label className="label">Fresh Confirmed Estimate * ({confirmedOrders.length} available)</label>
-              <select value={selectedOrder} onChange={(e) => setSelectedOrder(e.target.value)} className="input">
-                <option value="">Select a confirmed estimate...</option>
-                {confirmedOrders.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.order_no || o.id.split('-')[0].toUpperCase()} — {o.customer?.name ?? 'Unknown'}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setCreateOpen(false)} className="btn-secondary">Cancel</button>
-            <button onClick={createDispatch} disabled={creating || !selectedOrder} className="btn-primary">
-              {creating ? 'Creating...' : 'Start Dispatch'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* Admin Weight Mismatch Approval Modal */}
 
       {/* Admin Weight Mismatch Approval Modal */}
       <WeightMismatchApprovalModal
