@@ -432,21 +432,37 @@ export const translations = {
 };
 
 export function getLanguage(): Language {
-  const saved = localStorage.getItem('anbu_app_lang');
+  const saved = typeof window !== 'undefined' ? localStorage.getItem('anbu_app_lang') : null;
   return (saved === 'ta' || saved === 'en') ? saved : 'en';
 }
 
 export function setLanguage(lang: Language): void {
-  localStorage.setItem('anbu_app_lang', lang);
-  window.dispatchEvent(new Event('languagechange'));
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('anbu_app_lang', lang);
+    document.documentElement.lang = lang;
+    document.body?.setAttribute('lang', lang);
+    window.dispatchEvent(new Event('languagechange'));
+  }
 }
 
 export function useTranslation() {
-  const [lang, setLangState] = useState<Language>(getLanguage());
+  const [lang, setLangState] = useState<Language>(() => {
+    const l = getLanguage();
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = l;
+      document.body?.setAttribute('lang', l);
+    }
+    return l;
+  });
 
   useEffect(() => {
     const handleLangChange = () => {
-      setLangState(getLanguage());
+      const current = getLanguage();
+      setLangState(current);
+      if (typeof document !== 'undefined') {
+        document.documentElement.lang = current;
+        document.body?.setAttribute('lang', current);
+      }
     };
     window.addEventListener('languagechange', handleLangChange);
     return () => window.removeEventListener('languagechange', handleLangChange);

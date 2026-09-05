@@ -160,11 +160,11 @@ function AppContent() {
     if (!user) return [];
     const allowed = navConfigs.filter(item => {
       if (user.role === 'admin') return true;
-      if (user.role === 'billing') {
-        return ['dashboard', 'orders', 'pricelist', 'billing', 'reconciliation', 'customers', 'delivery', 'products', 'notifications', 'settings'].includes(item.id);
+      if (user.role === 'billing' || user.role === 'cashier') {
+        return ['dashboard', 'orders', 'pricelist', 'billing', 'reconciliation', 'customers', 'products', 'notifications'].includes(item.id);
       }
       if (user.role === 'dispatch') {
-        return ['dashboard', 'dispatches', 'delivery', 'products', 'notifications'].includes(item.id);
+        return ['dashboard', 'dispatches', 'delivery', 'products', 'pricelist', 'notifications'].includes(item.id);
       }
       if (user.role === 'driver') {
         return ['delivery', 'notifications'].includes(item.id);

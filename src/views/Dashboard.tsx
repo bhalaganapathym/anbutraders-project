@@ -155,17 +155,6 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
     (d) => d.discount_approval_status === 'pending'
   );
 
-  const quickAccessTools = [
-    { name: t('estimate') || 'Estimate', view: 'orders', icon: ShoppingCart, color: 'bg-violet-500 text-white' },
-    { name: t('dispatches') || 'Dispatches', view: 'dispatches', icon: Truck, color: 'bg-emerald-500 text-white' },
-    { name: t('billing') || 'Billing', view: 'billing', icon: Receipt, color: 'bg-blue-500 text-white' },
-    { name: t('customers') || 'Customers', view: 'customers', icon: Users, color: 'bg-amber-500 text-white' },
-    { name: t('price_list') || 'Price List', view: 'pricelist', icon: Package, color: 'bg-indigo-500 text-white' },
-    { name: t('drivers') || 'Drivers', view: 'drivers', icon: HardHat, color: 'bg-teal-500 text-white' },
-    { name: t('reconciliation') || 'Daily Settlement', view: 'reconciliation', icon: DollarSign, color: 'bg-rose-500 text-white' },
-    { name: t('settings') || 'Settings', view: 'settings', icon: Settings, color: 'bg-slate-600 text-white' },
-  ];
-
   const load = useCallback(async () => {
     try {
       const [data, adv] = await Promise.all([
@@ -246,63 +235,84 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   useRealtime('bills', load);
   useRealtime('products', load);
 
-  // Role-specific Quick Access Tools
+  // Role-specific Quick Access Tools with live translations
   const allQuickAccessMap = {
     new_order: {
-      name: 'New Estimate',
+      name: t('create_new_order') || 'New Estimate',
       icon: PlusCircle,
       view: 'new_order',
       color: 'bg-amber-500 text-white shadow-amber-500/20',
       border: 'hover:border-amber-500',
     },
     orders: {
-      name: 'Estimates',
+      name: t('estimate') || 'Estimates',
       icon: ShoppingCart,
       view: 'orders',
       color: 'bg-violet-600 text-white shadow-violet-600/20',
       border: 'hover:border-violet-500',
     },
     pricelist: {
-      name: 'Price List',
+      name: t('price_list') || 'Price List',
       icon: Tags,
       view: 'pricelist',
       color: 'bg-slate-700 text-white shadow-slate-700/20',
       border: 'hover:border-slate-500',
     },
     dispatches: {
-      name: 'Dispatches',
+      name: t('dispatches') || 'Dispatches',
       icon: Truck,
       view: 'dispatches',
       color: 'bg-emerald-500 text-white shadow-emerald-500/20',
       border: 'hover:border-emerald-500',
     },
     billing: {
-      name: 'Billing',
+      name: t('billing') || 'Billing',
       icon: Receipt,
       view: 'billing',
       color: 'bg-blue-600 text-white shadow-blue-600/20',
       border: 'hover:border-blue-500',
     },
     reconciliation: {
-      name: 'Reconciliation',
+      name: t('reconciliation') || 'Daily Settlement',
       icon: DollarSign,
       view: 'reconciliation',
-      color: 'bg-purple-600 text-white shadow-purple-600/20',
-      border: 'hover:border-purple-500',
+      color: 'bg-rose-500 text-white shadow-rose-500/20',
+      border: 'hover:border-rose-500',
     },
     customers: {
-      name: 'Customer Ledger',
+      name: t('customers_ledger') || 'Customer Ledger',
       icon: Users,
       view: 'customers',
       color: 'bg-sky-600 text-white shadow-sky-600/20',
       border: 'hover:border-sky-500',
     },
     delivery: {
-      name: 'Delivery / POD',
+      name: t('delivery_pod') || 'Delivery / POD',
       icon: MapPin,
       view: 'delivery',
-      color: 'bg-rose-500 text-white shadow-rose-500/20',
+      color: 'bg-rose-600 text-white shadow-rose-600/20',
       border: 'hover:border-rose-500',
+    },
+    products: {
+      name: t('products') || 'Products',
+      icon: Package,
+      view: 'products',
+      color: 'bg-indigo-600 text-white shadow-indigo-600/20',
+      border: 'hover:border-indigo-500',
+    },
+    drivers: {
+      name: t('drivers') || 'Drivers',
+      icon: HardHat,
+      view: 'drivers',
+      color: 'bg-teal-600 text-white shadow-teal-600/20',
+      border: 'hover:border-teal-500',
+    },
+    settings: {
+      name: t('settings') || 'Settings',
+      icon: Settings,
+      view: 'settings',
+      color: 'bg-slate-600 text-white shadow-slate-600/20',
+      border: 'hover:border-slate-500',
     },
   };
 
@@ -312,37 +322,48 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
       return [
         allQuickAccessMap.dispatches,
         allQuickAccessMap.delivery,
+        allQuickAccessMap.products,
+        allQuickAccessMap.pricelist,
       ];
     }
     if (role === 'billing' || role === 'cashier') {
       return [
         allQuickAccessMap.new_order,
         allQuickAccessMap.orders,
-        allQuickAccessMap.pricelist,
         allQuickAccessMap.billing,
+        allQuickAccessMap.pricelist,
+        allQuickAccessMap.customers,
         allQuickAccessMap.reconciliation,
       ];
     }
-    // Admin & other roles: Full 8 tools pipeline
+    if (role === 'driver') {
+      return [
+        allQuickAccessMap.delivery,
+      ];
+    }
+    // Admin & Owner: Complete pipeline
     return [
       allQuickAccessMap.new_order,
       allQuickAccessMap.orders,
-      allQuickAccessMap.pricelist,
       allQuickAccessMap.dispatches,
       allQuickAccessMap.billing,
-      allQuickAccessMap.reconciliation,
       allQuickAccessMap.customers,
-      allQuickAccessMap.delivery,
+      allQuickAccessMap.pricelist,
+      allQuickAccessMap.drivers,
+      allQuickAccessMap.reconciliation,
+      allQuickAccessMap.settings,
     ];
   };
 
   const quickAccessItems = getQuickAccessItems();
 
   const getGridColsClass = (count: number) => {
-    if (count <= 2) return 'grid grid-cols-2 max-w-md gap-3 sm:gap-4';
-    if (count <= 4) return 'grid grid-cols-2 sm:grid-cols-4 max-w-3xl gap-3 sm:gap-4';
-    if (count === 5) return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4';
-    return 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4';
+    if (count <= 1) return 'grid grid-cols-1 max-w-xs gap-3 sm:gap-4';
+    if (count === 2) return 'grid grid-cols-2 max-w-md gap-3 sm:gap-4';
+    if (count === 3) return 'grid grid-cols-3 max-w-xl gap-3 sm:gap-4';
+    if (count === 4) return 'grid grid-cols-2 sm:grid-cols-4 max-w-3xl gap-3 sm:gap-4';
+    if (count === 5 || count === 6) return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4';
+    return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-9 gap-3 sm:gap-4';
   };
 
   return (
@@ -747,19 +768,19 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
         </div>
       </section>
 
-      {/* 3. Quick Access Grid (8 App-Style Rounded Cards - Placed Below Activities Today) */}
+      {/* 3. Quick Access Grid (Role-Based) */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Sparkles size={16} className="text-amber-500" />
           <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-            Quick Access
+            {t('quick_actions') || 'Quick Access'}
           </h2>
         </div>
         
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
-          {quickAccessTools.map((item) => (
+        <div className={getGridColsClass(quickAccessItems.length)}>
+          {quickAccessItems.map((item) => (
             <button
-              key={item.name}
+              key={item.name + item.view}
               type="button"
               onClick={() => onNavigate(item.view)}
               className="group flex flex-col items-center justify-center p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all duration-200 active:scale-95 text-center"
