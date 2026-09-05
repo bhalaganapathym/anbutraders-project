@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice, round2 } from '@/lib/pricing';
+import { parseAndCategorizeAddresses } from '@/lib/address';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
 
@@ -692,43 +693,101 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                   </label>
                 )}
               </div>
-              <div className="p-5 space-y-3">
+              <div className="p-5 space-y-4">
                 {selectedCustomer && (() => {
-                  const savedAddrs = Array.from(new Set([
+                  const allAddrs = [
                     selectedCustomer.address,
                     ...(selectedCustomer.delivery_addresses || [])
-                  ].filter(Boolean) as string[]));
+                  ].filter(Boolean) as string[];
 
-                  return savedAddrs.length > 0 ? (
-                    <div className="space-y-1.5">
-                      <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                        <Navigation size={12} className="text-blue-500" /> Recommended Saved Addresses:
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        {savedAddrs.map((addr, idx) => {
-                          const isSelected = deliveryAddress.trim().toLowerCase() === addr.trim().toLowerCase();
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                setDeliveryAddress(addr);
-                                setUseCustomerAddress(addr === selectedCustomer.address);
-                              }}
-                              className={`text-xs px-3 py-1.5 rounded-lg transition text-left flex items-center gap-1.5 border ${
-                                isSelected
-                                  ? 'bg-blue-50 border-blue-500 text-blue-800 font-bold shadow-sm ring-2 ring-blue-500/20'
-                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 font-medium'
-                              }`}
-                            >
-                              <span>📍</span>
-                              <span className="truncate max-w-[260px]">{addr}</span>
-                            </button>
-                          );
-                        })}
+                  const { normalAddresses, gpsLocations } = parseAndCategorizeAddresses(allAddrs);
+
+                  if (normalAddresses.length === 0 && gpsLocations.length === 0) return null;
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
+                      {/* PANE 1: Normal / Street Addresses */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <Navigation size={13} className="text-blue-600" /> 🏢 Normal Addresses ({normalAddresses.length})
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-400">Street / Area</span>
+                        </div>
+
+                        {normalAddresses.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                            {normalAddresses.map((addr, idx) => {
+                              const isSelected = deliveryAddress.trim().toLowerCase() === addr.trim().toLowerCase();
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setDeliveryAddress(addr);
+                                    setUseCustomerAddress(addr === selectedCustomer.address);
+                                  }}
+                                  className={`text-xs px-2.5 py-1.5 rounded-lg transition text-left flex items-center gap-1.5 border shadow-2xs ${
+                                    isSelected
+                                      ? 'bg-blue-600 border-blue-600 text-white font-bold shadow-sm'
+                                      : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/50 font-medium'
+                                  }`}
+                                >
+                                  <span>📍</span>
+                                  <span className="truncate max-w-[200px]" title={addr}>{addr}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs italic text-slate-400 py-1">No normal text addresses saved</p>
+                        )}
+                      </div>
+
+                      {/* PANE 2: GPS Locations */}
+                      <div className="space-y-2 border-t md:border-t-0 md:border-l border-slate-200/80 pt-3 md:pt-0 md:pl-3.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                            <MapPin size={13} className="text-emerald-600" /> 🛰️ GPS Locations ({gpsLocations.length})
+                          </span>
+                          <span className="text-[10px] font-semibold text-emerald-600/80">Site Geo-Tag</span>
+                        </div>
+
+                        {gpsLocations.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                            {gpsLocations.map((gps, idx) => {
+                              const isSelected = deliveryAddress.trim().toLowerCase() === gps.raw.trim().toLowerCase();
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setDeliveryAddress(gps.raw);
+                                    setUseCustomerAddress(false);
+                                  }}
+                                  className={`text-xs px-2.5 py-1.5 rounded-lg transition text-left flex items-center gap-1.5 border shadow-2xs ${
+                                    isSelected
+                                      ? 'bg-emerald-600 border-emerald-600 text-white font-bold shadow-sm'
+                                      : 'bg-white border-emerald-200 text-emerald-900 hover:border-emerald-400 hover:bg-emerald-50/60 font-medium'
+                                  }`}
+                                >
+                                  <span>🎯</span>
+                                  <div className="flex flex-col min-w-0 max-w-[190px]">
+                                    <span className="truncate font-semibold text-xs">{gps.label}</span>
+                                    <span className={`text-[10px] truncate ${isSelected ? 'text-emerald-100' : 'text-emerald-600'}`}>
+                                      GPS: {gps.coordsText}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs italic text-slate-400 py-1">No GPS coordinates captured yet</p>
+                        )}
                       </div>
                     </div>
-                  ) : null;
+                  );
                 })()}
 
                 <textarea
@@ -738,7 +797,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                     setUseCustomerAddress(false);
                   }}
                   rows={2}
-                  className="w-full resize-none rounded-lg border border-slate-300 p-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-sm"
+                  className="w-full resize-none rounded-lg border border-slate-300 p-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-sm font-medium"
                   placeholder="Enter full delivery address, plot number, landmark (auto-saved to customer profile for future use)..."
                 />
               </div>

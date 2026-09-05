@@ -4,6 +4,7 @@ import { useToast } from '@/components/Toast';
 import { useTranslation } from '@/lib/i18n';
 import Modal from '@/components/Modal';
 import { openWhatsApp, DEFAULT_COMPANY_IMAGE_URL } from '@/lib/whatsapp';
+import { parseAndCategorizeAddresses } from '@/lib/address';
 import html2canvas from 'html2canvas';
 import { 
   Users, 
@@ -262,33 +263,78 @@ _Thank you for your business!_`;
           </div>
 
           {/* Saved Delivery & Site Locations stored in Ledger */}
-          {data.customer.delivery_addresses && data.customer.delivery_addresses.length > 0 && (
-            <div className="p-3 bg-blue-50/60 dark:bg-slate-800/60 rounded-xl border border-blue-200 dark:border-slate-700 space-y-2">
-              <p className="text-xs font-black text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
-                <MapPin size={14} className="text-rose-500" />
-                லெட்ஜரில் சேமிக்கப்பட்ட தள முகவரிகள் (Saved Site Locations in Ledger):
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {data.customer.delivery_addresses.map((addr, i) => (
-                  <div 
-                    key={i} 
-                    className="bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2 shadow-sm"
-                  >
-                    <span className="text-rose-500">📍</span>
-                    <span>{addr}</span>
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr.replace(/\(GPS:.*?\)/, '').trim() || addr)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 text-[10px] font-bold underline ml-1"
-                    >
-                      Maps
-                    </a>
-                  </div>
-                ))}
+          {(() => {
+            const allAddrs = [
+              data.customer.address,
+              ...(data.customer.delivery_addresses || [])
+            ].filter(Boolean) as string[];
+
+            const { normalAddresses, gpsLocations } = parseAndCategorizeAddresses(allAddrs);
+
+            if (normalAddresses.length === 0 && gpsLocations.length === 0) return null;
+
+            return (
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/70 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <p className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <MapPin size={14} className="text-rose-500" />
+                  லெட்ஜரில் சேமிக்கப்பட்ட முகவரிகள் & தளங்கள் (Saved Addresses & Site Locations):
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Normal addresses */}
+                  {normalAddresses.length > 0 && (
+                    <div className="space-y-1.5 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-750">
+                      <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block">
+                        🏢 Normal Addresses ({normalAddresses.length})
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {normalAddresses.map((addr, i) => (
+                          <div
+                            key={i}
+                            className="bg-slate-50 dark:bg-slate-800 px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5"
+                          >
+                            <span>📍</span>
+                            <span>{addr}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* GPS Locations */}
+                  {gpsLocations.length > 0 && (
+                    <div className="space-y-1.5 bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800/50">
+                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">
+                        🛰️ GPS Locations ({gpsLocations.length})
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {gpsLocations.map((gps, i) => (
+                          <div
+                            key={i}
+                            className="bg-white dark:bg-slate-900 px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-800 dark:text-slate-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5 shadow-2xs"
+                          >
+                            <span>🎯</span>
+                            <div className="flex flex-col">
+                              <span>{gps.label}</span>
+                              <span className="text-[9px] text-emerald-600 font-mono">GPS: {gps.coordsText}</span>
+                            </div>
+                            <a
+                              href={gps.mapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-emerald-700 hover:text-emerald-900 text-[10px] font-bold underline ml-1"
+                            >
+                              Maps ↗
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Action Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
