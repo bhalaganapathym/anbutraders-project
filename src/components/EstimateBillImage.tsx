@@ -95,7 +95,7 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
       <div
         ref={ref}
         className="w-[794px] bg-white text-slate-900 p-8 text-xs font-sans border-2 border-slate-800 space-y-4 shadow-none select-none"
-        style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}
+        style={{ fontFamily: 'Inter, "Noto Serif Tamil", system-ui, -apple-system, sans-serif' }}
       >
         {/* Header */}
         <div className="flex justify-between items-start border-b-2 border-slate-800 pb-3">
