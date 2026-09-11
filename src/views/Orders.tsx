@@ -215,7 +215,8 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
         totalAmount += pricing.totalPrice;
         totalWeight += pricing.totalWeight;
       });
-      totalAmount = round2(totalAmount + Number(order.unloading_charge || 0) + Number(order.transport_charge || 0));
+      const discountNum = round2(Number(order.discount_amount || 0));
+      totalAmount = round2(Math.max(0, totalAmount - discountNum + Number(order.unloading_charge || 0) + Number(order.transport_charge || 0)));
 
       return new Promise((resolve) => {
         canvas.toBlob((blob) => {
@@ -240,7 +241,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
         toast('Failed to render estimate image', 'error');
         return;
       }
-      const { blob, totalAmount } = res;
+      const { blob, totalAmount, totalWeight } = res;
       const estNo = order.order_no || order.id.substring(0, 8).toUpperCase();
       const phone = order.customer?.phone ? order.customer.phone.replace(/[^0-9]/g, '') : '';
       const dateStr = new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -252,11 +253,16 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
         advanceBlock = `\n💵 *Advance Paid:* ₹${advPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n🔴 *Balance Due:* ₹${balDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
       }
 
+      let steelWeightBlock = '';
+      if (totalWeight > 0) {
+        steelWeightBlock = `\n⚖️ *Total Steel Weight:* ${totalWeight.toFixed(2)} kg`;
+      }
+
       const caption = 
 `🧾 *ANBU TRADERS — ESTIMATE BILL*
 *Estimate No:* ${estNo}
 *Date:* ${dateStr}
-*Customer:* ${order.customer?.name ?? 'Customer'}
+*Customer:* ${order.customer?.name ?? 'Customer'}${steelWeightBlock}
 *Total Amount:* ₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}${advanceBlock}
 
 _Please find attached the official estimate bill image._

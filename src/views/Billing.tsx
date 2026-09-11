@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, type Dispatch, type Driver, type Customer, type DispatchItem } from '@/lib/api';
+import { api, type Dispatch, type Driver, type Customer, type DispatchItem, type Product } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { 
@@ -31,6 +31,93 @@ function numberToWords(num: number): string {
   };
   const intPart = Math.floor(num);
   return `INR ${inWords(intPart)} Only`;
+}
+
+export function getItemBillingInfo(
+  item: DispatchItem,
+  dispatch: Dispatch | null,
+  allProducts: Product[],
+  isDiscountApproved: boolean
+) {
+  const prod = allProducts.find(p => p.id === item.product_id) ||
+               allProducts.find(p => p.name?.toUpperCase() === item.product_name?.toUpperCase());
+  
+  const qty = Number(item.quantity) || 1;
+  const stdWt = round2(prod?.standard_weight || prod?.piece_weight_kg || 0);
+  const recordedWt = dispatch?.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
+
+  // Steel / Weighed product detection
+  const cat = (prod?.category || '').toUpperCase();
+  const name = (item.product_name || '').toUpperCase();
+  const isSteel =
+    cat.includes('STEEL') ||
+    cat.includes('TMT') ||
+    name.includes('STEEL') ||
+    name.includes('TMT') ||
+    (stdWt > 0 && !prod?.is_aac_block && cat !== 'CEMENT');
+
+  if (isSteel) {
+    // Total weight: use verified weighbridge recorded weight if available, otherwise nominal (qty * stdWt)
+    const totalWeight = recordedWt && Number(recordedWt) > 0 ? Number(recordedWt) : round2(qty * (stdWt > 0 ? stdWt : 1));
+    
+    // Base rate per kg: determine from prod.price / stdWt, or item.price / stdWt, or raw price if already rate/kg
+    let ratePerKg = 0;
+    const rawPrice = Number(prod?.price || item.price || item.original_price || 0);
+    if (stdWt > 0) {
+      if (rawPrice > 120) {
+        ratePerKg = round2(rawPrice / stdWt);
+      } else {
+        ratePerKg = round2(rawPrice);
+      }
+    } else {
+      ratePerKg = round2(rawPrice);
+    }
+
+    // Apply approved discount if any
+    let effectiveRatePerKg = ratePerKg;
+    if (isDiscountApproved && item.discount_per_kg && Number(item.discount_per_kg) > 0) {
+      effectiveRatePerKg = round2(Math.max(0, ratePerKg - Number(item.discount_per_kg)));
+    } else if (isDiscountApproved && item.discount_amount && Number(item.discount_amount) > 0 && totalWeight > 0) {
+      const perKgDisc = Number(item.discount_amount) / totalWeight;
+      effectiveRatePerKg = round2(Math.max(0, ratePerKg - perKgDisc));
+    }
+
+    const lineTotal = round2(totalWeight * effectiveRatePerKg);
+
+    return {
+      isSteel: true,
+      qty,
+      unit: item.unit || 'NOS',
+      stdWt,
+      totalWeight,
+      weightText: `${totalWeight.toFixed(2)} kg`,
+      ratePerKg: effectiveRatePerKg,
+      rateText: effectiveRatePerKg.toFixed(2),
+      perUnit: 'KG',
+      lineTotal,
+      totalPrice: lineTotal,
+      recordedWt
+    };
+  }
+
+  // Non-steel product (Cement, AAC, Paste, Liquid, etc.)
+  const unitPrice = isDiscountApproved ? (item.price || 0) : (item.original_price ?? item.price ?? 0);
+  const lineTotal = round2(unitPrice * qty);
+
+  return {
+    isSteel: false,
+    qty,
+    unit: item.unit || 'NOS',
+    stdWt: 0,
+    totalWeight: 0,
+    weightText: '—',
+    ratePerKg: 0,
+    rateText: Number(unitPrice).toFixed(2),
+    perUnit: (item.unit || 'NOS').toUpperCase(),
+    lineTotal,
+    totalPrice: lineTotal,
+    recordedWt: undefined
+  };
 }
 
 function WaitClock({
@@ -134,6 +221,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const [discountReason, setDiscountReason] = useState('');
   const [requestingDiscount, setRequestingDiscount] = useState(false);
   const [discountApprovalModalOpen, setDiscountApprovalModalOpen] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
   
   const paymentMethods = [
     'full payment done',
@@ -146,14 +234,16 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
   const loadData = useCallback(async () => {
     try {
-      const [dispData, driverData, custData] = await Promise.all([
+      const [dispData, driverData, custData, prodData] = await Promise.all([
         api.get('/dispatches'),
         api.get('/drivers'),
-        api.get('/customers')
+        api.get('/customers'),
+        api.get('/products')
       ]);
       setAllDispatches(dispData as Dispatch[]);
       setDrivers(driverData);
       setCustomers(custData);
+      setProducts(prodData as Product[]);
     } catch {
       toast('Failed to load billing data', 'error');
     } finally {
@@ -167,6 +257,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
   useRealtime('dispatches', loadData);
   useRealtime('bills', loadData);
+  useRealtime('products', loadData);
 
   const pendingBills = allDispatches.filter((d: Dispatch) => d.status === 'sent_to_billing');
   const completedBills = allDispatches.filter((d: Dispatch) => d.status === 'ready_for_loading' || d.status === 'completed' || !!d.bill);
@@ -195,8 +286,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch.items?.reduce((sum, item) => {
-        const p = isApproved ? (item.price ?? (item.original_price ?? 0)) : (item.original_price ?? (item.price ?? 0));
-        return sum + round2(p * (item.quantity || 1));
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
+        return sum + info.lineTotal;
       }, 0) || 0
     );
     const total = round2(itemsTotal + uChargeVal + dChargeVal);
@@ -222,15 +313,15 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         setToCollectAmount(total.toFixed(2));
       }
     }
-  }, [selectedDispatch, paymentMethod, unloadingCharge, deliveryCharge]);
+  }, [selectedDispatch, paymentMethod, unloadingCharge, deliveryCharge, products]);
 
   const handlePaidAmountChange = (val: string) => {
     setPaidAmount(val);
     const isApproved = selectedDispatch?.discount_approval_status === 'approved' && Number(selectedDispatch?.discount_amount || 0) > 0;
     const total = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
-        const p = isApproved ? (item.price ?? (item.original_price ?? 0)) : (item.original_price ?? (item.price ?? 0));
-        return sum + round2(p * (item.quantity || 1));
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
+        return sum + info.lineTotal;
       }, 0) || 0
     );
     const p = parseFloat(val) || 0;
@@ -243,8 +334,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const isApproved = selectedDispatch?.discount_approval_status === 'approved' && Number(selectedDispatch?.discount_amount || 0) > 0;
     const total = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
-        const p = isApproved ? (item.price ?? (item.original_price ?? 0)) : (item.original_price ?? (item.price ?? 0));
-        return sum + round2(p * (item.quantity || 1));
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
+        return sum + info.lineTotal;
       }, 0) || 0
     );
     const toCol = parseFloat(val) || 0;
@@ -410,7 +501,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     
     let totalAmount = 0;
     selectedDispatch.items?.forEach(item => {
-      totalAmount += round2((item.price || 0) * (item.quantity || 1));
+      const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved);
+      totalAmount += info.lineTotal;
     });
     const uChargeVal = parseFloat(unloadingCharge) || 0;
     const dChargeVal = parseFloat(deliveryCharge) || 0;
@@ -535,13 +627,16 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     Number(selectedDispatch?.discount_amount || 0) > 0;
 
   let totalAmount = 0;
+  let totalDispatchWeight = 0;
   selectedDispatch?.items?.forEach(item => {
-    const unitPrice = isSelectedDispatchDiscountApproved
-      ? (item.price || 0)
-      : (item.original_price ?? item.price ?? 0);
-    totalAmount += unitPrice * (item.quantity || 1);
+    const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved);
+    totalAmount += info.lineTotal;
+    if (info.totalWeight > 0) {
+      totalDispatchWeight += info.totalWeight;
+    }
   });
   totalAmount = round2(totalAmount);
+  totalDispatchWeight = round2(totalDispatchWeight);
   const uCharge = parseFloat(unloadingCharge) || 0;
   const dCharge = parseFloat(deliveryCharge) || 0;
   const grandTotalAmount = round2(totalAmount + uCharge + dCharge);
@@ -880,9 +975,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
               {/* Mobile View (< 768px): Bold, Non-Scrollable Cards */}
               <div className="md:hidden space-y-3">
                 {selectedDispatch.items?.map((item, idx) => {
-                  const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
-                  const unitPrice = isDiscountApproved ? (item.price || 0) : (item.original_price ?? item.price ?? 0);
-                  const lineTotal = round2(unitPrice * item.quantity);
+                  const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved);
 
                   return (
                     <div 
@@ -895,6 +988,11 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
                               Item #{idx + 1}
                             </span>
+                            {info.isSteel && (
+                              <span className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                                Steel Rate: ₹{info.rateText}/kg
+                              </span>
+                            )}
                             {isDiscountApproved && (item.discount_amount || 0) > 0 && (
                               <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
                                 {item.discount_per_kg ? `-₹${item.discount_per_kg.toFixed(2)}/kg` : `-₹${item.discount_amount?.toFixed(2)}`}
@@ -908,26 +1006,34 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                         <div className="text-right shrink-0">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Price</span>
                           <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                            ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ₹{info.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
                           <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
-                            Quantity / Nos
+                            Quantity
                           </span>
-                          <span className="text-base font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
-                            {item.quantity} <span className="text-xs font-bold text-slate-500">{item.unit}</span>
+                          <span className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
+                            {item.quantity} <span className="text-xs font-bold text-slate-500">{item.unit || 'NOS'}</span>
                           </span>
                         </div>
                         <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
                           <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
-                            Recorded Weight
+                            Total Weight
                           </span>
-                          <span className={`text-base font-black mt-0.5 block ${recordedWt ? 'text-blue-700 dark:text-blue-400' : 'text-slate-400'}`}>
-                            {recordedWt ? `${recordedWt} kg` : '—'}
+                          <span className={`text-sm font-black mt-0.5 block ${info.isSteel ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}`}>
+                            {info.isSteel ? info.weightText : '—'}
+                          </span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
+                          <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
+                            Rate / Unit
+                          </span>
+                          <span className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
+                            ₹{info.rateText} <span className="text-[10px] font-bold text-slate-500">/{info.perUnit}</span>
                           </span>
                         </div>
                       </div>
@@ -936,38 +1042,45 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                 })}
               </div>
 
-              {/* Desktop / Tablet View (>= 768px): High-Contrast, Clean Standard 4-Column Table */}
+              {/* Desktop / Tablet View (>= 768px): High-Contrast, Clean 5-Column Table */}
               <div className="hidden md:block border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700">
                     <tr>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">Item Name</th>
-                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">No. of Items</th>
-                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Recorded Weight</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-center">Nos / Quantity</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-center">Total Weight (kg)</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Rate</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Total Price</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y-2 divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900">
                     {selectedDispatch.items?.map((item, idx) => {
-                      const recordedWt = selectedDispatch.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
-                      const unitPrice = isDiscountApproved ? (item.price || 0) : (item.original_price ?? item.price ?? 0);
-                      const lineTotal = round2(unitPrice * item.quantity);
+                      const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved);
 
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                           <td className="px-5 py-4 font-black text-slate-900 dark:text-slate-100 text-sm">
-                            {item.product_name}
+                            <div>{item.product_name}</div>
+                            {isDiscountApproved && (item.discount_amount || 0) > 0 && (
+                              <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                {item.discount_per_kg ? `Discount: -₹${item.discount_per_kg.toFixed(2)}/kg` : `Discount: -₹${item.discount_amount?.toFixed(2)}`}
+                              </div>
+                            )}
                           </td>
-                          <td className="px-5 py-4 text-right font-black text-slate-900 dark:text-slate-100 text-sm">
-                            {item.quantity} <span className="font-bold text-xs text-slate-500">{item.unit}</span>
+                          <td className="px-5 py-4 text-center font-black text-slate-900 dark:text-slate-100 text-sm">
+                            {item.quantity} <span className="font-bold text-xs text-slate-500">{item.unit || 'NOS'}</span>
                           </td>
-                          <td className="px-5 py-4 text-right font-bold text-sm">
-                            <span className={recordedWt ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}>
-                              {recordedWt ? `${recordedWt} kg` : '—'}
+                          <td className="px-5 py-4 text-center font-bold text-sm">
+                            <span className={info.isSteel ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}>
+                              {info.isSteel ? info.weightText : '—'}
                             </span>
                           </td>
+                          <td className="px-5 py-4 text-right font-bold text-slate-900 dark:text-slate-100 text-sm">
+                            ₹{info.rateText} <span className="text-xs font-semibold text-slate-500">/{info.perUnit}</span>
+                          </td>
                           <td className="px-5 py-4 text-right font-black text-emerald-600 dark:text-emerald-400 text-base">
-                            ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ₹{info.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                         </tr>
                       );
@@ -1302,24 +1415,25 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                     <tr className="bg-gray-100 border-b-2 border-black font-extrabold">
                       <th className="border border-black p-1.5 text-center w-10">SI</th>
                       <th className="border border-black p-1.5 text-left">Description of Goods</th>
-                      <th className="border border-black p-1.5 text-center w-28">Nos / Quantity</th>
-                      <th className="border border-black p-1.5 text-right w-20">Rate</th>
+                      <th className="border border-black p-1.5 text-center w-24">Nos / Quantity</th>
+                      <th className="border border-black p-1.5 text-center w-28">Total Weight (kg)</th>
+                      <th className="border border-black p-1.5 text-right w-20">Rate (₹)</th>
                       <th className="border border-black p-1.5 text-center w-16">per</th>
                       <th className="border border-black p-1.5 text-right w-28">Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedDispatch.items?.map((it, idx) => {
-                      const unitPrice = isSelectedDispatchDiscountApproved ? (it.price || 0) : (it.original_price ?? it.price ?? 0);
-                      const lineTotal = round2(unitPrice * it.quantity);
+                      const info = getItemBillingInfo(it, selectedDispatch, products, isSelectedDispatchDiscountApproved);
                       return (
                         <tr key={it.id || idx}>
                           <td className="border border-black p-1.5 text-center font-medium">{idx + 1}</td>
                           <td className="border border-black p-1.5 font-bold uppercase">{it.product_name}</td>
-                          <td className="border border-black p-1.5 text-center font-semibold">{it.quantity}</td>
-                          <td className="border border-black p-1.5 text-right font-medium">{unitPrice.toFixed(2)}</td>
-                          <td className="border border-black p-1.5 text-center uppercase font-medium">{it.unit}</td>
-                          <td className="border border-black p-1.5 text-right font-black">{lineTotal.toFixed(2)}</td>
+                          <td className="border border-black p-1.5 text-center font-semibold">{it.quantity} {it.unit || 'NOS'}</td>
+                          <td className="border border-black p-1.5 text-center font-bold">{info.isSteel ? info.weightText : '—'}</td>
+                          <td className="border border-black p-1.5 text-right font-medium">{info.rateText}</td>
+                          <td className="border border-black p-1.5 text-center uppercase font-medium">{info.perUnit}</td>
+                          <td className="border border-black p-1.5 text-right font-black">{info.lineTotal.toFixed(2)}</td>
                         </tr>
                       );
                     })}
@@ -1327,6 +1441,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                     <tr className="bg-slate-50/50">
                       <td className="border border-black p-1.5 text-center font-medium">—</td>
                       <td className="border border-black p-1.5 font-bold uppercase text-slate-800">Unloading Charge</td>
+                      <td className="border border-black p-1.5 text-center text-gray-400">—</td>
                       <td className="border border-black p-1.5 text-center text-gray-400">—</td>
                       <td className="border border-black p-1.5 text-right text-gray-400">—</td>
                       <td className="border border-black p-1.5 text-center text-gray-400">—</td>
@@ -1339,6 +1454,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                       <td className="border border-black p-1.5 text-center font-medium">—</td>
                       <td className="border border-black p-1.5 font-bold uppercase text-slate-800">Transport Charges</td>
                       <td className="border border-black p-1.5 text-center text-gray-400">—</td>
+                      <td className="border border-black p-1.5 text-center text-gray-400">—</td>
                       <td className="border border-black p-1.5 text-right text-gray-400">—</td>
                       <td className="border border-black p-1.5 text-center text-gray-400">—</td>
                       <td className="border border-black p-1.5 text-right font-black">
@@ -1346,7 +1462,11 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                       </td>
                     </tr>
                     <tr className="font-extrabold border-t-2 border-black bg-gray-100">
-                      <td colSpan={5} className="border border-black p-2 text-right uppercase text-xs">Total</td>
+                      <td colSpan={3} className="border border-black p-2 text-right uppercase text-xs">Total</td>
+                      <td className="border border-black p-2 text-center text-xs font-bold">
+                        {totalDispatchWeight > 0 ? `${totalDispatchWeight.toFixed(2)} kg` : '—'}
+                      </td>
+                      <td colSpan={2} className="border border-black p-2 text-right uppercase text-xs">Total Amount</td>
                       <td className="border border-black p-2 text-right text-sm font-black">₹{grandTotalAmount.toFixed(2)}</td>
                     </tr>
                   </tbody>

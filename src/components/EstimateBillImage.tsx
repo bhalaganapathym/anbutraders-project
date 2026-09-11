@@ -74,7 +74,9 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
         unit: it.unit || prod?.unit || 'nos',
         isSteel: pricing.isSteel,
         weightKg: pricing.isSteel && pricing.totalWeight > 0 ? pricing.totalWeight : 0,
-        rateText: pricing.isSteel ? `₹${pricing.ratePerKg.toFixed(2)}/kg` : `₹${pricing.unitPrice.toFixed(2)}`,
+        rate: pricing.billingRate,
+        rateText: pricing.billingRate.toFixed(2),
+        perUnit: pricing.billingPerUnit,
         amount: pricing.totalPrice
       };
     });
@@ -165,9 +167,10 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
             <tr className="bg-slate-100 border-b-2 border-slate-800 font-black text-slate-900">
               <th className="border border-slate-800 p-1.5 text-center w-10">SI</th>
               <th className="border border-slate-800 p-1.5 text-left">Description of Goods</th>
-              <th className="border border-slate-800 p-1.5 text-center w-28">Quantity</th>
-              <th className="border border-slate-800 p-1.5 text-center w-24">Weight (kg)</th>
-              <th className="border border-slate-800 p-1.5 text-right w-24">Rate (₹)</th>
+              <th className="border border-slate-800 p-1.5 text-center w-24">Nos / Quantity</th>
+              <th className="border border-slate-800 p-1.5 text-center w-28">Total Weight (kg)</th>
+              <th className="border border-slate-800 p-1.5 text-right w-20">Rate (₹)</th>
+              <th className="border border-slate-800 p-1.5 text-center w-16">per</th>
               <th className="border border-slate-800 p-1.5 text-right w-28">Amount (₹)</th>
             </tr>
           </thead>
@@ -187,6 +190,9 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
                 <td className="border border-slate-800 p-1.5 text-right font-medium text-slate-800">
                   {it.rateText}
                 </td>
+                <td className="border border-slate-800 p-1.5 text-center uppercase font-medium text-slate-800">
+                  {it.perUnit}
+                </td>
                 <td className="border border-slate-800 p-1.5 text-right font-extrabold text-slate-900">
                   ₹{it.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
@@ -201,7 +207,7 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
               <td className="border border-slate-800 p-1.5 text-center font-bold text-slate-800">
                 {totalWeight > 0 ? `${totalWeight.toFixed(2)} kg` : '—'}
               </td>
-              <td className="border border-slate-800 p-1.5 text-right text-slate-700">
+              <td colSpan={2} className="border border-slate-800 p-1.5 text-right text-slate-700">
                 Subtotal:
               </td>
               <td className="border border-slate-800 p-1.5 text-right font-black text-slate-900">
@@ -212,10 +218,10 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
             {/* Discount Row if applicable */}
             {discountNum > 0 && (
               <tr className="border-b border-slate-300 bg-emerald-50/50">
-                <td colSpan={4} className="border border-slate-800 p-1 text-right text-emerald-800 font-bold">
+                <td colSpan={5} className="border border-slate-800 p-1 text-right text-emerald-800 font-bold">
                   Discount Applied:
                 </td>
-                <td className="border border-slate-800 p-1 text-right text-emerald-800">—</td>
+                <td className="border border-slate-800 p-1 text-center text-emerald-800">—</td>
                 <td className="border border-slate-800 p-1 text-right font-black text-emerald-800">
                   -₹{discountNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
@@ -225,10 +231,10 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
             {/* Additional Charges if applicable */}
             {unloadingNum > 0 && (
               <tr className="border-b border-slate-300">
-                <td colSpan={4} className="border border-slate-800 p-1 text-right text-slate-600 font-medium">
+                <td colSpan={5} className="border border-slate-800 p-1 text-right text-slate-600 font-medium">
                   Unloading Charges:
                 </td>
-                <td className="border border-slate-800 p-1 text-right text-slate-600">—</td>
+                <td className="border border-slate-800 p-1 text-center text-slate-600">—</td>
                 <td className="border border-slate-800 p-1 text-right font-bold text-slate-800">
                   ₹{unloadingNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
@@ -237,10 +243,10 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
 
             {transportNum > 0 && (
               <tr className="border-b border-slate-300">
-                <td colSpan={4} className="border border-slate-800 p-1 text-right text-slate-600 font-medium">
+                <td colSpan={5} className="border border-slate-800 p-1 text-right text-slate-600 font-medium">
                   Transport Charges:
                 </td>
-                <td className="border border-slate-800 p-1 text-right text-slate-600">—</td>
+                <td className="border border-slate-800 p-1 text-center text-slate-600">—</td>
                 <td className="border border-slate-800 p-1 text-right font-bold text-slate-800">
                   ₹{transportNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
@@ -249,7 +255,7 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
 
             {/* Grand Total Row */}
             <tr className="font-black border-t-2 border-slate-900 bg-slate-100">
-              <td colSpan={4} className="border border-slate-800 p-2 text-right uppercase text-xs tracking-wider">
+              <td colSpan={5} className="border border-slate-800 p-2 text-right uppercase text-xs tracking-wider">
                 Grand Total:
               </td>
               <td colSpan={2} className="border border-slate-800 p-2 text-right text-base font-black text-slate-900">

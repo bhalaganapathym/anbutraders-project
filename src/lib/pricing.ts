@@ -6,6 +6,9 @@ export interface ProductPriceInfo {
   totalWeight: number;
   totalPrice: number;
   unit: string;
+  billingRate: number;
+  billingPerUnit: string;
+  billingWeightText: string;
   displayBreakdown: string;
 }
 
@@ -52,6 +55,9 @@ export function calculateProductPrice(
       totalWeight: 0,
       totalPrice: 0,
       unit: 'nos',
+      billingRate: 0,
+      billingPerUnit: 'NOS',
+      billingWeightText: '—',
       displayBreakdown: ''
     };
   }
@@ -103,6 +109,9 @@ export function calculateProductPrice(
       totalWeight,
       totalPrice,
       unit: 'nos',
+      billingRate: roundedRatePerKg,
+      billingPerUnit: 'KG',
+      billingWeightText: `${totalWeight.toFixed(2)} kg`,
       displayBreakdown
     };
   }
@@ -122,6 +131,9 @@ export function calculateProductPrice(
     totalWeight,
     totalPrice,
     unit,
+    billingRate: unitPrice,
+    billingPerUnit: (unit || 'nos').toUpperCase(),
+    billingWeightText: '—',
     displayBreakdown
   };
 }
@@ -211,6 +223,8 @@ export function calculateDiscountedProductPrice(
 
   return {
     ...base,
+    totalPrice: finalTotalPrice,
+    billingRate: base.isSteel ? discountedRatePerKg : discountedUnitPrice,
     discountType: discount.type,
     discountValue: val,
     discountPerKg,
