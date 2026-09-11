@@ -71,6 +71,8 @@ class Order(Base):
     unloading_charge = Column(Numeric, default=0, nullable=True)
     transport_charge = Column(Numeric, default=0, nullable=True)
     transport_charge_type = Column(String, default="fixed", nullable=True)
+    discount_amount = Column(Numeric, default=0, nullable=False)
+    discount_details = Column(JSON, nullable=True)
     total_weight_kg = Column(Numeric, default=0, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     confirmed_at = Column(DateTime(timezone=True), nullable=True)

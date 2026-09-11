@@ -38,6 +38,8 @@ export interface EstimateOrderData {
   unloading_charge?: number | null;
   transport_charge?: number | null;
   transport_charge_type?: string | null;
+  discount_amount?: number | null;
+  discount_details?: any;
   is_advance_order?: boolean | null;
   advance_paid_amount?: number | null;
   advance_payment_method?: string | null;
@@ -81,7 +83,8 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
     totalWeight = round2(totalWeight);
     const unloadingNum = round2(Number(order.unloading_charge || 0));
     const transportNum = round2(Number(order.transport_charge || 0));
-    const grandTotal = round2(itemsSubtotal + unloadingNum + transportNum);
+    const discountNum = round2(Number(order.discount_amount || 0));
+    const grandTotal = round2(Math.max(0, itemsSubtotal - discountNum + unloadingNum + transportNum));
 
     const estNo = order.order_no || (order.id ? order.id.substring(0, 8).toUpperCase() : 'EST');
     const dateStr = order.created_at
@@ -205,6 +208,19 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
                 ₹{itemsSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </td>
             </tr>
+
+            {/* Discount Row if applicable */}
+            {discountNum > 0 && (
+              <tr className="border-b border-slate-300 bg-emerald-50/50">
+                <td colSpan={4} className="border border-slate-800 p-1 text-right text-emerald-800 font-bold">
+                  Discount Applied:
+                </td>
+                <td className="border border-slate-800 p-1 text-right text-emerald-800">—</td>
+                <td className="border border-slate-800 p-1 text-right font-black text-emerald-800">
+                  -₹{discountNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            )}
 
             {/* Additional Charges if applicable */}
             {unloadingNum > 0 && (

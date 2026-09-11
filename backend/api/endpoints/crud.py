@@ -474,10 +474,10 @@ def create_order(
             customer_name=cust_name
         )
         db.add(notif)
-    else:
+    elif order.status == "confirmed":
         notif = Notification(
             type="order_confirmed",
-            title=f"📋 New Estimate Created — {new_order_no}",
+            title=f"📋 Estimate Confirmed — {new_order_no}",
             message=f"{cust_name} (₹{total_val:,.2f}): {summary_str}. Ready for dispatch / loading.",
             order_id=order.id,
             customer_name=cust_name

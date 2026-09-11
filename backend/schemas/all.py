@@ -371,6 +371,8 @@ class OrderCreate(BaseModel):
     unloading_charge: Optional[float] = 0.0
     transport_charge: Optional[float] = 0.0
     transport_charge_type: Optional[str] = "fixed"
+    discount_amount: Optional[float] = 0.0
+    discount_details: Optional[Any] = None
     total_weight_kg: Optional[float] = 0.0
     items: Optional[List[OrderItemCreate]] = []
 
@@ -390,6 +392,8 @@ class OrderResponse(BaseModel):
     unloading_charge: Optional[float] = 0.0
     transport_charge: Optional[float] = 0.0
     transport_charge_type: Optional[str] = "fixed"
+    discount_amount: Optional[float] = 0.0
+    discount_details: Optional[Any] = None
     total_weight_kg: Optional[float] = 0.0
     created_at: datetime
     confirmed_at: Optional[datetime] = None

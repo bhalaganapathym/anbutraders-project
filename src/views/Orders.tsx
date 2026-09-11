@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import {
   Pencil, Plus, Search, Trash2, ShoppingCart, CheckCircle2, Truck, X, Minus, Phone, User, MapPin, UserPlus, Tag, Clock, Calendar, Sparkles,
-  Download, Image as ImageIcon
+  Download, Image as ImageIcon, MessageSquare
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice, round2 } from '@/lib/pricing';
@@ -76,12 +76,12 @@ const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
   const phone = o.customer?.phone ? o.customer.phone.replace(/[^0-9]/g, '') : '';
   const dateStr = new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   
-  let totalAmount = 0;
+  let itemsTotal = 0;
   let totalWeight = 0;
   const itemLines = (o.items || []).map((it) => {
     const prName = it.product?.name ?? 'Item';
     const pricing = calculateProductPrice(it.product, it.quantity || 1);
-    totalAmount += pricing.totalPrice;
+    itemsTotal += pricing.totalPrice;
     totalWeight += pricing.totalWeight;
     if (pricing.isSteel) {
       return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? 'nos'} × ${pricing.standardWeight} kg = *${pricing.totalWeight.toFixed(2)} kg*\n  Rate: ₹${pricing.ratePerKg.toFixed(2)} / kg\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
@@ -89,12 +89,28 @@ const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
     return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? ''}\n  Rate: ₹${pricing.unitPrice.toFixed(2)}\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
   }).join('\n\n');
 
-  const words = numberToWords(totalAmount);
+  itemsTotal = round2(itemsTotal);
+  const discVal = Number((o as any).discount_amount || 0);
+  const unloadVal = Number(o.unloading_charge || 0);
+  const transpVal = Number(o.transport_charge || 0);
+  const finalTotal = round2(Math.max(0, itemsTotal - discVal + unloadVal + transpVal));
+  const words = numberToWords(finalTotal);
+
+  let chargesBlock = '';
+  if (discVal > 0) {
+    chargesBlock += `🎁 *Discount Applied:* -₹${discVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+  }
+  if (unloadVal > 0) {
+    chargesBlock += `📦 *Unloading Charge:* ₹${unloadVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+  }
+  if (transpVal > 0) {
+    chargesBlock += `🚚 *Transport Charges:* ₹${transpVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+  }
 
   let advanceBlock = '';
   if (o.is_advance_order) {
     const advPaid = Number(o.advance_paid_amount || 0);
-    const balDue = Math.max(0, totalAmount - advPaid);
+    const balDue = Math.max(0, finalTotal - advPaid);
     const schedDate = o.scheduled_delivery_date ? new Date(o.scheduled_delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
     advanceBlock = `─────────────────────────────\n📦 *ADVANCE BOOKING DETAILS:*\n📅 *Scheduled Delivery Date:* ${schedDate}\n💵 *Advance Paid:* ₹${advPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n🔴 *Balance Due on Delivery:* ₹${balDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
   }
@@ -116,8 +132,9 @@ Ph: 0413-2964204, 9626325204
 ${itemLines}
 
 ─────────────────────────────
-*Total Weight:* ${totalWeight.toFixed(2)} kg
-*Total Amount:* ₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+*Items Subtotal:* ₹${itemsTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+${chargesBlock}*Total Weight:* ${totalWeight.toFixed(2)} kg
+*Grand Total:* *₹${finalTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*
 *Amount in words:* ${words}
 ${advanceBlock}─────────────────────────────
 _We declare that this invoice/estimate shows the actual price of the goods described and that all particulars are true and correct._
@@ -174,6 +191,7 @@ export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () =>
 
   const [sharingImageOrder, setSharingImageOrder] = useState<OrderWithCustomer | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [confirmedOrderPrompt, setConfirmedOrderPrompt] = useState<OrderWithCustomer | null>(null);
   const estimatePrintRef = useRef<HTMLDivElement>(null);
 
   const generateEstimateImageBlob = async (order: OrderWithCustomer): Promise<{ blob: Blob; totalAmount: number; totalWeight: number } | null> => {
@@ -566,9 +584,15 @@ _Please find attached the official estimate bill image._
         delivery_address: o.delivery_address,
         notes: o.notes,
         status: 'confirmed',
+        unloading_charge: o.unloading_charge,
+        transport_charge: o.transport_charge,
+        transport_charge_type: o.transport_charge_type,
+        discount_amount: (o as any).discount_amount || 0,
+        discount_details: (o as any).discount_details || null,
         items: o.items?.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit: i.unit })) || []
       });
-      toast('Estimate confirmed', 'success');
+      toast('Estimate confirmed! Ready for loading & dispatch.', 'success');
+      setConfirmedOrderPrompt({ ...o, status: 'confirmed' });
       load();
     } catch (e) {
       toast('Failed to confirm estimate', 'error');
@@ -773,7 +797,11 @@ _Please find attached the official estimate bill image._
             {filtered.map((o) => {
               const isSelected = selectedIds.has(o.id);
               const itemCount = o.items?.length || 0;
-              const totalEstimateAmount = round2((o.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
+              const itemsTotal = round2((o.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
+              const discVal = Number((o as any).discount_amount || 0);
+              const unloadVal = Number(o.unloading_charge || 0);
+              const transpVal = Number(o.transport_charge || 0);
+              const totalEstimateAmount = round2(Math.max(0, itemsTotal - discVal + unloadVal + transpVal));
 
               return (
                 <div
@@ -934,7 +962,11 @@ _Please find attached the official estimate bill image._
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((o) => {
                   const isSelected = selectedIds.has(o.id);
-                  const totalEstimateAmount = round2((o.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
+                  const itemsTotal = round2((o.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
+                  const discVal = Number((o as any).discount_amount || 0);
+                  const unloadVal = Number(o.unloading_charge || 0);
+                  const transpVal = Number(o.transport_charge || 0);
+                  const totalEstimateAmount = round2(Math.max(0, itemsTotal - discVal + unloadVal + transpVal));
 
                   return (
                     <tr
@@ -1422,6 +1454,66 @@ _Please find attached the official estimate bill image._
               </div>
               <button onClick={() => setDetailOrder(null)} className="btn-secondary">
                 Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Confirmation WhatsApp Prompt Modal */}
+      <Modal
+        open={Boolean(confirmedOrderPrompt)}
+        onClose={() => setConfirmedOrderPrompt(null)}
+        title="🎉 Estimate Confirmed"
+        size="md"
+      >
+        {confirmedOrderPrompt && (
+          <div className="space-y-4">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs space-y-1">
+              <p className="font-bold text-emerald-900 dark:text-emerald-200 text-sm">
+                Estimate #{confirmedOrderPrompt.order_no || confirmedOrderPrompt.id.slice(0, 8).toUpperCase()} is now confirmed!
+              </p>
+              <p className="text-slate-600 dark:text-slate-400">
+                Customer: <strong>{confirmedOrderPrompt.customer?.name}</strong> {confirmedOrderPrompt.customer?.phone ? `(${confirmedOrderPrompt.customer.phone})` : ''}
+              </p>
+              <p className="text-slate-500 text-[11px]">
+                The dispatch team has been notified. Would you like to share the official estimate with the customer via WhatsApp?
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const o = confirmedOrderPrompt;
+                  setConfirmedOrderPrompt(null);
+                  handleSendEstimateImageWhatsApp(o);
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#25D366] hover:bg-[#1ebd5a] text-white py-3 px-4 font-bold text-sm shadow-md transition"
+              >
+                <ImageIcon size={18} />
+                <span>Send Estimate Bill Image via WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const o = confirmedOrderPrompt;
+                  setConfirmedOrderPrompt(null);
+                  sendEstimateWhatsApp(o);
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#25D366]/40 bg-[#25D366]/10 text-[#128C7E] hover:bg-[#25D366]/20 py-2.5 px-4 font-bold text-xs transition"
+              >
+                <MessageSquare size={16} />
+                <span>Send Text Summary via WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setConfirmedOrderPrompt(null)}
+                className="btn-secondary text-xs py-2 mt-1"
+              >
+                Done / Later
               </button>
             </div>
           </div>

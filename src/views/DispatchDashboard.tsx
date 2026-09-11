@@ -64,6 +64,7 @@ type ItemVerificationState = {
   weight: string;
   weightUnit: 'kg' | 'g';
   cementText?: string;
+  enteredQty?: string;
   photoFile: File | null;
   photoPreview: string | null;
   verified: boolean;
@@ -72,7 +73,6 @@ type ItemVerificationState = {
 const isCementProduct = (prod: Product | undefined, item: DispatchItem) => {
   const cat = (prod?.category || '').toUpperCase();
   const name = (item.product_name || '').toLowerCase();
-  const unit = (item.unit || '').toLowerCase();
   return cat === 'CEMENT' || name.includes('cement');
 };
 
@@ -82,6 +82,39 @@ const isAacBlockProduct = (prod: Product | undefined, item: DispatchItem) => {
     (prod?.category || '').toUpperCase().includes('AAC') ||
     (item.product_name || '').toLowerCase().includes('aac')
   );
+};
+
+const isLiquidProduct = (prod: Product | undefined, item: DispatchItem) => {
+  const cat = (prod?.category || '').toUpperCase();
+  const unit = (item.unit || prod?.unit || '').toUpperCase();
+  const name = (item.product_name || '').toLowerCase();
+  return (
+    cat === 'LIQUID' ||
+    unit === 'L' ||
+    unit === 'LTR' ||
+    unit === 'LITRE' ||
+    unit === 'LITRES' ||
+    name.includes('liquid') ||
+    name.includes('litre') ||
+    name.includes(' ltr')
+  );
+};
+
+const isPasteProduct = (prod: Product | undefined, item: DispatchItem) => {
+  const cat = (prod?.category || '').toUpperCase();
+  const name = (item.product_name || '').toLowerCase();
+  return cat === 'PASTE' || name.includes('paste');
+};
+
+const isQuantityMatch = (enteredText: string | undefined, expectedQty: number) => {
+  if (enteredText === undefined || enteredText === null) return false;
+  const clean = enteredText.trim().toLowerCase();
+  if (!clean) return false;
+  const numOnly = clean.replace(/[^0-9.]/g, '');
+  if (numOnly && !isNaN(Number(numOnly))) {
+    return Math.abs(Number(numOnly) - expectedQty) < 0.001;
+  }
+  return false;
 };
 
 const isCementMatch = (enteredText: string | undefined, expectedQty: number) => {
@@ -149,12 +182,14 @@ export default function DispatchDashboard({
         initial[item.id] = {
           weight: savedItem.weight || '',
           weightUnit: savedItem.weightUnit || 'kg',
+          cementText: savedItem.cementText || '',
+          enteredQty: savedItem.enteredQty || savedItem.cementText || '',
           photoFile: null,
           photoPreview: savedItem.photoPreview || null,
           verified: Boolean(savedItem.verified)
         };
       } else {
-        initial[item.id] = { weight: '', weightUnit: 'kg', photoFile: null, photoPreview: null, verified: false };
+        initial[item.id] = { weight: '', weightUnit: 'kg', cementText: '', enteredQty: '', photoFile: null, photoPreview: null, verified: false };
       }
     });
     setItemVerification(initial);
@@ -368,7 +403,9 @@ export default function DispatchDashboard({
         const ivItem = itemVerification[item.id];
         const prod = products.find(p => p.id === item.product_id);
         const isAac = isAacBlockProduct(prod, item);
-        if (isAac || !prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
+        const isCement = isCementProduct(prod, item);
+        const isLiquid = isLiquidProduct(prod, item);
+        if (isAac || isCement || isLiquid || !prod?.standard_weight || !ivItem?.weight || isNaN(Number(ivItem.weight)) || Number(ivItem.weight) <= 0) return false;
         let actualWt = Number(ivItem.weight);
         if (ivItem.weightUnit === 'g') actualWt /= 1000;
         const q = Number(item.quantity) || 1;
@@ -531,13 +568,16 @@ export default function DispatchDashboard({
   detailItems.forEach(item => {
     const prod = products.find(p => p.id === item.product_id);
     const isAac = isAacBlockProduct(prod, item);
-    if (prod && prod.standard_weight && !isAac) {
+    const isCement = isCementProduct(prod, item);
+    const isLiquid = isLiquidProduct(prod, item);
+    const requiresWeight = !isAac && !isCement && !isLiquid && (prod?.standard_weight ? prod.standard_weight > 0 : false);
+    if (prod && prod.standard_weight && requiresWeight) {
       estimatedTotal += round2(prod.standard_weight * item.quantity);
     }
     
     if (itemVerification[item.id]) {
       const iv = itemVerification[item.id];
-      if (iv.weight && !isAac) {
+      if (iv.weight && requiresWeight) {
         let wt = Number(iv.weight);
         if (iv.weightUnit === 'g') wt = wt / 1000;
         actualTotal += round2(wt);
@@ -571,19 +611,22 @@ export default function DispatchDashboard({
   const [isCompletedLocal, setIsCompletedLocal] = useState(false);
   const allVerified = detailItems.every(item => {
     const iv = itemVerification[item.id];
+    if (!iv) return false;
     const prod = products.find(p => p.id === item.product_id);
     const isAac = isAacBlockProduct(prod, item);
-    const requiresWeight = !isAac && (prod?.standard_weight ? prod.standard_weight > 0 : false);
     const isCement = isCementProduct(prod, item);
+    const isLiquid = isLiquidProduct(prod, item);
+    const requiresWeight = !isAac && !isCement && !isLiquid && (prod?.standard_weight ? prod.standard_weight > 0 : false);
 
     if (requiresWeight) {
-      return iv?.verified || (isMismatchApproved && iv?.weight);
+      return iv.verified || (isMismatchApproved && Boolean(iv.weight));
     }
     if (isCement) {
       const expectedQty = Math.round(Number(item.quantity) || 1);
-      return iv?.verified && isCementMatch(iv?.cementText, expectedQty);
+      return iv.verified && isCementMatch(iv.cementText || iv.enteredQty, expectedQty);
     }
-    return iv?.verified;
+    const expectedQty = Number(item.quantity) || 0;
+    return iv.verified && isQuantityMatch(iv.enteredQty, expectedQty);
   });
   
   const canSendToBilling = allVerified && detail.status === 'pending';
@@ -602,14 +645,22 @@ export default function DispatchDashboard({
         const iv = itemVerification[item.id];
         const prod = products.find(p => p.id === item.product_id);
         const isCement = isCementProduct(prod, item);
+        const isLiquid = isLiquidProduct(prod, item);
+        const isAac = isAacBlockProduct(prod, item);
 
         if (iv) {
           let wt = Number(iv.weight) || 0;
           if (iv.weightUnit === 'g') wt = wt / 1000;
           if (wt > 0) {
             newWeights.push({ actual_weight: wt, notes: `Verified for ${item.product_name}` });
-          } else if (isCement && iv.cementText) {
-            newWeights.push({ actual_weight: Number(item.quantity) || 0, notes: `Verified ${iv.cementText.trim()} for ${item.product_name}` });
+          } else if (isCement && (iv.cementText || iv.enteredQty)) {
+            newWeights.push({ actual_weight: Number(item.quantity) || 0, notes: `Verified ${iv.cementText || iv.enteredQty} bags for ${item.product_name}` });
+          } else if (isLiquid && iv.enteredQty) {
+            newWeights.push({ actual_weight: Number(iv.enteredQty) || 0, notes: `Verified ${iv.enteredQty} Litres for ${item.product_name}` });
+          } else if (isAac && iv.enteredQty) {
+            newWeights.push({ actual_weight: Number(iv.enteredQty) || 0, notes: `Verified ${iv.enteredQty} nos (blocks) for ${item.product_name}` });
+          } else if (iv.enteredQty) {
+            newWeights.push({ actual_weight: Number(iv.enteredQty) || 0, notes: `Verified ${iv.enteredQty} ${item.unit || 'units'} for ${item.product_name}` });
           }
           
           if (iv.photoFile) {
@@ -780,15 +831,44 @@ export default function DispatchDashboard({
           <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Items to Verify</h2>
           <div className="space-y-4">
             {detailItems.map((item) => {
-              const iv = itemVerification[item.id] || { weight: '', weightUnit: 'kg', photoFile: null, photoPreview: null, verified: false };
+              const iv = itemVerification[item.id] || { weight: '', weightUnit: 'kg', cementText: '', enteredQty: '', photoFile: null, photoPreview: null, verified: false };
               const prod = products.find(p => p.id === item.product_id);
               const isAac = isAacBlockProduct(prod, item);
-              const requiresWeight = !isAac && (prod?.standard_weight ? prod.standard_weight > 0 : false);
               const isCement = isCementProduct(prod, item);
-              const cementQty = Math.round(Number(item.quantity) || 1);
-              const isCementCorrect = isCement && isCementMatch(iv.cementText, cementQty);
-              const hasEnteredCement = iv.cementText !== undefined && iv.cementText.trim() !== '';
-              const isCementMismatch = isCement && hasEnteredCement && !isCementCorrect;
+              const isLiquid = isLiquidProduct(prod, item);
+              const isPaste = isPasteProduct(prod, item);
+              const requiresWeight = !isAac && !isCement && !isLiquid && (prod?.standard_weight ? prod.standard_weight > 0 : false);
+
+              // Unit-specific verification expectations & labels
+              const expectedUnitQty = isCement 
+                ? Math.round(Number(item.quantity) || 1) 
+                : Number(item.quantity) || 0;
+              const unitLabel = isCement 
+                ? 'bags' 
+                : isLiquid 
+                  ? 'Litres' 
+                  : isAac 
+                    ? 'Nos (Blocks)' 
+                    : (item.unit || 'Units');
+              const unitPrompt = requiresWeight
+                ? 'Weight Verification'
+                : isCement
+                  ? 'Cement Bags Verification'
+                  : isLiquid
+                    ? 'Liquid Litres Verification'
+                    : isAac
+                      ? 'AAC Block Count Verification'
+                      : `${item.unit || 'Unit'} Verification`;
+
+              const unitEnteredVal = isCement ? (iv.cementText || iv.enteredQty || '') : (iv.enteredQty || '');
+              const isUnitCorrect = !requiresWeight && (
+                isCement 
+                  ? isCementMatch(unitEnteredVal, expectedUnitQty) 
+                  : isQuantityMatch(unitEnteredVal, expectedUnitQty)
+              );
+              const hasEnteredUnit = unitEnteredVal.trim() !== '';
+              const isUnitMismatch = !requiresWeight && hasEnteredUnit && !isUnitCorrect;
+
               const isVerificationDone = detail.status !== 'pending';
 
               // Weight verification calculations & quantity-scaled tolerance range
@@ -828,13 +908,16 @@ export default function DispatchDashboard({
                 }
               }
 
+              const isAnyMismatch = isSteelMismatch || isUnitMismatch;
+              const isAnyCorrect = isWeightCorrect || isUnitCorrect;
+
               return (
                 <div 
                   key={item.id} 
                   className={`grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border transition ${
-                    isSteelMismatch || isCementMismatch
+                    isAnyMismatch
                       ? 'border-2 border-rose-500 bg-rose-50/40 dark:bg-rose-950/30' 
-                      : isWeightCorrect || isCementCorrect
+                      : isAnyCorrect
                         ? 'border-2 border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20'
                         : iv.verified 
                           ? 'bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/50' 
@@ -849,6 +932,16 @@ export default function DispatchDashboard({
                       {isAac && (
                         <span className="badge bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
                           🧱 AAC Block
+                        </span>
+                      )}
+                      {isLiquid && (
+                        <span className="badge bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 text-[10px] font-bold border border-cyan-200 dark:border-cyan-800">
+                          💧 Liquid
+                        </span>
+                      )}
+                      {isPaste && (
+                        <span className="badge bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-200 dark:border-amber-800">
+                          🍯 Paste
                         </span>
                       )}
                     </div>
@@ -869,10 +962,10 @@ export default function DispatchDashboard({
                     </div>
                   </div>
 
-                  {/* Middle: Weight / Bags Verification (4 cols) */}
+                  {/* Middle: Weight / Bags / Unit Verification (4 cols) */}
                   <div className="lg:col-span-4 flex flex-col justify-center border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-700/50 pt-4 lg:pt-0 lg:pl-4">
                     <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
-                      {requiresWeight ? 'Weight Verification' : isCement ? 'Cement Count Verification' : 'Verification'}
+                      {unitPrompt}
                     </p>
                     {requiresWeight ? (
                       !isVerificationDone ? (
@@ -959,41 +1052,43 @@ export default function DispatchDashboard({
                           {detail.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight || 'Verified'} {detail.weights?.find(w => w.notes?.includes(item.product_name)) ? 'kg' : ''}
                         </p>
                       )
-                    ) : isCement ? (
+                    ) : (
                       !isVerificationDone ? (
                         <div>
                           <div className="flex items-center gap-2">
                             <div className="relative flex items-center">
                               <input 
                                 type="text" 
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                value={iv.cementText || ''} 
+                                inputMode="decimal"
+                                value={unitEnteredVal} 
                                 onChange={(e) => {
                                   const val = e.target.value;
-                                  const matches = isCementMatch(val, cementQty);
+                                  const matches = isCement 
+                                    ? isCementMatch(val, expectedUnitQty) 
+                                    : isQuantityMatch(val, expectedUnitQty);
                                   setItemVerification(prev => ({
                                     ...prev, 
                                     [item.id]: {
                                       ...prev[item.id], 
-                                      cementText: val,
+                                      cementText: isCement ? val : prev[item.id]?.cementText,
+                                      enteredQty: val,
                                       verified: matches ? true : (prev[item.id]?.verified && !matches ? false : prev[item.id]?.verified)
                                     }
                                   }));
                                 }}
-                                disabled={iv.verified && isCementCorrect}
-                                placeholder={`e.g. ${cementQty}`}
+                                disabled={iv.verified && isUnitCorrect}
+                                placeholder={`e.g. ${expectedUnitQty}`}
                                 className={`input w-32 text-center text-base font-black transition-all rounded-xl ${
-                                  isCementMismatch 
+                                  isUnitMismatch 
                                     ? 'bg-red-600 dark:bg-red-600 border-2 border-red-700 text-white placeholder-white/70 shadow-lg shadow-red-600/30' 
-                                    : isCementCorrect
+                                    : isUnitCorrect
                                       ? 'bg-emerald-600 dark:bg-emerald-600 border-2 border-emerald-700 text-white placeholder-white/70 shadow-lg shadow-emerald-600/30'
                                       : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-400'
                                 }`}
                               />
                             </div>
-                            <span className="text-xs font-black text-slate-500 uppercase">bags</span>
-                            {isCementCorrect && (
+                            <span className="text-xs font-black text-slate-500 uppercase">{unitLabel}</span>
+                            {isUnitCorrect && (
                               <div className="text-emerald-600 flex items-center gap-1 text-xs font-black ml-1">
                                 <CheckCircle2 size={16} /> Verified
                               </div>
@@ -1005,30 +1100,28 @@ export default function DispatchDashboard({
                             <div className="flex items-center gap-1.5 text-xs flex-wrap">
                               <span className="text-slate-500 dark:text-slate-400 font-semibold">Requirement:</span>
                               <span className="font-mono font-black text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.5 rounded text-[11px]">
-                                Enter "{cementQty}" ({cementQty} bags)
+                                Enter "{expectedUnitQty}" ({expectedUnitQty} {unitLabel})
                               </span>
                             </div>
 
-                            {isCementMismatch ? (
+                            {isUnitMismatch ? (
                               <div className="text-[11px] text-rose-600 dark:text-rose-400 font-extrabold flex items-center gap-1">
                                 <AlertCircle size={13} className="shrink-0 animate-bounce" />
-                                <span>Mismatch! Enter "{cementQty}" to confirm {cementQty} bags</span>
+                                <span>Mismatch! Enter "{expectedUnitQty}" to confirm {expectedUnitQty} {unitLabel}</span>
                               </div>
-                            ) : isCementCorrect ? (
+                            ) : isUnitCorrect ? (
                               <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-extrabold flex items-center gap-1">
                                 <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
-                                <span>Match ✓ {cementQty} bags confirmed</span>
+                                <span>Match ✓ {expectedUnitQty} {unitLabel} confirmed</span>
                               </div>
                             ) : null}
                           </div>
                         </div>
                       ) : (
                         <p className="font-bold text-slate-700 dark:text-slate-300">
-                          {cementQty} bags (Verified)
+                          {expectedUnitQty} {unitLabel} (Verified)
                         </p>
                       )
-                    ) : (
-                      <p className="text-sm italic text-slate-400">Not required for this product</p>
                     )}
                   </div>
 
@@ -1070,7 +1163,7 @@ export default function DispatchDashboard({
                           checked={iv.verified || isMismatchApproved}
                           disabled={
                             (requiresWeight && (!iv.weight || (isSteelMismatch && !isMismatchApproved))) ||
-                            (isCement && !isCementCorrect)
+                            (!requiresWeight && !isUnitCorrect)
                           }
                           onChange={(e) => setItemVerification(prev => ({...prev, [item.id]: {...prev[item.id], verified: e.target.checked}}))}
                         />

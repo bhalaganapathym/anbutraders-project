@@ -4,12 +4,14 @@ import { useToast } from '@/components/Toast';
 import {
   ArrowLeft, Search, Plus, Trash2, CheckCircle2, User, Phone, MapPin, 
   Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText, Mic, MicOff, Zap,
-  Calendar, DollarSign, Clock, Sparkles, Navigation, Image as ImageIcon, Download
+  Calendar, DollarSign, Clock, Sparkles, Navigation, Image as ImageIcon, Download,
+  Tag, Tags
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
-import { calculateProductPrice, round2 } from '@/lib/pricing';
+import { calculateProductPrice, calculateDiscountedProductPrice, round2 } from '@/lib/pricing';
 import { parseAndCategorizeAddresses } from '@/lib/address';
 import { EstimateBillImage } from '@/components/EstimateBillImage';
+import Modal from '@/components/Modal';
 import html2canvas from 'html2canvas';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
@@ -87,6 +89,10 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     orderToEdit?.transport_charge_type || 'fixed'
   );
 
+  // Item Discounts State
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  const [itemDiscounts, setItemDiscounts] = useState<Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }>>({});
+
   // Order Items
   const [lines, setLines] = useState<Line[]>([]);
   const [draftStatus, setDraftStatus] = useState<'Saved' | 'Saving...'>('Saved');
@@ -155,6 +161,19 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             return prod ? { product_id: item.product_id, quantity: item.quantity, unit: item.unit || prod.unit, product: prod } : null;
           }).filter(Boolean);
           setLines(mappedLines);
+        }
+        if ((orderToEdit as any).discount_details && Array.isArray((orderToEdit as any).discount_details)) {
+          const loadedDiscounts: Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }> = {};
+          (orderToEdit as any).discount_details.forEach((d: any) => {
+            const pid = d.product_id || d.item_id;
+            if (pid) {
+              loadedDiscounts[pid] = {
+                type: d.discount_type || 'per_kg',
+                value: Number(d.discount_value) || 0
+              };
+            }
+          });
+          setItemDiscounts(loadedDiscounts);
         }
       }
     } catch (e) {
@@ -396,9 +415,28 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     const p = calculateProductPrice(l.product, l.quantity);
     return acc + p.totalPrice;
   }, 0));
+
+  // Item Discounts Calculation
+  const discountDetailsPayload = lines.map(l => {
+    const disc = itemDiscounts[l.product_id] || { type: 'per_kg', value: 0 };
+    const pInfo = calculateDiscountedProductPrice(l.product, l.quantity, disc);
+    return {
+      product_id: l.product_id,
+      product_name: l.product.name,
+      quantity: l.quantity,
+      unit: l.unit || l.product.unit,
+      discount_type: disc.type,
+      discount_value: disc.value,
+      discount_amount: pInfo.totalDiscountAmount,
+      original_price: pInfo.unitPrice,
+      new_price: pInfo.discountedUnitPrice
+    };
+  });
+  const totalDiscountAmount = round2(discountDetailsPayload.reduce((sum, d) => sum + d.discount_amount, 0));
+
   const unloadingNum = round2(parseFloat(unloadingCharge) || 0);
   const transportNum = round2(parseFloat(transportCharge) || 0);
-  const grandTotal = round2(itemSubtotal + unloadingNum + transportNum);
+  const grandTotal = round2(Math.max(0, itemSubtotal - totalDiscountAmount + unloadingNum + transportNum));
 
   // WhatsApp Integration
   const generateWhatsAppMessage = () => {
@@ -417,21 +455,29 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     msg += `─────────────────────────────\n`;
     msg += `*ITEMS:*\n\n`;
     lines.forEach((l, idx) => {
-      const p = calculateProductPrice(l.product, l.quantity);
+      const disc = itemDiscounts[l.product_id] || { type: 'per_kg', value: 0 };
+      const p = calculateDiscountedProductPrice(l.product, l.quantity, disc);
       msg += `${idx + 1}. *${l.product.name}*\n`;
       if (p.isSteel) {
-        msg += `   ${l.quantity} nos × ${p.standardWeight} kg = *${p.totalWeight.toFixed(2)} kg* @ ₹${p.ratePerKg.toFixed(2)}/kg = *₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
+        msg += `   ${l.quantity} nos × ${p.standardWeight} kg = *${p.totalWeight.toFixed(2)} kg* @ ₹${p.discountedRatePerKg.toFixed(2)}/kg = *₹${p.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*`;
+        if (p.totalDiscountAmount > 0) msg += ` _(Saved ₹${p.totalDiscountAmount.toFixed(2)})_`;
+        msg += `\n`;
       } else {
-        msg += `   ${l.quantity} ${l.unit || l.product.unit} × ₹${p.unitPrice.toFixed(2)} = *₹${p.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
+        msg += `   ${l.quantity} ${l.unit || l.product.unit} × ₹${p.discountedUnitPrice.toFixed(2)} = *₹${p.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*`;
+        if (p.totalDiscountAmount > 0) msg += ` _(Saved ₹${p.totalDiscountAmount.toFixed(2)})_`;
+        msg += `\n`;
       }
     });
     msg += `─────────────────────────────\n`;
     msg += `*Items Subtotal:* ₹${itemSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+    if (totalDiscountAmount > 0) {
+      msg += `🎁 *Discount Applied:* -₹${totalDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+    }
     if (unloadingNum > 0) {
       msg += `📦 *Unloading Charge:* ₹${unloadingNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
     }
     if (transportNum > 0) {
-      msg += `🚚 *Transport Charge:* ₹${transportNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+      msg += `🚚 *Transport Charges:* ₹${transportNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
     }
     if (estimatedWeight > 0) {
       msg += `⚖️ *Est. Total Weight:* ${estimatedWeight.toFixed(2)} kg\n`;
@@ -551,7 +597,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     }
   };
 
-  const handleSaveOrder = async () => {
+  const handleSaveOrder = async (confirmNow: boolean = false) => {
     if (!selectedCustomer) {
       toast('Please select a customer', 'error');
       return;
@@ -567,7 +613,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         customer_id: selectedCustomer.id,
         delivery_address: deliveryAddress,
         notes: '',
-        status: 'pending',
+        status: confirmNow ? 'confirmed' : (orderToEdit?.status || 'pending'),
         is_advance_order: isAdvanceOrder,
         scheduled_delivery_date: isAdvanceOrder && scheduledDeliveryDate ? new Date(scheduledDeliveryDate).toISOString() : null,
         advance_paid_amount: isAdvanceOrder ? round2(parseFloat(advancePaidAmount) || 0) : 0,
@@ -577,17 +623,24 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         unloading_charge: unloadingNum,
         transport_charge: transportNum,
         transport_charge_type: transportChargeType,
+        discount_amount: totalDiscountAmount,
+        discount_details: discountDetailsPayload.filter(d => d.discount_amount > 0),
         total_weight_kg: estimatedWeight,
         items: lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, unit: l.unit }))
       };
       
       if (orderToEdit) {
         await api.put(`/orders/${orderToEdit.id}`, payload);
-        toast('Order updated successfully', 'success');
+        toast(confirmNow ? 'Estimate confirmed successfully!' : 'Estimate draft updated', 'success');
       } else {
         await api.post('/orders', payload);
-        toast(isAdvanceOrder ? 'Advance Order booked successfully!' : 'Order created successfully', 'success');
+        toast(confirmNow ? 'Estimate confirmed & booked!' : (isAdvanceOrder ? 'Advance Order booked!' : 'Estimate draft saved'), 'success');
       }
+
+      if (confirmNow) {
+        handleWhatsApp();
+      }
+
       onBack();
     } catch (e: any) {
       toast(e.message || 'Failed to save order', 'error');
@@ -1444,6 +1497,25 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                   <span className="text-slate-900 font-bold">₹{itemSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
 
+                {/* Item Discounts Row */}
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-600 font-semibold flex items-center gap-1">
+                      <Tags size={13} className="text-amber-600" /> Item Discounts
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsDiscountModalOpen(true)}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline ml-1"
+                    >
+                      {totalDiscountAmount > 0 ? 'Edit' : '+ Add'}
+                    </button>
+                  </div>
+                  <span className={`font-black ${totalDiscountAmount > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    {totalDiscountAmount > 0 ? `-₹${totalDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹0.00'}
+                  </span>
+                </div>
+
                 {/* Unloading & Transport Charges Inputs */}
                 <div className="pt-2 border-t border-slate-100 space-y-2">
                   <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
@@ -1463,7 +1535,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                   </div>
 
                   <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                    <span className="flex items-center gap-1 text-slate-600">🚚 Transport Charge</span>
+                    <span className="flex items-center gap-1 text-slate-600">🚚 Transport Charges</span>
                     <div className="flex items-center gap-1">
                       <span className="text-slate-400">₹</span>
                       <input
@@ -1539,34 +1611,163 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
               type="button"
               onClick={handleShareEstimateImage}
               disabled={isGeneratingImage || !selectedCustomer || lines.length === 0}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2.5 font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50 text-xs sm:text-sm"
               title="Share or Download Official Estimate Image"
             >
-              <ImageIcon size={18} />
+              <ImageIcon size={16} />
               <span>{isGeneratingImage ? 'Rendering...' : 'Estimate Image'}</span>
             </button>
             <button 
               type="button"
               onClick={handleWhatsApp}
               disabled={!selectedCustomer || lines.length === 0}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl border border-[#25D366]/30 bg-[#25D366]/10 px-4 py-3 font-bold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl border border-[#25D366]/30 bg-[#25D366]/10 px-3.5 py-2.5 font-bold text-[#128C7E] transition hover:bg-[#25D366]/20 disabled:opacity-50 text-xs sm:text-sm"
               title="Share estimate via WhatsApp"
             >
-              <MessageCircle size={18} />
+              <MessageCircle size={16} />
               <span>WhatsApp</span>
             </button>
             <button 
               type="button"
-              onClick={handleSaveOrder}
+              onClick={() => handleSaveOrder(false)}
               disabled={saving || !selectedCustomer || lines.length === 0}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 text-xs sm:text-sm shadow-sm"
+              title="Save draft estimate without dispatch notification"
             >
-              {saving ? 'Saving...' : 'Save Order'}
+              {saving ? 'Saving...' : 'Save Draft'}
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleSaveOrder(true)}
+              disabled={saving || !selectedCustomer || lines.length === 0}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50 text-xs sm:text-sm"
+              title="Confirm estimate, notify dispatch, and open WhatsApp"
+            >
+              <CheckCircle2 size={16} />
+              <span>{saving ? 'Confirming...' : 'Confirm & Book'}</span>
             </button>
           </div>
 
         </div>
       </div>
+
+      {/* Item Discount Editor Modal */}
+      <Modal open={isDiscountModalOpen} onClose={() => setIsDiscountModalOpen(false)} title="🎁 Apply / Edit Item Discounts" size="lg">
+        <div className="space-y-4">
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs space-y-1">
+            <div className="flex items-center justify-between font-bold">
+              <span className="text-amber-900 dark:text-amber-300">
+                Estimate: {nextOrderId} — {selectedCustomer?.name || 'Customer'}
+              </span>
+              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                Total Savings: ₹{totalDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <p className="text-slate-600 dark:text-slate-400 text-[11px]">
+              Enter price discount per kg (e.g. 0.50 for ₹0.50 off/kg on steel), per unit, or flat reduction for each line item below.
+            </p>
+          </div>
+
+          {lines.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-4">Please add products to the estimate first.</p>
+          ) : (
+            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+              {lines.map((line, idx) => {
+                const disc = itemDiscounts[line.product_id] || { type: 'per_kg', value: 0 };
+                const pInfo = calculateDiscountedProductPrice(line.product, line.quantity, disc);
+
+                return (
+                  <div
+                    key={line.product_id || idx}
+                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 dark:text-slate-100">
+                          {line.product.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          {line.quantity} {line.unit || line.product.unit} {pInfo.isSteel ? `· Weight: ${pInfo.totalWeight.toFixed(2)} kg` : ''} · Catalog Rate: ₹{pInfo.unitPrice.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Line Total</span>
+                        <p className="text-xs font-black font-mono text-slate-800 dark:text-slate-200">
+                          ₹{pInfo.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 items-end">
+                      <div>
+                        <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">
+                          Discount Mode
+                        </label>
+                        <select
+                          value={disc.type}
+                          onChange={(e) =>
+                            setItemDiscounts({
+                              ...itemDiscounts,
+                              [line.product_id]: { ...disc, type: e.target.value as any }
+                            })
+                          }
+                          className="input py-1 text-xs font-semibold"
+                        >
+                          <option value="per_kg">₹ / kg reduction</option>
+                          <option value="per_unit">₹ / unit reduction</option>
+                          <option value="flat">₹ flat reduction</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-extrabold uppercase text-slate-500 mb-1">
+                          Discount Value ({disc.type === 'per_kg' ? '₹/kg' : disc.type === 'per_unit' ? '₹/unit' : '₹ flat'})
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={disc.value || ''}
+                            onChange={(e) =>
+                              setItemDiscounts({
+                                ...itemDiscounts,
+                                [line.product_id]: { ...disc, value: parseFloat(e.target.value) || 0 }
+                              })
+                            }
+                            placeholder="0.00"
+                            className="input pl-6 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200 dark:border-emerald-800 text-right">
+                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 block">
+                          Savings on Line
+                        </span>
+                        <span className="text-xs font-black text-emerald-800 dark:text-emerald-300">
+                          -₹{pInfo.totalDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsDiscountModalOpen(false)}
+              className="btn-primary text-xs px-5 py-2"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Hidden container for rendering crisp estimate image */}
       <div className="fixed top-[-9999px] left-[-9999px]">
@@ -1579,6 +1780,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             delivery_address: deliveryAddress,
             unloading_charge: unloadingNum,
             transport_charge: transportNum,
+            discount_amount: totalDiscountAmount,
+            discount_details: discountDetailsPayload.filter(d => d.discount_amount > 0),
             is_advance_order: isAdvanceOrder,
             advance_paid_amount: parseFloat(advancePaidAmount) || 0,
             advance_payment_method: advancePaymentMethod,

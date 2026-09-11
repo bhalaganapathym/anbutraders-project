@@ -1026,7 +1026,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Delivery Charge (₹) <span className="text-slate-400 font-normal">(Optional)</span>
+                  Transport Charges (₹) <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="number"
@@ -1334,10 +1334,10 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                         {uCharge > 0 ? uCharge.toFixed(2) : ''}
                       </td>
                     </tr>
-                    {/* Delivery Charge Row */}
+                    {/* Transport Charges Row */}
                     <tr className="bg-slate-50/50">
                       <td className="border border-black p-1.5 text-center font-medium">—</td>
-                      <td className="border border-black p-1.5 font-bold uppercase text-slate-800">Delivery Charge</td>
+                      <td className="border border-black p-1.5 font-bold uppercase text-slate-800">Transport Charges</td>
                       <td className="border border-black p-1.5 text-center text-gray-400">—</td>
                       <td className="border border-black p-1.5 text-right text-gray-400">—</td>
                       <td className="border border-black p-1.5 text-center text-gray-400">—</td>

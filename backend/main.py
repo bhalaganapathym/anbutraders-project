@@ -30,6 +30,8 @@ try:
         conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS unloading_charge NUMERIC(12, 2) DEFAULT 0.00;"))
         conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS transport_charge NUMERIC(12, 2) DEFAULT 0.00;"))
         conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS transport_charge_type VARCHAR DEFAULT 'fixed';"))
+        conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12, 2) DEFAULT 0.00;"))
+        conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_details JSON;"))
         conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_weight_kg NUMERIC(12, 3) DEFAULT 0.00;"))
         conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS notes VARCHAR;"))
         conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS pod_voice_note_url VARCHAR;"))

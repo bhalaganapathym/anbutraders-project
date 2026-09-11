@@ -45,7 +45,7 @@ const empty: Form = {
   piece_weight_kg: ''
 };
 
-const categories = ['Steel', 'Cement', 'TMT Bars', 'AAC Blocks', 'Pipes', 'Other'];
+const categories = ['Steel', 'Cement', 'TMT Bars', 'AAC Blocks', 'Pipes', 'Paste', 'Liquid', 'Other'];
 const knownBrands = ['Tata Steel', 'iSteel', 'Sumangala', 'Suryadev', 'Ultratech', 'Dalmia', 'Chettinad'];
 const knownSizes = ['8mm', '10mm', '12mm', '16mm', '20mm', '25mm', '32mm', '4 inch', '6 inch', '8 inch', '9 inch'];
 
@@ -55,6 +55,10 @@ const categoryColor: Record<string, string> = {
   'TMT Bars': 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
   'AAC Blocks': 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
   Pipes: 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+  Paste: 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+  Liquid: 'bg-cyan-50 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+  PASTE: 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+  LIQUID: 'bg-cyan-50 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
   Other: 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
 };
 
