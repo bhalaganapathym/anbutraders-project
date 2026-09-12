@@ -92,6 +92,15 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   // Item Discounts State
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [itemDiscounts, setItemDiscounts] = useState<Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }>>({});
+  const [customItemRates, setCustomItemRates] = useState<Record<string, number>>(() => {
+    if (orderToEdit?.discount_details) {
+      const dd = orderToEdit.discount_details;
+      if (typeof dd === 'object' && !Array.isArray(dd) && dd.custom_rates) {
+        return dd.custom_rates;
+      }
+    }
+    return {};
+  });
   const [customTotalEstimate, setCustomTotalEstimate] = useState<string>(() => {
     if (orderToEdit?.discount_details) {
       const dd = orderToEdit.discount_details;
@@ -173,8 +182,13 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         }
         if ((orderToEdit as any).discount_details) {
           const dd = (orderToEdit as any).discount_details;
-          if (typeof dd === 'object' && !Array.isArray(dd) && dd.custom_total_estimate) {
-            setCustomTotalEstimate(String(dd.custom_total_estimate));
+          if (typeof dd === 'object' && !Array.isArray(dd)) {
+            if (dd.custom_total_estimate) {
+              setCustomTotalEstimate(String(dd.custom_total_estimate));
+            }
+            if (dd.custom_rates) {
+              setCustomItemRates(dd.custom_rates);
+            }
           }
           const detailsList = Array.isArray(dd) ? dd : (dd.items || []);
           if (Array.isArray(detailsList)) {
@@ -424,18 +438,21 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const totalItems = lines.length;
   const totalQty = lines.reduce((acc, l) => acc + l.quantity, 0);
   const estimatedWeight = round2(lines.reduce((acc, l) => {
-    const p = calculateProductPrice(l.product, l.quantity);
+    const customRate = customItemRates[l.product_id];
+    const p = calculateProductPrice(l.product, l.quantity, customRate);
     return acc + p.totalWeight;
   }, 0));
   const itemSubtotal = round2(lines.reduce((acc, l) => {
-    const p = calculateProductPrice(l.product, l.quantity);
+    const customRate = customItemRates[l.product_id];
+    const p = calculateProductPrice(l.product, l.quantity, customRate);
     return acc + p.totalPrice;
   }, 0));
 
   // Item Discounts Calculation
   const discountDetailsPayload = lines.map(l => {
     const disc = itemDiscounts[l.product_id] || { type: 'per_kg', value: 0 };
-    const pInfo = calculateDiscountedProductPrice(l.product, l.quantity, disc);
+    const customRate = customItemRates[l.product_id];
+    const pInfo = calculateDiscountedProductPrice(l.product, l.quantity, disc, customRate);
     return {
       product_id: l.product_id,
       product_name: l.product.name,
@@ -445,7 +462,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       discount_value: disc.value,
       discount_amount: pInfo.totalDiscountAmount,
       original_price: pInfo.unitPrice,
-      new_price: pInfo.discountedUnitPrice
+      new_price: pInfo.discountedUnitPrice,
+      rate_per_kg: customRate || pInfo.ratePerKg
     };
   });
   const totalDiscountAmount = round2(discountDetailsPayload.reduce((sum, d) => sum + d.discount_amount, 0));
@@ -476,7 +494,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     msg += `*ITEMS:*\n\n`;
     lines.forEach((l, idx) => {
       const disc = itemDiscounts[l.product_id] || { type: 'per_kg', value: 0 };
-      const p = calculateDiscountedProductPrice(l.product, l.quantity, disc);
+      const customRate = customItemRates[l.product_id];
+      const p = calculateDiscountedProductPrice(l.product, l.quantity, disc, customRate);
       msg += `${idx + 1}. *${l.product.name}*\n`;
       if (p.isSteel) {
         msg += `   ${l.quantity} nos × ${p.standardWeight} kg = *${p.totalWeight.toFixed(2)} kg* @ ₹${p.discountedRatePerKg.toFixed(2)}/kg = *₹${p.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*`;
@@ -657,6 +676,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         discount_amount: finalDiscount,
         discount_details: {
           items: discountDetailsPayload.filter(d => d.discount_amount > 0),
+          custom_rates: customItemRates,
           custom_total_estimate: customTotalEstimate !== '' ? effectiveGrandTotal : null,
           estimate_adjustment: estimateAdjustment
         },
@@ -1406,7 +1426,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {lines.map((line, idx) => {
-                      const pricing = calculateProductPrice(line.product, line.quantity);
+                      const customRate = customItemRates[line.product_id];
+                      const pricing = calculateProductPrice(line.product, line.quantity, customRate);
                       const isSteel = pricing.isSteel && pricing.standardWeight > 0;
                       const lineMode = lineUnitModes[line.product_id] || 'nos';
 
@@ -1417,9 +1438,41 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm font-medium text-slate-500">
                               {isSteel ? (
                                 <>
-                                  <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                                    ₹{pricing.ratePerKg.toFixed(2)} / kg
-                                  </span>
+                                  <div className="inline-flex items-center bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 shadow-sm">
+                                    <span className="text-xs font-bold text-amber-800 mr-0.5">₹</span>
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      min="1"
+                                      value={customItemRates[line.product_id] !== undefined ? customItemRates[line.product_id] : pricing.ratePerKg}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        setCustomItemRates(prev => ({
+                                          ...prev,
+                                          [line.product_id]: isNaN(val) ? 0 : val
+                                        }));
+                                      }}
+                                      className="w-16 text-center font-black text-xs text-amber-900 bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-amber-500 rounded px-0.5"
+                                      title="Click to edit Rate / kg"
+                                    />
+                                    <span className="text-xs font-bold text-amber-700 ml-0.5">/ kg</span>
+                                  </div>
+                                  {customItemRates[line.product_id] !== undefined && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCustomItemRates(prev => {
+                                          const next = { ...prev };
+                                          delete next[line.product_id];
+                                          return next;
+                                        });
+                                      }}
+                                      className="text-[11px] text-amber-700 hover:text-amber-900 font-bold underline"
+                                      title="Reset to catalog rate"
+                                    >
+                                      Reset
+                                    </button>
+                                  )}
                                   <span className="text-slate-300">•</span>
                                   <span>{pricing.standardWeight} kg / nos</span>
                                   <span className="text-slate-300">•</span>
@@ -1738,7 +1791,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
               {lines.map((line, idx) => {
                 const disc = itemDiscounts[line.product_id] || { type: 'per_kg', value: 0 };
-                const pInfo = calculateDiscountedProductPrice(line.product, line.quantity, disc);
+                const customRate = customItemRates[line.product_id];
+                const pInfo = calculateDiscountedProductPrice(line.product, line.quantity, disc, customRate);
 
                 return (
                   <div
@@ -1857,7 +1911,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             scheduled_delivery_date: scheduledDeliveryDate,
             advance_notes: advanceNotes
           }}
-          items={lines}
+          items={lines.map(l => ({ ...l, rate_per_kg: customItemRates[l.product_id] }))}
           products={products}
         />
       </div>

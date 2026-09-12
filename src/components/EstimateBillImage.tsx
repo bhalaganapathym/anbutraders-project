@@ -26,6 +26,7 @@ export interface EstimateItemData {
   quantity: number;
   unit?: string | null;
   price?: number | null;
+  rate_per_kg?: number | null;
 }
 
 export interface EstimateOrderData {
@@ -63,7 +64,12 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
 
     const computedItems = items.map((it, idx) => {
       const prod = it.product || products.find(p => p.id === it.product_id);
-      const pricing = calculateProductPrice(prod, it.quantity || 1);
+      const customRate = it.rate_per_kg ?? (
+        order.discount_details && typeof order.discount_details === 'object' && !Array.isArray(order.discount_details)
+          ? order.discount_details.custom_rates?.[it.product_id || '']
+          : null
+      );
+      const pricing = calculateProductPrice(prod, it.quantity || 1, customRate);
       itemsSubtotal += pricing.totalPrice;
       totalWeight += pricing.totalWeight;
       return {

@@ -44,7 +44,8 @@ export function calculateProductPrice(
     unit?: string | null;
     brand?: string | null;
   } | null | undefined,
-  quantity: number = 1
+  quantity: number = 1,
+  customRatePerKg?: number | null
 ): ProductPriceInfo {
   if (!product) {
     return {
@@ -85,9 +86,10 @@ export function calculateProductPrice(
     let ratePerKg = pPrice;
     let unitPrice = pPrice * stdWeight;
 
-    // If pPrice in DB was stored as the piece price (e.g. 280.25 for 4.75kg = 59/kg, or 525 for 10.5kg = 50/kg)
-    // Standard steel rates in India range between ~₹35 to ~₹150 / kg
-    if (pPrice > 120 && stdWeight > 0) {
+    if (customRatePerKg !== undefined && customRatePerKg !== null && Number(customRatePerKg) > 0) {
+      ratePerKg = Number(customRatePerKg);
+      unitPrice = ratePerKg * stdWeight;
+    } else if (pPrice > 120 && stdWeight > 0) {
       const calculatedRate = pPrice / stdWeight;
       if (calculatedRate >= 25 && calculatedRate <= 200) {
         unitPrice = pPrice;
@@ -162,9 +164,10 @@ export function calculateDiscountedProductPrice(
   discount?: {
     type: 'per_kg' | 'per_unit' | 'flat';
     value: number;
-  } | null
+  } | null,
+  customRatePerKg?: number | null
 ): DiscountedPriceInfo {
-  const base = calculateProductPrice(product, quantity);
+  const base = calculateProductPrice(product, quantity, customRatePerKg);
   if (!discount || !discount.value || discount.value <= 0) {
     return {
       ...base,

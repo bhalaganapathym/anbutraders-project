@@ -37,7 +37,8 @@ export function getItemBillingInfo(
   item: DispatchItem,
   dispatch: Dispatch | null,
   allProducts: Product[],
-  isDiscountApproved: boolean
+  isDiscountApproved: boolean,
+  customRate?: number | null
 ) {
   const prod = allProducts.find(p => p.id === item.product_id) ||
                allProducts.find(p => p.name?.toUpperCase() === item.product_name?.toUpperCase());
@@ -73,9 +74,11 @@ export function getItemBillingInfo(
       ratePerKg = round2(rawPrice);
     }
 
-    // Apply approved discount if any
+    // Apply custom rate if provided, otherwise apply approved discount if any
     let effectiveRatePerKg = ratePerKg;
-    if (isDiscountApproved && item.discount_per_kg && Number(item.discount_per_kg) > 0) {
+    if (customRate !== undefined && customRate !== null && Number(customRate) > 0) {
+      effectiveRatePerKg = round2(Number(customRate));
+    } else if (isDiscountApproved && item.discount_per_kg && Number(item.discount_per_kg) > 0) {
       effectiveRatePerKg = round2(Math.max(0, ratePerKg - Number(item.discount_per_kg)));
     } else if (isDiscountApproved && item.discount_amount && Number(item.discount_amount) > 0 && totalWeight > 0) {
       const perKgDisc = Number(item.discount_amount) / totalWeight;
@@ -92,6 +95,7 @@ export function getItemBillingInfo(
       totalWeight,
       weightText: `${totalWeight.toFixed(2)} kg`,
       ratePerKg: effectiveRatePerKg,
+      defaultRatePerKg: ratePerKg,
       rateText: effectiveRatePerKg.toFixed(2),
       perUnit: 'KG',
       lineTotal,
@@ -101,7 +105,11 @@ export function getItemBillingInfo(
   }
 
   // Non-steel product (Cement, AAC, Paste, Liquid, etc.)
-  const unitPrice = isDiscountApproved ? (item.price || 0) : (item.original_price ?? item.price ?? 0);
+  const defaultUnitPrice = item.original_price ?? item.price ?? 0;
+  let unitPrice = isDiscountApproved ? (item.price || 0) : defaultUnitPrice;
+  if (customRate !== undefined && customRate !== null && Number(customRate) > 0) {
+    unitPrice = round2(Number(customRate));
+  }
   const lineTotal = round2(unitPrice * qty);
 
   return {
@@ -112,6 +120,7 @@ export function getItemBillingInfo(
     totalWeight: 0,
     weightText: '—',
     ratePerKg: 0,
+    defaultRatePerKg: defaultUnitPrice,
     rateText: Number(unitPrice).toFixed(2),
     perUnit: (item.unit || 'NOS').toUpperCase(),
     lineTotal,
@@ -199,6 +208,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
   const [selectedDispatch, setSelectedDispatch] = useState<Dispatch | null>(null);
   const [customTotalBill, setCustomTotalBill] = useState<string>('');
+  const [customItemRates, setCustomItemRates] = useState<Record<string, number>>({});
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
   const [paidAmount, setPaidAmount] = useState<string>('');
   const [toCollectAmount, setToCollectAmount] = useState<string>('');
@@ -279,12 +289,13 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     if (orderTransport > 0 && !deliveryCharge) setDeliveryCharge(String(orderTransport));
   }, [selectedDispatch, customers]);
 
-  // Reset customTotalBill whenever selectedDispatch changes
+  // Reset customTotalBill and customItemRates whenever selectedDispatch changes
   useEffect(() => {
     setCustomTotalBill('');
+    setCustomItemRates({});
   }, [selectedDispatch?.id]);
 
-  // Auto-calculate amounts when selectedDispatch, paymentMethod, or customTotalBill changes
+  // Auto-calculate amounts when selectedDispatch, paymentMethod, customTotalBill, or customItemRates changes
   useEffect(() => {
     if (!selectedDispatch) return;
     const isApproved = selectedDispatch.discount_approval_status === 'approved' && Number(selectedDispatch.discount_amount || 0) > 0;
@@ -292,7 +303,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch.items?.reduce((sum, item) => {
-        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customItemRates[item.id]);
         return sum + info.lineTotal;
       }, 0) || 0
     );
@@ -322,7 +333,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         setToCollectAmount(total.toFixed(2));
       }
     }
-  }, [selectedDispatch, paymentMethod, unloadingCharge, deliveryCharge, products, customTotalBill]);
+  }, [selectedDispatch, paymentMethod, unloadingCharge, deliveryCharge, products, customTotalBill, customItemRates]);
 
   const handleCustomTotalBillChange = (val: string) => {
     setCustomTotalBill(val);
@@ -331,7 +342,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
-        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customItemRates[item.id]);
         return sum + info.lineTotal;
       }, 0) || 0
     );
@@ -358,7 +369,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
-        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customItemRates[item.id]);
         return sum + info.lineTotal;
       }, 0) || 0
     );
@@ -378,7 +389,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
-        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customItemRates[item.id]);
         return sum + info.lineTotal;
       }, 0) || 0
     );
@@ -549,7 +560,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     
     let totalAmount = 0;
     selectedDispatch.items?.forEach(item => {
-      const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved);
+      const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved, customItemRates[item.id]);
       totalAmount += info.lineTotal;
     });
     const uChargeVal = parseFloat(unloadingCharge) || 0;
@@ -681,7 +692,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   let totalAmount = 0;
   let totalDispatchWeight = 0;
   selectedDispatch?.items?.forEach(item => {
-    const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved);
+    const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved, customItemRates[item.id]);
     totalAmount += info.lineTotal;
     if (info.totalWeight > 0) {
       totalDispatchWeight += info.totalWeight;
@@ -1069,7 +1080,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
               {/* Mobile View (< 768px): Bold, Non-Scrollable Cards */}
               <div className="md:hidden space-y-3">
                 {selectedDispatch.items?.map((item, idx) => {
-                  const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved);
+                  const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customItemRates[item.id]);
 
                   return (
                     <div 
@@ -1083,7 +1094,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                               Item #{idx + 1}
                             </span>
                             {info.isSteel && (
-                              <span className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                              <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800">
                                 Steel Rate: ₹{info.rateText}/kg
                               </span>
                             )}
@@ -1123,12 +1134,56 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                           </span>
                         </div>
                         <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
-                          <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
-                            Rate / Unit
-                          </span>
-                          <span className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
-                            ₹{info.rateText} <span className="text-[10px] font-bold text-slate-500">/{info.perUnit}</span>
-                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
+                              {info.isSteel ? 'Rate / kg' : 'Rate / Unit'}
+                            </span>
+                            {info.isSteel && customItemRates[item.id] !== undefined && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCustomItemRates(prev => {
+                                    const next = { ...prev };
+                                    delete next[item.id];
+                                    return next;
+                                  });
+                                }}
+                                className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5"
+                                title="Reset to default rate"
+                              >
+                                <RotateCcw size={10} /> Reset
+                              </button>
+                            )}
+                          </div>
+                          {info.isSteel ? (
+                            <div className="relative mt-1 flex items-center">
+                              <span className="text-xs font-bold text-amber-700 dark:text-amber-400 mr-1">₹</span>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value={customItemRates[item.id] !== undefined ? customItemRates[item.id] : (info.ratePerKg || '')}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  setCustomItemRates(prev => {
+                                    if (isNaN(val) || val <= 0) {
+                                      const next = { ...prev };
+                                      delete next[item.id];
+                                      return next;
+                                    }
+                                    return { ...prev, [item.id]: val };
+                                  });
+                                }}
+                                className="w-full text-xs font-black text-amber-900 dark:text-amber-200 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                title="Edit rate per kg"
+                              />
+                              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 ml-1">/kg</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
+                              ₹{info.rateText} <span className="text-[10px] font-bold text-slate-500">/{info.perUnit}</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1150,7 +1205,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   </thead>
                   <tbody className="divide-y-2 divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900">
                     {selectedDispatch.items?.map((item, idx) => {
-                      const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved);
+                      const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customItemRates[item.id]);
 
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -1171,7 +1226,53 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                             </span>
                           </td>
                           <td className="px-5 py-4 text-right font-bold text-slate-900 dark:text-slate-100 text-sm">
-                            ₹{info.rateText} <span className="text-xs font-semibold text-slate-500">/{info.perUnit}</span>
+                            {info.isSteel ? (
+                              <div className="inline-flex flex-col items-end gap-1">
+                                <div className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 rounded-lg px-2 py-1 shadow-sm">
+                                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400">₹</span>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    value={customItemRates[item.id] !== undefined ? customItemRates[item.id] : (info.ratePerKg || '')}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value);
+                                      setCustomItemRates(prev => {
+                                        if (isNaN(val) || val <= 0) {
+                                          const next = { ...prev };
+                                          delete next[item.id];
+                                          return next;
+                                        }
+                                        return { ...prev, [item.id]: val };
+                                      });
+                                    }}
+                                    className="w-20 text-right text-xs font-black text-amber-900 dark:text-amber-200 bg-transparent focus:outline-none focus:ring-0"
+                                    title="Edit rate per kg"
+                                  />
+                                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">/kg</span>
+                                </div>
+                                {customItemRates[item.id] !== undefined && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCustomItemRates(prev => {
+                                        const next = { ...prev };
+                                        delete next[item.id];
+                                        return next;
+                                      });
+                                    }}
+                                    className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5"
+                                    title="Reset to default rate"
+                                  >
+                                    <RotateCcw size={10} /> Reset
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                ₹{info.rateText} <span className="text-xs font-semibold text-slate-500">/{info.perUnit}</span>
+                              </>
+                            )}
                           </td>
                           <td className="px-5 py-4 text-right font-black text-emerald-600 dark:text-emerald-400 text-base">
                             ₹{info.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1518,7 +1619,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   </thead>
                   <tbody>
                     {selectedDispatch.items?.map((it, idx) => {
-                      const info = getItemBillingInfo(it, selectedDispatch, products, isSelectedDispatchDiscountApproved);
+                      const info = getItemBillingInfo(it, selectedDispatch, products, isSelectedDispatchDiscountApproved, customItemRates[it.id]);
                       return (
                         <tr key={it.id || idx}>
                           <td className="border border-black p-1.5 text-center font-medium">{idx + 1}</td>
