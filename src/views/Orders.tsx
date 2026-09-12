@@ -807,7 +807,12 @@ _Please find attached the official estimate bill image._
               const discVal = Number((o as any).discount_amount || 0);
               const unloadVal = Number(o.unloading_charge || 0);
               const transpVal = Number(o.transport_charge || 0);
-              const totalEstimateAmount = round2(Math.max(0, itemsTotal - discVal + unloadVal + transpVal));
+              const customEstimate = (o as any).discount_details && typeof (o as any).discount_details === 'object' && !Array.isArray((o as any).discount_details)
+                ? (o as any).discount_details.custom_total_estimate
+                : null;
+              const totalEstimateAmount = customEstimate !== null && customEstimate !== undefined
+                ? round2(Number(customEstimate))
+                : round2(Math.max(0, itemsTotal - discVal + unloadVal + transpVal));
 
               return (
                 <div
@@ -972,7 +977,12 @@ _Please find attached the official estimate bill image._
                   const discVal = Number((o as any).discount_amount || 0);
                   const unloadVal = Number(o.unloading_charge || 0);
                   const transpVal = Number(o.transport_charge || 0);
-                  const totalEstimateAmount = round2(Math.max(0, itemsTotal - discVal + unloadVal + transpVal));
+                  const customEstimate = (o as any).discount_details && typeof (o as any).discount_details === 'object' && !Array.isArray((o as any).discount_details)
+                    ? (o as any).discount_details.custom_total_estimate
+                    : null;
+                  const totalEstimateAmount = customEstimate !== null && customEstimate !== undefined
+                    ? round2(Number(customEstimate))
+                    : round2(Math.max(0, itemsTotal - discVal + unloadVal + transpVal));
 
                   return (
                     <tr

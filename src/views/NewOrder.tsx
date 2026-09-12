@@ -5,7 +5,7 @@ import {
   ArrowLeft, Search, Plus, Trash2, CheckCircle2, User, Phone, MapPin, 
   Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText, Mic, MicOff, Zap,
   Calendar, DollarSign, Clock, Sparkles, Navigation, Image as ImageIcon, Download,
-  Tag, Tags
+  Tag, Tags, RotateCcw
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 import { calculateProductPrice, calculateDiscountedProductPrice, round2 } from '@/lib/pricing';
@@ -92,6 +92,15 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   // Item Discounts State
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [itemDiscounts, setItemDiscounts] = useState<Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }>>({});
+  const [customTotalEstimate, setCustomTotalEstimate] = useState<string>(() => {
+    if (orderToEdit?.discount_details) {
+      const dd = orderToEdit.discount_details;
+      if (typeof dd === 'object' && !Array.isArray(dd) && dd.custom_total_estimate) {
+        return String(dd.custom_total_estimate);
+      }
+    }
+    return '';
+  });
 
   // Order Items
   const [lines, setLines] = useState<Line[]>([]);
@@ -162,18 +171,25 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
           }).filter(Boolean);
           setLines(mappedLines);
         }
-        if ((orderToEdit as any).discount_details && Array.isArray((orderToEdit as any).discount_details)) {
-          const loadedDiscounts: Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }> = {};
-          (orderToEdit as any).discount_details.forEach((d: any) => {
-            const pid = d.product_id || d.item_id;
-            if (pid) {
-              loadedDiscounts[pid] = {
-                type: d.discount_type || 'per_kg',
-                value: Number(d.discount_value) || 0
-              };
-            }
-          });
-          setItemDiscounts(loadedDiscounts);
+        if ((orderToEdit as any).discount_details) {
+          const dd = (orderToEdit as any).discount_details;
+          if (typeof dd === 'object' && !Array.isArray(dd) && dd.custom_total_estimate) {
+            setCustomTotalEstimate(String(dd.custom_total_estimate));
+          }
+          const detailsList = Array.isArray(dd) ? dd : (dd.items || []);
+          if (Array.isArray(detailsList)) {
+            const loadedDiscounts: Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }> = {};
+            detailsList.forEach((d: any) => {
+              const pid = d.product_id || d.item_id;
+              if (pid) {
+                loadedDiscounts[pid] = {
+                  type: d.discount_type || 'per_kg',
+                  value: Number(d.discount_value) || 0
+                };
+              }
+            });
+            setItemDiscounts(loadedDiscounts);
+          }
         }
       }
     } catch (e) {
@@ -437,6 +453,10 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const unloadingNum = round2(parseFloat(unloadingCharge) || 0);
   const transportNum = round2(parseFloat(transportCharge) || 0);
   const grandTotal = round2(Math.max(0, itemSubtotal - totalDiscountAmount + unloadingNum + transportNum));
+  const effectiveGrandTotal = customTotalEstimate !== '' && !isNaN(parseFloat(customTotalEstimate))
+    ? round2(Math.max(0, parseFloat(customTotalEstimate)))
+    : grandTotal;
+  const estimateAdjustment = round2(effectiveGrandTotal - grandTotal);
 
   // WhatsApp Integration
   const generateWhatsAppMessage = () => {
@@ -482,11 +502,18 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     if (estimatedWeight > 0) {
       msg += `⚖️ *Est. Total Weight:* ${estimatedWeight.toFixed(2)} kg\n`;
     }
-    msg += `💰 *Grand Total:* *₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
+    if (estimateAdjustment !== 0) {
+      if (estimateAdjustment < 0) {
+        msg += `🏷️ *Special Adjustment:* -₹${Math.abs(estimateAdjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+      } else {
+        msg += `➕ *Estimate Adjustment:* +₹${estimateAdjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n`;
+      }
+    }
+    msg += `💰 *Grand Total:* *₹${effectiveGrandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n`;
 
     if (isAdvanceOrder) {
       const advNum = parseFloat(advancePaidAmount) || 0;
-      const balNum = Math.max(0, grandTotal - advNum);
+      const balNum = Math.max(0, effectiveGrandTotal - advNum);
       msg += `─────────────────────────────\n`;
       msg += `📦 *ADVANCE ORDER BOOKING CONFIRMED:*\n`;
       msg += `📅 *Scheduled Delivery Date:* ${scheduledDeliveryDate ? new Date(scheduledDeliveryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}\n`;
@@ -566,7 +593,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         try {
           await navigator.share({
             title: `Estimate ${estNo} — Anbu Traders`,
-            text: `🧾 Estimate Bill ${estNo} for ${selectedCustomer.name}\nTotal: ₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\nANBU TRADERS`,
+            text: `🧾 Estimate Bill ${estNo} for ${selectedCustomer.name}\nTotal: ₹${effectiveGrandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}\nANBU TRADERS`,
             files: [imageFile],
           });
           toast('Estimate image shared successfully', 'success');
@@ -609,6 +636,10 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     
     setSaving(true);
     try {
+      const finalDiscount = effectiveGrandTotal < (itemSubtotal + unloadingNum + transportNum)
+        ? round2(itemSubtotal + unloadingNum + transportNum - effectiveGrandTotal)
+        : totalDiscountAmount;
+
       const payload = {
         customer_id: selectedCustomer.id,
         delivery_address: deliveryAddress,
@@ -623,8 +654,12 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         unloading_charge: unloadingNum,
         transport_charge: transportNum,
         transport_charge_type: transportChargeType,
-        discount_amount: totalDiscountAmount,
-        discount_details: discountDetailsPayload.filter(d => d.discount_amount > 0),
+        discount_amount: finalDiscount,
+        discount_details: {
+          items: discountDetailsPayload.filter(d => d.discount_amount > 0),
+          custom_total_estimate: customTotalEstimate !== '' ? effectiveGrandTotal : null,
+          estimate_adjustment: estimateAdjustment
+        },
         total_weight_kg: estimatedWeight,
         items: lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, unit: l.unit }))
       };
@@ -1552,11 +1587,40 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                 </div>
               </div>
               
-              <div className="border-t border-slate-200 border-dashed pt-3">
+              <div className="border-t border-slate-200 border-dashed pt-3 space-y-1">
                 <div className="flex justify-between items-center text-slate-900">
-                  <span className="text-sm font-bold">Total Estimate</span>
-                  <span className="text-xl font-black text-blue-600 tracking-tight">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-bold">Total Estimate</span>
+                    {customTotalEstimate !== '' && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomTotalEstimate('')}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-0.5 shadow-sm"
+                        title="Reset to calculated estimate"
+                      >
+                        <RotateCcw size={10} /> Reset
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={customTotalEstimate !== '' ? customTotalEstimate : grandTotal.toFixed(2)}
+                      onChange={(e) => setCustomTotalEstimate(e.target.value)}
+                      className="w-28 sm:w-36 text-right rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm font-black text-blue-600 outline-none focus:border-blue-500 focus:bg-white transition"
+                      title="Click to edit Total Estimate"
+                    />
+                  </div>
                 </div>
+                {customTotalEstimate !== '' && (
+                  <p className="text-[10px] text-slate-400 text-right">
+                    Calculated: ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {estimateAdjustment !== 0 && ` (${estimateAdjustment > 0 ? '+' : ''}₹${estimateAdjustment.toFixed(2)})`}
+                  </p>
+                )}
               </div>
 
               {/* Advance Booking Details in Summary */}
@@ -1577,7 +1641,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                   <div className="flex justify-between text-slate-900 font-bold border-t border-indigo-200/60 pt-1.5">
                     <span>Due on Delivery:</span>
                     <span className="font-black text-rose-600">
-                      ₹{Math.max(0, grandTotal - (parseFloat(advancePaidAmount) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      ₹{Math.max(0, effectiveGrandTotal - (parseFloat(advancePaidAmount) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -1596,14 +1660,14 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
           
           <div className="hidden lg:flex flex-col">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Order Total</p>
-            <p className="text-xl font-bold text-slate-900">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-xl font-bold text-slate-900">₹{effectiveGrandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
 
           <div className="flex w-full lg:w-auto items-center justify-between lg:hidden">
              <div className="text-sm font-medium text-slate-600">
                <span className="font-bold text-slate-900">{totalItems} items</span>
              </div>
-             <div className="text-lg font-bold text-blue-600">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+             <div className="text-lg font-bold text-blue-600">₹{effectiveGrandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           </div>
 
           <div className="flex w-full sm:w-auto items-center gap-2.5 flex-wrap">
@@ -1781,7 +1845,12 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             unloading_charge: unloadingNum,
             transport_charge: transportNum,
             discount_amount: totalDiscountAmount,
-            discount_details: discountDetailsPayload.filter(d => d.discount_amount > 0),
+            discount_details: {
+              items: discountDetailsPayload.filter(d => d.discount_amount > 0),
+              custom_total_estimate: customTotalEstimate !== '' ? effectiveGrandTotal : null,
+              estimate_adjustment: estimateAdjustment
+            },
+            custom_total: customTotalEstimate !== '' ? effectiveGrandTotal : null,
             is_advance_order: isAdvanceOrder,
             advance_paid_amount: parseFloat(advancePaidAmount) || 0,
             advance_payment_method: advancePaymentMethod,

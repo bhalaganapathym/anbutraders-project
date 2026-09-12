@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { 
   FileText, Download, CreditCard, IndianRupee, AlertCircle, MessageSquare, Clock, Bell, CheckCircle2, 
   User, MapPin, Phone, Truck, Package, Calendar, Tag, Sparkles, XCircle, ShieldCheck, HelpCircle,
-  PlusCircle, ShoppingCart, Tags, Receipt, DollarSign
+  PlusCircle, ShoppingCart, Tags, Receipt, DollarSign, RotateCcw
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import DiscountApprovalModal from '@/components/DiscountApprovalModal';
@@ -198,6 +198,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const isAdmin = user?.role?.toLowerCase() === 'admin' || user?.username?.toLowerCase() === 'admin';
 
   const [selectedDispatch, setSelectedDispatch] = useState<Dispatch | null>(null);
+  const [customTotalBill, setCustomTotalBill] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
   const [paidAmount, setPaidAmount] = useState<string>('');
   const [toCollectAmount, setToCollectAmount] = useState<string>('');
@@ -278,7 +279,12 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     if (orderTransport > 0 && !deliveryCharge) setDeliveryCharge(String(orderTransport));
   }, [selectedDispatch, customers]);
 
-  // Auto-calculate amounts when selectedDispatch or paymentMethod changes
+  // Reset customTotalBill whenever selectedDispatch changes
+  useEffect(() => {
+    setCustomTotalBill('');
+  }, [selectedDispatch?.id]);
+
+  // Auto-calculate amounts when selectedDispatch, paymentMethod, or customTotalBill changes
   useEffect(() => {
     if (!selectedDispatch) return;
     const isApproved = selectedDispatch.discount_approval_status === 'approved' && Number(selectedDispatch.discount_amount || 0) > 0;
@@ -290,7 +296,10 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         return sum + info.lineTotal;
       }, 0) || 0
     );
-    const total = round2(itemsTotal + uChargeVal + dChargeVal);
+    const calculatedTotal = round2(itemsTotal + uChargeVal + dChargeVal);
+    const total = customTotalBill !== '' && !isNaN(parseFloat(customTotalBill))
+      ? round2(Math.max(0, parseFloat(customTotalBill)))
+      : calculatedTotal;
     
     if (paymentMethod === 'full payment done') {
       setPaidAmount(total.toFixed(2));
@@ -313,17 +322,50 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         setToCollectAmount(total.toFixed(2));
       }
     }
-  }, [selectedDispatch, paymentMethod, unloadingCharge, deliveryCharge, products]);
+  }, [selectedDispatch, paymentMethod, unloadingCharge, deliveryCharge, products, customTotalBill]);
 
-  const handlePaidAmountChange = (val: string) => {
-    setPaidAmount(val);
+  const handleCustomTotalBillChange = (val: string) => {
+    setCustomTotalBill(val);
     const isApproved = selectedDispatch?.discount_approval_status === 'approved' && Number(selectedDispatch?.discount_amount || 0) > 0;
-    const total = round2(
+    const uChargeVal = parseFloat(unloadingCharge) || 0;
+    const dChargeVal = parseFloat(deliveryCharge) || 0;
+    const itemsTotal = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
         const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
         return sum + info.lineTotal;
       }, 0) || 0
     );
+    const calculatedTotal = round2(itemsTotal + uChargeVal + dChargeVal);
+    const num = parseFloat(val);
+    const total = !isNaN(num) ? round2(Math.max(0, num)) : calculatedTotal;
+
+    if (paymentMethod === 'full payment done') {
+      setPaidAmount(total.toFixed(2));
+      setToCollectAmount('0.00');
+    } else if (paymentMethod === 'full payment on site' || paymentMethod === 'credit' || paymentMethod === 'today payment') {
+      setPaidAmount('0.00');
+      setToCollectAmount(total.toFixed(2));
+    } else if (paymentMethod.includes('partial')) {
+      const currentPaid = round2(paidAmount);
+      setToCollectAmount(round2(Math.max(0, total - currentPaid)).toFixed(2));
+    }
+  };
+
+  const handlePaidAmountChange = (val: string) => {
+    setPaidAmount(val);
+    const isApproved = selectedDispatch?.discount_approval_status === 'approved' && Number(selectedDispatch?.discount_amount || 0) > 0;
+    const uChargeVal = parseFloat(unloadingCharge) || 0;
+    const dChargeVal = parseFloat(deliveryCharge) || 0;
+    const itemsTotal = round2(
+      selectedDispatch?.items?.reduce((sum, item) => {
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
+        return sum + info.lineTotal;
+      }, 0) || 0
+    );
+    const calculatedTotal = round2(itemsTotal + uChargeVal + dChargeVal);
+    const total = customTotalBill !== '' && !isNaN(parseFloat(customTotalBill))
+      ? round2(Math.max(0, parseFloat(customTotalBill)))
+      : calculatedTotal;
     const p = parseFloat(val) || 0;
     const remaining = round2(Math.max(0, total - round2(p)));
     setToCollectAmount(remaining.toFixed(2));
@@ -332,12 +374,18 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const handleToCollectAmountChange = (val: string) => {
     setToCollectAmount(val);
     const isApproved = selectedDispatch?.discount_approval_status === 'approved' && Number(selectedDispatch?.discount_amount || 0) > 0;
-    const total = round2(
+    const uChargeVal = parseFloat(unloadingCharge) || 0;
+    const dChargeVal = parseFloat(deliveryCharge) || 0;
+    const itemsTotal = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
         const info = getItemBillingInfo(item, selectedDispatch, products, isApproved);
         return sum + info.lineTotal;
       }, 0) || 0
     );
+    const calculatedTotal = round2(itemsTotal + uChargeVal + dChargeVal);
+    const total = customTotalBill !== '' && !isNaN(parseFloat(customTotalBill))
+      ? round2(Math.max(0, parseFloat(customTotalBill)))
+      : calculatedTotal;
     const toCol = parseFloat(val) || 0;
     const p = round2(Math.max(0, total - round2(toCol)));
     setPaidAmount(p.toFixed(2));
@@ -506,7 +554,11 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     });
     const uChargeVal = parseFloat(unloadingCharge) || 0;
     const dChargeVal = parseFloat(deliveryCharge) || 0;
-    totalAmount = round2(totalAmount + uChargeVal + dChargeVal);
+    const calcGrandTotal = round2(totalAmount + uChargeVal + dChargeVal);
+    const finalBillTotal = customTotalBill !== '' && !isNaN(parseFloat(customTotalBill))
+      ? round2(Math.max(0, parseFloat(customTotalBill)))
+      : calcGrandTotal;
+    const adjustment = round2(finalBillTotal - calcGrandTotal);
 
     const paidVal = round2(parseFloat(paidAmount) || 0);
     const toCollectVal = round2(parseFloat(toCollectAmount) || 0);
@@ -520,8 +572,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         customer_id: selectedDispatch.customer_id,
         driver_id: null,
         payment_method: paymentMethod,
-        total_amount: round2(totalAmount),
-        discount_amount: round2(selectedDispatch.discount_amount || 0),
+        total_amount: round2(finalBillTotal),
+        discount_amount: round2((selectedDispatch.discount_amount || 0) + (adjustment < 0 ? Math.abs(adjustment) : 0)),
         paid_amount: round2(paidVal),
         pending_amount: round2(toCollectVal),
         prior_pending_paid: priorPaidVal,
@@ -554,7 +606,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
       const imgWidth = 210;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      pdf.save(`Estimate_${selectedDispatch?.dispatch_no || 'Bill'}.pdf`);
+      pdf.save(`Invoice_${selectedDispatch?.dispatch_no || 'Bill'}.pdf`);
       toast('PDF downloaded', 'success');
     } catch {
       toast('Failed to generate PDF', 'error');
@@ -573,7 +625,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
       const imgData = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = imgData;
-      link.download = `Estimate_${selectedDispatch?.dispatch_no || 'Bill'}.png`;
+      link.download = `Invoice_${selectedDispatch?.dispatch_no || 'Bill'}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -594,7 +646,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
       return;
     }
     const billData = {
-      total_amount: (parseFloat(paidAmount) || 0) + (parseFloat(toCollectAmount) || 0),
+      total_amount: effectiveTotalBill,
       paid_amount: parseFloat(paidAmount) || 0,
       pending_amount: parseFloat(toCollectAmount) || 0,
     } as any;
@@ -640,6 +692,10 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const uCharge = parseFloat(unloadingCharge) || 0;
   const dCharge = parseFloat(deliveryCharge) || 0;
   const grandTotalAmount = round2(totalAmount + uCharge + dCharge);
+  const effectiveTotalBill = customTotalBill !== '' && !isNaN(parseFloat(customTotalBill))
+    ? round2(Math.max(0, parseFloat(customTotalBill)))
+    : grandTotalAmount;
+  const billAdjustment = round2(effectiveTotalBill - grandTotalAmount);
 
   const customerPriorDues = round2(Number(selectedCustomer?.pending_amount || 0));
   const priorPaidVal = round2(parseFloat(priorPendingPaid) || 0);
@@ -817,13 +873,51 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         {selectedDispatch && (
           <div className="space-y-6">
             
-            {/* Prominent Total Bill Display at the Top (Bold & Big) */}
+            {/* Prominent Total Bill Display at the Top (Bold & Big, Editable) */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
               <div>
-                <span className="text-xs font-extrabold uppercase tracking-wider text-blue-100">Total Bill Amount</span>
-                <h2 className="text-3xl sm:text-4xl font-black tracking-tight mt-0.5">
-                  ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-blue-100">Total Bill Amount</span>
+                  {customTotalBill !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomTotalBill('');
+                        if (paymentMethod === 'full payment done') {
+                          setPaidAmount(grandTotalAmount.toFixed(2));
+                          setToCollectAmount('0.00');
+                        } else if (paymentMethod === 'full payment on site' || paymentMethod === 'credit' || paymentMethod === 'today payment') {
+                          setPaidAmount('0.00');
+                          setToCollectAmount(grandTotalAmount.toFixed(2));
+                        } else if (paymentMethod.includes('partial')) {
+                          setToCollectAmount(round2(Math.max(0, grandTotalAmount - round2(paidAmount))).toFixed(2));
+                        }
+                      }}
+                      className="text-[10px] font-bold bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded transition flex items-center gap-1 shadow-sm"
+                      title="Reset to calculated total"
+                    >
+                      <RotateCcw size={10} /> Reset (₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-3xl sm:text-4xl font-black text-white">₹</span>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={customTotalBill !== '' ? customTotalBill : effectiveTotalBill.toFixed(2)}
+                    onChange={(e) => handleCustomTotalBillChange(e.target.value)}
+                    className="text-2xl sm:text-3xl font-black bg-white/15 hover:bg-white/25 focus:bg-white text-white focus:text-slate-900 border border-white/30 focus:border-white rounded-lg px-2.5 py-1 outline-none transition w-48 sm:w-64 shadow-inner"
+                    title="Click to edit Total Bill Amount"
+                  />
+                </div>
+                {customTotalBill !== '' && (
+                  <p className="text-[11px] text-blue-200 mt-1 font-medium">
+                    Calculated: ₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {billAdjustment !== 0 && ` (${billAdjustment > 0 ? '+' : ''}₹${billAdjustment.toFixed(2)})`}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <span className="badge bg-white/20 text-white text-xs font-bold uppercase">{selectedDispatch.dispatch_no}</span>
@@ -1210,7 +1304,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   Payment & Collection Breakdown
                 </span>
                 <span className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                  Total Bill: ₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  Total Bill: ₹{effectiveTotalBill.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
 
@@ -1388,8 +1482,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                     </div>
                   </div>
                   <div className="text-right">
-                    <h2 className="text-lg font-black border-2 border-black px-3 py-0.5 inline-block uppercase">ESTIMATE</h2>
-                    <p className="text-[10px] italic mt-1 text-gray-700">(TRIPLICATE FOR SUPPLIER)</p>
+                    <h2 className="text-lg font-black border-2 border-black px-3 py-0.5 inline-block uppercase">INVOICE</h2>
+                    <p className="text-[10px] italic mt-1 text-gray-700">(TAX INVOICE / CASH BILL)</p>
                     <p className="text-[11px] mt-2 font-bold"><strong>Invoice No:</strong> {selectedDispatch.dispatch_no}</p>
                     <p className="text-[11px] font-bold"><strong>Date:</strong> {new Date().toLocaleDateString('en-IN')}</p>
                   </div>
@@ -1461,24 +1555,40 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                         {dCharge > 0 ? dCharge.toFixed(2) : ''}
                       </td>
                     </tr>
+                    {/* Bill Adjustment / Rounding Row if edited */}
+                    {billAdjustment !== 0 && (
+                      <tr className="bg-slate-50/50">
+                        <td className="border border-black p-1.5 text-center font-medium">—</td>
+                        <td className="border border-black p-1.5 font-bold uppercase text-slate-800">
+                          {billAdjustment < 0 ? 'Special Discount / Bill Adjustment' : 'Additional Charge / Adjustment'}
+                        </td>
+                        <td className="border border-black p-1.5 text-center text-gray-400">—</td>
+                        <td className="border border-black p-1.5 text-center text-gray-400">—</td>
+                        <td className="border border-black p-1.5 text-right text-gray-400">—</td>
+                        <td className="border border-black p-1.5 text-center text-gray-400">—</td>
+                        <td className="border border-black p-1.5 text-right font-black">
+                          {billAdjustment < 0 ? `-₹${Math.abs(billAdjustment).toFixed(2)}` : `+₹${billAdjustment.toFixed(2)}`}
+                        </td>
+                      </tr>
+                    )}
                     <tr className="font-extrabold border-t-2 border-black bg-gray-100">
                       <td colSpan={3} className="border border-black p-2 text-right uppercase text-xs">Total</td>
                       <td className="border border-black p-2 text-center text-xs font-bold">
                         {totalDispatchWeight > 0 ? `${totalDispatchWeight.toFixed(2)} kg` : '—'}
                       </td>
                       <td colSpan={2} className="border border-black p-2 text-right uppercase text-xs">Total Amount</td>
-                      <td className="border border-black p-2 text-right text-sm font-black">₹{grandTotalAmount.toFixed(2)}</td>
+                      <td className="border border-black p-2 text-right text-sm font-black">₹{effectiveTotalBill.toFixed(2)}</td>
                     </tr>
                   </tbody>
                 </table>
 
                 <div className="space-y-1.5 pt-1 text-[11px]">
-                  <p className="font-semibold"><strong>Amount Chargeable (in words):</strong> {numberToWords(grandTotalAmount)}</p>
+                  <p className="font-semibold"><strong>Amount Chargeable (in words):</strong> {numberToWords(effectiveTotalBill)}</p>
 
                   <div className="grid grid-cols-3 gap-2 border-2 border-black p-2.5 my-2 bg-gray-50 text-[11px]">
                     <div>
                       <p className="text-[10px] font-bold text-gray-600 uppercase">Current Invoice Amount</p>
-                      <p className="font-black text-sm text-black">₹{grandTotalAmount.toFixed(2)}</p>
+                      <p className="font-black text-sm text-black">₹{effectiveTotalBill.toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-gray-600 uppercase">Current Bill Paid</p>

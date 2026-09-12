@@ -40,6 +40,7 @@ export interface EstimateOrderData {
   transport_charge_type?: string | null;
   discount_amount?: number | null;
   discount_details?: any;
+  custom_total?: number | null;
   is_advance_order?: boolean | null;
   advance_paid_amount?: number | null;
   advance_payment_method?: string | null;
@@ -86,7 +87,17 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
     const unloadingNum = round2(Number(order.unloading_charge || 0));
     const transportNum = round2(Number(order.transport_charge || 0));
     const discountNum = round2(Number(order.discount_amount || 0));
-    const grandTotal = round2(Math.max(0, itemsSubtotal - discountNum + unloadingNum + transportNum));
+    const calculatedGrandTotal = round2(Math.max(0, itemsSubtotal - discountNum + unloadingNum + transportNum));
+
+    const customTotal = order.custom_total ?? (
+      order.discount_details && typeof order.discount_details === 'object' && !Array.isArray(order.discount_details)
+        ? (order.discount_details as any).custom_total_estimate
+        : null
+    );
+    const grandTotal = customTotal !== null && customTotal !== undefined && !isNaN(Number(customTotal))
+      ? round2(Math.max(0, Number(customTotal)))
+      : calculatedGrandTotal;
+    const estAdjustment = round2(grandTotal - calculatedGrandTotal);
 
     const estNo = order.order_no || (order.id ? order.id.substring(0, 8).toUpperCase() : 'EST');
     const dateStr = order.created_at
@@ -249,6 +260,21 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
                 <td className="border border-slate-800 p-1 text-center text-slate-600">—</td>
                 <td className="border border-slate-800 p-1 text-right font-bold text-slate-800">
                   ₹{transportNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            )}
+
+            {/* Estimate Adjustment / Rounding if custom total applied */}
+            {estAdjustment !== 0 && (
+              <tr className="border-b border-slate-300 bg-amber-50/40">
+                <td colSpan={5} className="border border-slate-800 p-1 text-right text-slate-700 font-bold">
+                  {estAdjustment < 0 ? 'Estimate Discount / Adjustment:' : 'Additional Adjustment / Rounding:'}
+                </td>
+                <td className="border border-slate-800 p-1 text-center text-slate-700">—</td>
+                <td className="border border-slate-800 p-1 text-right font-black text-slate-800">
+                  {estAdjustment < 0
+                    ? `-₹${Math.abs(estAdjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                    : `+₹${estAdjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
                 </td>
               </tr>
             )}
