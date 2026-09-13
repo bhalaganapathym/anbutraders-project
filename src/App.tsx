@@ -55,11 +55,26 @@ function AppContent() {
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncLabel, setSyncLabel] = useState('Just now');
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
   const connectionStatus = useConnectionStatus();
   const [isPublicTrack, setIsPublicTrack] = useState(() => 
     typeof window !== 'undefined' && (window.location.hash.startsWith('#/track/') || window.location.hash.startsWith('#/receipt/'))
   );
   const { t, lang, changeLanguage } = useTranslation();
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      realtimeManager.connect();
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Check URL hash for public tracking route #/track/:id
   useEffect(() => {
@@ -396,33 +411,29 @@ function AppContent() {
           <div 
             className="flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1 rounded-full bg-slate-100/90 dark:bg-slate-800/90 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-xs"
             title={
-              connectionStatus === 'connected'
+              !isOnline
+                ? 'No internet connection on device'
+                : connectionStatus === 'connected'
                 ? `Connected & Synced: ${lastSyncTime.toLocaleTimeString()}`
                 : connectionStatus === 'connecting'
-                ? 'Reconnecting to realtime server...'
-                : 'Offline. Reconnecting automatically when network recovers.'
+                ? 'Syncing with live server...'
+                : `Connected (Sync: ${syncLabel})`
             }
           >
             <span
               className={`h-2 w-2 rounded-full shrink-0 ${
-                connectionStatus === 'disconnected'
+                !isOnline
                   ? 'bg-rose-500'
-                  : connectionStatus === 'connecting'
-                  ? 'bg-amber-500 animate-ping'
-                  : isSyncing
+                  : isSyncing || connectionStatus === 'connecting'
                   ? 'bg-amber-500 animate-ping'
                   : 'bg-emerald-500'
               }`}
             />
             <span className="hidden md:inline text-slate-400 dark:text-slate-500">
-              {connectionStatus === 'connected' ? 'Sync:' : 'Status:'}
+              {!isOnline ? 'Status:' : 'Sync:'}
             </span>
             <span className="font-semibold text-slate-700 dark:text-slate-200">
-              {connectionStatus === 'connected'
-                ? syncLabel
-                : connectionStatus === 'connecting'
-                ? (lang === 'ta' ? 'இணைகிறது...' : 'Connecting...')
-                : (lang === 'ta' ? 'இணையமில்லை' : 'Offline')}
+              {!isOnline ? (lang === 'ta' ? 'இணையமில்லை' : 'Offline') : syncLabel}
             </span>
             <button
               onClick={() => {

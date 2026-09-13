@@ -86,10 +86,27 @@ class RealtimeMultiplexer {
 
   private getWebSocketUrl(): string {
     const apiUrl = import.meta.env.VITE_API_URL || '';
-    const wsBase = apiUrl
-      ? apiUrl.replace(/^http/, 'ws')
-      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1`;
-    return `${wsBase}/ws`;
+    if (apiUrl) {
+      const wsBase = apiUrl.replace(/^http/, 'ws').replace(/\/$/, '');
+      if (wsBase.endsWith('/api/v1')) {
+        return `${wsBase}/ws`;
+      } else if (wsBase.endsWith('/api')) {
+        return `${wsBase}/v1/ws`;
+      } else {
+        return `${wsBase}/api/v1/ws`;
+      }
+    }
+    if (typeof window !== 'undefined') {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'ws://localhost:8080/api/v1/ws';
+      }
+      if (window.location.hostname.includes('vercel.app')) {
+        return 'wss://anbutraders-project.onrender.com/api/v1/ws';
+      }
+      const wsBase = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1`;
+      return `${wsBase}/ws`;
+    }
+    return 'wss://anbutraders-project.onrender.com/api/v1/ws';
   }
 
   public connect() {

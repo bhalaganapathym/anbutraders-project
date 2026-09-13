@@ -1,6 +1,14 @@
 import { compressImage } from './imageCompressor';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return 'https://anbutraders-project.onrender.com/api/v1';
+  }
+  return '/api';
+};
+const API_URL = getApiUrl();
 
 interface CacheEntry {
   data: any;
