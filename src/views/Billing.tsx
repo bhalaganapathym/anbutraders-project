@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { 
   FileText, Download, CreditCard, IndianRupee, AlertCircle, MessageSquare, Clock, Bell, CheckCircle2, 
   User, MapPin, Phone, Truck, Package, Calendar, Tag, Sparkles, XCircle, ShieldCheck, HelpCircle,
-  PlusCircle, ShoppingCart, Tags, Receipt, DollarSign, RotateCcw
+  PlusCircle, ShoppingCart, Tags, Receipt, DollarSign, RotateCcw, Save
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import DiscountApprovalModal from '@/components/DiscountApprovalModal';
@@ -209,6 +209,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const [selectedDispatch, setSelectedDispatch] = useState<Dispatch | null>(null);
   const [customTotalBill, setCustomTotalBill] = useState<string>('');
   const [customItemRates, setCustomItemRates] = useState<Record<string, number>>({});
+  const [rateInputs, setRateInputs] = useState<Record<string, string>>({});
+  const [savingRates, setSavingRates] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('full payment done');
   const [paidAmount, setPaidAmount] = useState<string>('');
   const [toCollectAmount, setToCollectAmount] = useState<string>('');
@@ -289,10 +291,45 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     if (orderTransport > 0 && !deliveryCharge) setDeliveryCharge(String(orderTransport));
   }, [selectedDispatch, customers]);
 
-  // Reset customTotalBill and customItemRates whenever selectedDispatch changes
+  // Initialize customTotalBill, customItemRates, and rateInputs whenever selectedDispatch changes
   useEffect(() => {
     setCustomTotalBill('');
-    setCustomItemRates({});
+    if (!selectedDispatch) {
+      setCustomItemRates({});
+      setRateInputs({});
+      return;
+    }
+    // Load custom rates if already saved in dispatch or order
+    let dd = selectedDispatch.discount_details;
+    if (typeof dd === 'string') {
+      try { dd = JSON.parse(dd); } catch {}
+    }
+    let orderDd = (selectedDispatch as any).order?.discount_details;
+    if (typeof orderDd === 'string') {
+      try { orderDd = JSON.parse(orderDd); } catch {}
+    }
+
+    const rates: Record<string, number> = {};
+    const inputs: Record<string, string> = {};
+
+    const sourceRates = (dd && typeof dd === 'object' && dd.custom_rates)
+      ? dd.custom_rates
+      : (orderDd && typeof orderDd === 'object' && orderDd.custom_rates)
+      ? orderDd.custom_rates
+      : null;
+
+    if (sourceRates && typeof sourceRates === 'object') {
+      for (const [k, v] of Object.entries(sourceRates)) {
+        const num = Number(v);
+        if (!isNaN(num) && num > 0) {
+          const rounded = Math.round(num * 10) / 10;
+          rates[k] = rounded;
+          inputs[k] = rounded.toFixed(1);
+        }
+      }
+    }
+    setCustomItemRates(rates);
+    setRateInputs(inputs);
   }, [selectedDispatch?.id]);
 
   // Auto-calculate amounts when selectedDispatch, paymentMethod, customTotalBill, or customItemRates changes
@@ -303,7 +340,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch.items?.reduce((sum, item) => {
-        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customItemRates[item.id]);
+        const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customRate);
         return sum + info.lineTotal;
       }, 0) || 0
     );
@@ -342,7 +380,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
-        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customItemRates[item.id]);
+        const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customRate);
         return sum + info.lineTotal;
       }, 0) || 0
     );
@@ -369,7 +408,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
-        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customItemRates[item.id]);
+        const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customRate);
         return sum + info.lineTotal;
       }, 0) || 0
     );
@@ -389,7 +429,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const itemsTotal = round2(
       selectedDispatch?.items?.reduce((sum, item) => {
-        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customItemRates[item.id]);
+        const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+        const info = getItemBillingInfo(item, selectedDispatch, products, isApproved, customRate);
         return sum + info.lineTotal;
       }, 0) || 0
     );
@@ -553,6 +594,47 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     }
   };
 
+  const handleSaveCustomRates = async () => {
+    if (!selectedDispatch) return;
+    setSavingRates(true);
+    try {
+      const existingDd = typeof selectedDispatch.discount_details === 'object' && selectedDispatch.discount_details !== null
+        ? selectedDispatch.discount_details
+        : {};
+      const updatedItems = (selectedDispatch.items || []).map(item => {
+        const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+        const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customRate);
+        return {
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          unit: item.unit,
+          price: info.isSteel ? info.ratePerKg : (info.totalPrice / (item.quantity || 1)),
+          original_price: item.original_price ?? item.price,
+          discount_per_kg: item.discount_per_kg || 0,
+          discount_per_unit: item.discount_per_unit || 0,
+          discount_amount: item.discount_amount || 0
+        };
+      });
+
+      const updated: any = await api.put(`/dispatches/${selectedDispatch.id}`, {
+        ...selectedDispatch,
+        discount_details: {
+          ...existingDd,
+          custom_rates: customItemRates
+        },
+        items: updatedItems
+      });
+      setSelectedDispatch(updated as Dispatch);
+      toast('Custom rates saved to dispatch successfully!', 'success');
+      loadData();
+    } catch (e: any) {
+      toast(e.message || 'Failed to save custom rates', 'error');
+    } finally {
+      setSavingRates(false);
+    }
+  };
+
   const handleCreateBill = async () => {
     if (!selectedDispatch) return;
     if (creatingBill) return;
@@ -560,7 +642,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     
     let totalAmount = 0;
     selectedDispatch.items?.forEach(item => {
-      const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved, customItemRates[item.id]);
+      const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+      const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved, customRate);
       totalAmount += info.lineTotal;
     });
     const uChargeVal = parseFloat(unloadingCharge) || 0;
@@ -577,6 +660,36 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const isCredit = paymentMethod === 'credit' || paymentMethod === 'today payment' || toCollectVal > 0;
 
     try {
+      // Save custom rates and updated items to dispatch as well
+      const existingDd = typeof selectedDispatch.discount_details === 'object' && selectedDispatch.discount_details !== null
+        ? selectedDispatch.discount_details
+        : {};
+      const updatedItems = (selectedDispatch.items || []).map(item => {
+        const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+        const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved, customRate);
+        return {
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          unit: item.unit,
+          price: info.isSteel ? info.ratePerKg : (info.totalPrice / (item.quantity || 1)),
+          original_price: item.original_price ?? item.price,
+          discount_per_kg: item.discount_per_kg || 0,
+          discount_per_unit: item.discount_per_unit || 0,
+          discount_amount: item.discount_amount || 0
+        };
+      });
+
+      await api.put(`/dispatches/${selectedDispatch.id}`, {
+        ...selectedDispatch,
+        discount_details: {
+          ...existingDd,
+          custom_rates: customItemRates,
+          custom_total_bill: customTotalBill !== '' ? finalBillTotal : null
+        },
+        items: updatedItems
+      });
+
       await api.post('/bills', {
         dispatch_id: selectedDispatch.id,
         order_id: selectedDispatch.order_id,
@@ -692,7 +805,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   let totalAmount = 0;
   let totalDispatchWeight = 0;
   selectedDispatch?.items?.forEach(item => {
-    const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved, customItemRates[item.id]);
+    const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+    const info = getItemBillingInfo(item, selectedDispatch, products, isSelectedDispatchDiscountApproved, customRate);
     totalAmount += info.lineTotal;
     if (info.totalWeight > 0) {
       totalDispatchWeight += info.totalWeight;
@@ -1056,31 +1170,50 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   </span>
                 </div>
                 
-                {/* Apply / Edit Discount Button - Clean and only shows active tag when approved */}
-                <button
-                  type="button"
-                  onClick={openDiscountEditor}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition active:scale-95 ${
-                    isDiscountApproved
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-black'
+                <div className="flex items-center gap-2">
+                  {Object.keys(customItemRates).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleSaveCustomRates}
+                      disabled={savingRates}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition active:scale-95 bg-blue-600 hover:bg-blue-700 text-white"
+                      title="Save edited rates to dispatch"
+                    >
+                      <Save size={13} />
+                      {savingRates ? 'Saving...' : 'Save Rates'}
+                    </button>
+                  )}
+                  {/* Apply / Edit Discount Button - Clean and only shows active tag when approved */}
+                  <button
+                    type="button"
+                    onClick={openDiscountEditor}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition active:scale-95 ${
+                      isDiscountApproved
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-black'
+                        : selectedDispatch.discount_approval_status === 'pending'
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white font-black'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <Tag size={13} />
+                    {isDiscountApproved
+                      ? `Discount Active (-₹${round2(selectedDispatch.discount_amount).toFixed(2)})`
                       : selectedDispatch.discount_approval_status === 'pending'
-                      ? 'bg-amber-600 hover:bg-amber-700 text-white font-black'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  <Tag size={13} />
-                  {isDiscountApproved
-                    ? `Discount Active (-₹${round2(selectedDispatch.discount_amount).toFixed(2)})`
-                    : selectedDispatch.discount_approval_status === 'pending'
-                    ? 'Discount Pending Approval'
-                    : '+ Add Discount'}
-                </button>
+                      ? 'Discount Pending Approval'
+                      : '+ Add Discount'}
+                  </button>
+                </div>
               </div>
 
               {/* Mobile View (< 768px): Bold, Non-Scrollable Cards */}
               <div className="md:hidden space-y-3">
                 {selectedDispatch.items?.map((item, idx) => {
-                  const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customItemRates[item.id]);
+                  const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+                  const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customRate);
+                  const isCustom = customItemRates[item.id] !== undefined || customItemRates[item.product_id] !== undefined;
+                  const itemRateInput = rateInputs[item.id] !== undefined 
+                    ? rateInputs[item.id] 
+                    : (isCustom && customRate ? customRate.toFixed(1) : (info.ratePerKg || 0).toFixed(1));
 
                   return (
                     <div 
@@ -1138,13 +1271,20 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                             <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
                               {info.isSteel ? 'Rate / kg' : 'Rate / Unit'}
                             </span>
-                            {info.isSteel && customItemRates[item.id] !== undefined && (
+                            {info.isSteel && isCustom && (
                               <button
                                 type="button"
                                 onClick={() => {
+                                  setRateInputs(prev => {
+                                    const next = { ...prev };
+                                    delete next[item.id];
+                                    delete next[item.product_id];
+                                    return next;
+                                  });
                                   setCustomItemRates(prev => {
                                     const next = { ...prev };
                                     delete next[item.id];
+                                    delete next[item.product_id];
                                     return next;
                                   });
                                 }}
@@ -1159,23 +1299,39 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                             <div className="relative mt-1 flex items-center">
                               <span className="text-xs font-bold text-amber-700 dark:text-amber-400 mr-1">₹</span>
                               <input
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                value={customItemRates[item.id] !== undefined ? customItemRates[item.id] : (info.ratePerKg || '')}
+                                type="text"
+                                inputMode="decimal"
+                                value={itemRateInput}
+                                onFocus={(e) => e.target.select()}
                                 onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  setCustomItemRates(prev => {
-                                    if (isNaN(val) || val <= 0) {
+                                  const text = e.target.value;
+                                  // Allow only numbers and at most 1 decimal place
+                                  if (text !== '' && !/^\d*(\.\d{0,1})?$/.test(text)) return;
+                                  setRateInputs(prev => ({ ...prev, [item.id]: text }));
+                                  const val = parseFloat(text);
+                                  if (!isNaN(val) && val > 0) {
+                                    setCustomItemRates(prev => ({ ...prev, [item.id]: Math.round(val * 10) / 10 }));
+                                  } else if (text === '') {
+                                    setCustomItemRates(prev => {
                                       const next = { ...prev };
                                       delete next[item.id];
+                                      delete next[item.product_id];
                                       return next;
-                                    }
-                                    return { ...prev, [item.id]: val };
-                                  });
+                                    });
+                                  }
+                                }}
+                                onBlur={() => {
+                                  if (!rateInputs[item.id] || rateInputs[item.id].trim() === '') {
+                                    setRateInputs(prev => {
+                                      const next = { ...prev };
+                                      delete next[item.id];
+                                      delete next[item.product_id];
+                                      return next;
+                                    });
+                                  }
                                 }}
                                 className="w-full text-xs font-black text-amber-900 dark:text-amber-200 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                title="Edit rate per kg"
+                                title="Edit rate per kg (1 decimal place)"
                               />
                               <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 ml-1">/kg</span>
                             </div>
@@ -1205,7 +1361,12 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   </thead>
                   <tbody className="divide-y-2 divide-slate-100 dark:divide-slate-800/80 bg-white dark:bg-slate-900">
                     {selectedDispatch.items?.map((item, idx) => {
-                      const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customItemRates[item.id]);
+                      const customRate = customItemRates[item.id] ?? customItemRates[item.product_id];
+                      const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customRate);
+                      const isCustom = customItemRates[item.id] !== undefined || customItemRates[item.product_id] !== undefined;
+                      const itemRateInput = rateInputs[item.id] !== undefined 
+                        ? rateInputs[item.id] 
+                        : (isCustom && customRate ? customRate.toFixed(1) : (info.ratePerKg || 0).toFixed(1));
 
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -1231,33 +1392,56 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                                 <div className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 rounded-lg px-2 py-1 shadow-sm">
                                   <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400">₹</span>
                                   <input
-                                    type="number"
-                                    step="0.1"
-                                    min="0"
-                                    value={customItemRates[item.id] !== undefined ? customItemRates[item.id] : (info.ratePerKg || '')}
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={itemRateInput}
+                                    onFocus={(e) => e.target.select()}
                                     onChange={(e) => {
-                                      const val = parseFloat(e.target.value);
-                                      setCustomItemRates(prev => {
-                                        if (isNaN(val) || val <= 0) {
+                                      const text = e.target.value;
+                                      // Allow only numbers and at most 1 decimal place
+                                      if (text !== '' && !/^\d*(\.\d{0,1})?$/.test(text)) return;
+                                      setRateInputs(prev => ({ ...prev, [item.id]: text }));
+                                      const val = parseFloat(text);
+                                      if (!isNaN(val) && val > 0) {
+                                        setCustomItemRates(prev => ({ ...prev, [item.id]: Math.round(val * 10) / 10 }));
+                                      } else if (text === '') {
+                                        setCustomItemRates(prev => {
                                           const next = { ...prev };
                                           delete next[item.id];
+                                          delete next[item.product_id];
                                           return next;
-                                        }
-                                        return { ...prev, [item.id]: val };
-                                      });
+                                        });
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      if (!rateInputs[item.id] || rateInputs[item.id].trim() === '') {
+                                        setRateInputs(prev => {
+                                          const next = { ...prev };
+                                          delete next[item.id];
+                                          delete next[item.product_id];
+                                          return next;
+                                        });
+                                      }
                                     }}
                                     className="w-20 text-right text-xs font-black text-amber-900 dark:text-amber-200 bg-transparent focus:outline-none focus:ring-0"
-                                    title="Edit rate per kg"
+                                    title="Edit rate per kg (1 decimal place)"
                                   />
                                   <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">/kg</span>
                                 </div>
-                                {customItemRates[item.id] !== undefined && (
+                                {isCustom && (
                                   <button
                                     type="button"
                                     onClick={() => {
+                                      setRateInputs(prev => {
+                                        const next = { ...prev };
+                                        delete next[item.id];
+                                        delete next[item.product_id];
+                                        return next;
+                                      });
                                       setCustomItemRates(prev => {
                                         const next = { ...prev };
                                         delete next[item.id];
+                                        delete next[item.product_id];
                                         return next;
                                       });
                                     }}
@@ -1619,7 +1803,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   </thead>
                   <tbody>
                     {selectedDispatch.items?.map((it, idx) => {
-                      const info = getItemBillingInfo(it, selectedDispatch, products, isSelectedDispatchDiscountApproved, customItemRates[it.id]);
+                      const customRate = customItemRates[it.id] ?? customItemRates[it.product_id];
+                      const info = getItemBillingInfo(it, selectedDispatch, products, isSelectedDispatchDiscountApproved, customRate);
                       return (
                         <tr key={it.id || idx}>
                           <td className="border border-black p-1.5 text-center font-medium">{idx + 1}</td>

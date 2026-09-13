@@ -193,20 +193,31 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
       const num = dispatches.length + 1;
       const dispatchNo = `DSP-${String(num).padStart(4, '0')}`;
       
+      let orderDd = (order as any).discount_details;
+      if (typeof orderDd === 'string') {
+        try { orderDd = JSON.parse(orderDd); } catch {}
+      }
+      const customRates = (orderDd && typeof orderDd === 'object' && orderDd.custom_rates)
+        ? orderDd.custom_rates
+        : {};
+
       const payload = {
         dispatch_no: dispatchNo,
         order_id: order.id,
         customer_id: order.customer_id,
         delivery_address: order.delivery_address || order.customer?.address || null,
         status: 'pending',
+        discount_details: orderDd || null,
         items: orderItems.map((it) => {
-          const pricing = calculateProductPrice(it.product, it.quantity);
+          const customRate = customRates[it.product_id];
+          const pricing = calculateProductPrice(it.product, it.quantity, customRate);
           return {
             product_id: it.product_id,
             product_name: it.product?.name ?? 'Unknown',
             quantity: it.quantity,
             unit: it.unit || it.product?.unit || 'piece',
             price: pricing.unitPrice,
+            original_price: calculateProductPrice(it.product, it.quantity).unitPrice,
           };
         })
       };

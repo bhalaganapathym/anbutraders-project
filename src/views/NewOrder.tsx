@@ -94,17 +94,40 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const [itemDiscounts, setItemDiscounts] = useState<Record<string, { type: 'per_kg' | 'per_unit' | 'flat'; value: number }>>({});
   const [customItemRates, setCustomItemRates] = useState<Record<string, number>>(() => {
     if (orderToEdit?.discount_details) {
-      const dd = orderToEdit.discount_details;
-      if (typeof dd === 'object' && !Array.isArray(dd) && dd.custom_rates) {
+      let dd = orderToEdit.discount_details;
+      if (typeof dd === 'string') {
+        try { dd = JSON.parse(dd); } catch {}
+      }
+      if (typeof dd === 'object' && dd !== null && !Array.isArray(dd) && dd.custom_rates) {
         return dd.custom_rates;
+      }
+    }
+    return {};
+  });
+  const [rateInputs, setRateInputs] = useState<Record<string, string>>(() => {
+    if (orderToEdit?.discount_details) {
+      let dd = orderToEdit.discount_details;
+      if (typeof dd === 'string') {
+        try { dd = JSON.parse(dd); } catch {}
+      }
+      if (typeof dd === 'object' && dd !== null && !Array.isArray(dd) && dd.custom_rates) {
+        const res: Record<string, string> = {};
+        for (const [k, v] of Object.entries(dd.custom_rates)) {
+          const num = Number(v);
+          if (!isNaN(num)) res[k] = (Math.round(num * 10) / 10).toFixed(1);
+        }
+        return res;
       }
     }
     return {};
   });
   const [customTotalEstimate, setCustomTotalEstimate] = useState<string>(() => {
     if (orderToEdit?.discount_details) {
-      const dd = orderToEdit.discount_details;
-      if (typeof dd === 'object' && !Array.isArray(dd) && dd.custom_total_estimate) {
+      let dd = orderToEdit.discount_details;
+      if (typeof dd === 'string') {
+        try { dd = JSON.parse(dd); } catch {}
+      }
+      if (typeof dd === 'object' && dd !== null && !Array.isArray(dd) && dd.custom_total_estimate) {
         return String(dd.custom_total_estimate);
       }
     }
@@ -181,13 +204,22 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
           setLines(mappedLines);
         }
         if ((orderToEdit as any).discount_details) {
-          const dd = (orderToEdit as any).discount_details;
-          if (typeof dd === 'object' && !Array.isArray(dd)) {
+          let dd = (orderToEdit as any).discount_details;
+          if (typeof dd === 'string') {
+            try { dd = JSON.parse(dd); } catch {}
+          }
+          if (typeof dd === 'object' && dd !== null && !Array.isArray(dd)) {
             if (dd.custom_total_estimate) {
               setCustomTotalEstimate(String(dd.custom_total_estimate));
             }
             if (dd.custom_rates) {
               setCustomItemRates(dd.custom_rates);
+              const strRates: Record<string, string> = {};
+              for (const [k, v] of Object.entries(dd.custom_rates)) {
+                const num = Number(v);
+                if (!isNaN(num)) strRates[k] = (Math.round(num * 10) / 10).toFixed(1);
+              }
+              setRateInputs(strRates);
             }
           }
           const detailsList = Array.isArray(dd) ? dd : (dd.items || []);
@@ -1441,26 +1473,55 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                   <div className="inline-flex items-center bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 shadow-sm">
                                     <span className="text-xs font-bold text-amber-800 mr-0.5">₹</span>
                                     <input
-                                      type="number"
-                                      step="0.1"
-                                      min="1"
-                                      value={customItemRates[line.product_id] !== undefined ? customItemRates[line.product_id] : pricing.ratePerKg}
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={
+                                        rateInputs[line.product_id] !== undefined
+                                          ? rateInputs[line.product_id]
+                                          : (customItemRates[line.product_id] !== undefined
+                                            ? customItemRates[line.product_id].toFixed(1)
+                                            : pricing.ratePerKg.toFixed(1))
+                                      }
+                                      onFocus={(e) => e.target.select()}
                                       onChange={(e) => {
-                                        const val = parseFloat(e.target.value);
-                                        setCustomItemRates(prev => ({
-                                          ...prev,
-                                          [line.product_id]: isNaN(val) ? 0 : val
-                                        }));
+                                        const text = e.target.value;
+                                        // Allow only numbers and at most 1 decimal place
+                                        if (text !== '' && !/^\d*(\.\d{0,1})?$/.test(text)) return;
+                                        setRateInputs(prev => ({ ...prev, [line.product_id]: text }));
+                                        const val = parseFloat(text);
+                                        if (!isNaN(val) && val > 0) {
+                                          setCustomItemRates(prev => ({ ...prev, [line.product_id]: Math.round(val * 10) / 10 }));
+                                        } else if (text === '') {
+                                          setCustomItemRates(prev => {
+                                            const next = { ...prev };
+                                            delete next[line.product_id];
+                                            return next;
+                                          });
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        if (!rateInputs[line.product_id] || rateInputs[line.product_id].trim() === '') {
+                                          setRateInputs(prev => {
+                                            const next = { ...prev };
+                                            delete next[line.product_id];
+                                            return next;
+                                          });
+                                        }
                                       }}
                                       className="w-16 text-center font-black text-xs text-amber-900 bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-amber-500 rounded px-0.5"
-                                      title="Click to edit Rate / kg"
+                                      title="Edit Rate / kg (1 decimal place)"
                                     />
                                     <span className="text-xs font-bold text-amber-700 ml-0.5">/ kg</span>
                                   </div>
-                                  {customItemRates[line.product_id] !== undefined && (
+                                  {(customItemRates[line.product_id] !== undefined || rateInputs[line.product_id] !== undefined) && (
                                     <button
                                       type="button"
                                       onClick={() => {
+                                        setRateInputs(prev => {
+                                          const next = { ...prev };
+                                          delete next[line.product_id];
+                                          return next;
+                                        });
                                         setCustomItemRates(prev => {
                                           const next = { ...prev };
                                           delete next[line.product_id];

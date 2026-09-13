@@ -803,7 +803,17 @@ _Please find attached the official estimate bill image._
             {filtered.map((o) => {
               const isSelected = selectedIds.has(o.id);
               const itemCount = o.items?.length || 0;
-              const itemsTotal = round2((o.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
+              let orderDd = (o as any).discount_details;
+              if (typeof orderDd === 'string') {
+                try { orderDd = JSON.parse(orderDd); } catch {}
+              }
+              const customRates = (orderDd && typeof orderDd === 'object' && orderDd.custom_rates)
+                ? orderDd.custom_rates
+                : {};
+              const itemsTotal = round2((o.items || []).reduce((acc, it) => {
+                const customRate = customRates[it.product_id];
+                return acc + round2(calculateProductPrice(it.product, it.quantity || 1, customRate).totalPrice);
+              }, 0));
               const discVal = Number((o as any).discount_amount || 0);
               const unloadVal = Number(o.unloading_charge || 0);
               const transpVal = Number(o.transport_charge || 0);
@@ -973,7 +983,17 @@ _Please find attached the official estimate bill image._
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((o) => {
                   const isSelected = selectedIds.has(o.id);
-                  const itemsTotal = round2((o.items || []).reduce((acc, it) => acc + round2(calculateProductPrice(it.product, it.quantity || 1).totalPrice), 0));
+                  let orderDd = (o as any).discount_details;
+                  if (typeof orderDd === 'string') {
+                    try { orderDd = JSON.parse(orderDd); } catch {}
+                  }
+                  const customRates = (orderDd && typeof orderDd === 'object' && orderDd.custom_rates)
+                    ? orderDd.custom_rates
+                    : {};
+                  const itemsTotal = round2((o.items || []).reduce((acc, it) => {
+                    const customRate = customRates[it.product_id];
+                    return acc + round2(calculateProductPrice(it.product, it.quantity || 1, customRate).totalPrice);
+                  }, 0));
                   const discVal = Number((o as any).discount_amount || 0);
                   const unloadVal = Number(o.unloading_charge || 0);
                   const transpVal = Number(o.transport_charge || 0);
