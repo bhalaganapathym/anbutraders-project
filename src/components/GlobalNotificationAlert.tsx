@@ -20,9 +20,10 @@ export default function GlobalNotificationAlert() {
       const data = await api.get('/notifications');
       const notifs = data as Notification[];
       
+      const userRole = (user.role || '').toLowerCase();
       const myNotifs = notifs.filter(n => {
         const t = (n.type || '').toLowerCase();
-        if (user.role === 'dispatch') {
+        if (userRole === 'dispatch') {
           return t === 'order_confirmed' || 
                  t === 'advance_order_booked' || 
                  t === 'bill_generated' || 
@@ -31,7 +32,7 @@ export default function GlobalNotificationAlert() {
                  t === 'mismatch_rejected' ||
                  t === 'weight_mismatch_decision';
         }
-        if (user.role === 'billing' || user.role === 'cashier') {
+        if (userRole === 'billing' || userRole === 'cashier') {
           return t === 'dispatch_sent_to_billing' ||
                  t === 'ready_for_billing' ||
                  t === 'dispatch_completed' || 
@@ -42,7 +43,7 @@ export default function GlobalNotificationAlert() {
                  t === 'credit_overdue' ||
                  t === 'billing_alert';
         }
-        if (user.role === 'driver') {
+        if (userRole === 'driver') {
           return t === 'bill_generated' || 
                  t === 'ready_for_loading' || 
                  t === 'dispatch_completed';

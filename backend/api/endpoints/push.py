@@ -40,7 +40,7 @@ def subscribe_push(
         if existing:
             existing.p256dh = sub_in.keys.p256dh
             existing.auth = sub_in.keys.auth
-            existing.user_role = sub_in.user_role or "all"
+            existing.user_role = (sub_in.user_role or "all").lower()
             existing.user_id = sub_in.user_id
             existing.updated_at = datetime.now(timezone.utc)
             db.commit()
@@ -51,7 +51,7 @@ def subscribe_push(
                 endpoint=sub_in.endpoint,
                 p256dh=sub_in.keys.p256dh,
                 auth=sub_in.keys.auth,
-                user_role=sub_in.user_role or "all",
+                user_role=(sub_in.user_role or "all").lower(),
                 user_id=sub_in.user_id,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)

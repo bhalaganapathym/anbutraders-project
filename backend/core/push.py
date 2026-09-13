@@ -3,7 +3,7 @@ import logging
 import threading
 from datetime import datetime, timezone
 from pywebpush import webpush, WebPushException
-from sqlalchemy import event
+from sqlalchemy import event, func
 from core.config import settings
 from db.session import SessionLocal
 from models.all import PushSubscription, Notification
@@ -64,7 +64,7 @@ def send_web_push(
                 allowed_roles = [role, "admin", "all"]
 
             query = query.filter(
-                PushSubscription.user_role.in_(allowed_roles) | 
+                func.lower(PushSubscription.user_role).in_([r.lower() for r in allowed_roles]) | 
                 PushSubscription.user_role.is_(None)
             )
         

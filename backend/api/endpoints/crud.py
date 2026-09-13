@@ -748,21 +748,32 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
         if value is not None: # Don't overwrite with none blindly if it wasn't provided, though pydantic will supply defaults
             setattr(dispatch, key, value)
             
+    notif_created = False
     if old_status != dispatch.status:
         customer = db.query(Customer).filter(Customer.id == dispatch.customer_id).first()
         customer_name = customer.name if customer else (dispatch.customer.name if dispatch.customer else "Customer")
 
         if dispatch.status == "sent_to_billing":
             dispatch.sent_to_billing_at = datetime.now(timezone.utc)
+            driver_parts = []
+            if dispatch.driver_name:
+                driver_parts.append(f"Driver: {dispatch.driver_name}")
+            if dispatch.driver_mobile:
+                driver_parts.append(f"Phone: {dispatch.driver_mobile}")
+            if dispatch.vehicle_number:
+                driver_parts.append(f"Vehicle: {dispatch.vehicle_number}")
+            driver_str = " • ".join(driver_parts) if driver_parts else "Driver: Not assigned"
+
             notif = Notification(
                 type="dispatch_sent_to_billing",
-                title=f"🧾 Ready for Billing — {dispatch.dispatch_no}",
-                message=f"Dispatch {dispatch.dispatch_no} for {customer_name} verified. Driver: {dispatch.driver_name or 'N/A'}. Ready for billing.",
+                title=f"🧾 Phase 1 Verified — {dispatch.dispatch_no}",
+                message=f"Dispatch {dispatch.dispatch_no} for {customer_name} verified. {driver_str}. Ready for billing.",
                 dispatch_id=dispatch.id,
                 order_id=dispatch.order_id,
                 customer_name=customer_name
             )
             db.add(notif)
+            notif_created = True
         elif dispatch_in.status == "completed":
             dispatch.completed_at = datetime.now(timezone.utc)
             if dispatch.order_id:
@@ -788,11 +799,25 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
                 customer_name=customer_name
             )
             db.add(notif)
+            notif_created = True
 
-    if dispatch_in.items:
-        db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).delete()
+    if dispatch_in.items is not None and len(dispatch_in.items) > 0:
+        existing_items = {it.product_id: it for it in db.query(DispatchItem).filter(DispatchItem.dispatch_id == id).all()}
+        in_product_ids = {it.product_id for it in dispatch_in.items}
+        
+        # Update existing items or add new
         for item in dispatch_in.items:
-            db.add(DispatchItem(dispatch_id=dispatch.id, **item.model_dump()))
+            if item.product_id in existing_items:
+                target_it = existing_items[item.product_id]
+                for k, v in item.model_dump().items():
+                    setattr(target_it, k, v)
+            else:
+                db.add(DispatchItem(dispatch_id=dispatch.id, **item.model_dump()))
+                
+        # Remove items no longer in payload
+        for prod_id, ex_it in existing_items.items():
+            if prod_id not in in_product_ids:
+                db.delete(ex_it)
 
     if dispatch_in.weights is not None:
         db.query(Weight).filter(Weight.dispatch_id == id).delete()
@@ -811,6 +836,8 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
     db.refresh(dispatch)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "orders"})
+    if notif_created:
+        background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
     return dispatch
 
 @router.patch("/dispatches/{id}/draft", response_model=DispatchResponse)
