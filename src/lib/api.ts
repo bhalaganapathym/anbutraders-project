@@ -2,7 +2,31 @@ import { compressImage } from './imageCompressor';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-async function fetchApi(endpoint: string, options: RequestInit = {}) {
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+const apiCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes TTL for catalog data
+const CACHEABLE_ENDPOINTS = ['/products', '/customers', '/drivers', '/vehicles'];
+
+/**
+ * Invalidate cached endpoints (e.g., when WebSocket notifies of a change)
+ */
+export function invalidateApiCache(pattern?: string) {
+  if (!pattern || pattern === '*') {
+    apiCache.clear();
+    return;
+  }
+  for (const key of apiCache.keys()) {
+    if (key.toLowerCase().includes(pattern.toLowerCase())) {
+      apiCache.delete(key);
+    }
+  }
+}
+
+async function fetchApi(endpoint: string, options: RequestInit = {}, retries = 2): Promise<any> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -13,23 +37,75 @@ async function fetchApi(endpoint: string, options: RequestInit = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || 'API Error');
+  // Check cache for GET requests on catalog endpoints
+  const isGet = !options.method || options.method === 'GET';
+  const isCacheable = isGet && CACHEABLE_ENDPOINTS.some((prefix) => endpoint.startsWith(prefix));
+
+  if (isCacheable) {
+    const cached = apiCache.get(endpoint);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+      return cached.data;
+    }
   }
-  return res.json();
+
+  let attempt = 0;
+  while (attempt <= retries) {
+    try {
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
+      if (!res.ok) {
+        if ((res.status >= 502 && res.status <= 504) && attempt < retries) {
+          attempt++;
+          await new Promise((r) => setTimeout(r, attempt * 400));
+          continue;
+        }
+        const text = await res.text();
+        throw new Error(text || 'API Error');
+      }
+      const data = await res.json();
+      if (isCacheable) {
+        apiCache.set(endpoint, { data, timestamp: Date.now() });
+      }
+      return data;
+    } catch (err: any) {
+      if (attempt < retries && (err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('NetworkError'))) {
+        attempt++;
+        await new Promise((r) => setTimeout(r, attempt * 400));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 export const api = {
   get: (endpoint: string) => fetchApi(endpoint),
-  post: (endpoint: string, data: any) => fetchApi(endpoint, { method: 'POST', body: JSON.stringify(data) }),
-  put: (endpoint: string, data: any) => fetchApi(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
-  patch: (endpoint: string, data: any) => fetchApi(endpoint, { method: 'PATCH', body: JSON.stringify(data) }),
-  delete: (endpoint: string) => fetchApi(endpoint, { method: 'DELETE' }),
+  post: async (endpoint: string, data: any) => {
+    const res = await fetchApi(endpoint, { method: 'POST', body: JSON.stringify(data) });
+    const resource = endpoint.replace(/^\//, '').split('/')[0];
+    invalidateApiCache(resource);
+    return res;
+  },
+  put: async (endpoint: string, data: any) => {
+    const res = await fetchApi(endpoint, { method: 'PUT', body: JSON.stringify(data) });
+    const resource = endpoint.replace(/^\//, '').split('/')[0];
+    invalidateApiCache(resource);
+    return res;
+  },
+  patch: async (endpoint: string, data: any) => {
+    const res = await fetchApi(endpoint, { method: 'PATCH', body: JSON.stringify(data) });
+    const resource = endpoint.replace(/^\//, '').split('/')[0];
+    invalidateApiCache(resource);
+    return res;
+  },
+  delete: async (endpoint: string) => {
+    const res = await fetchApi(endpoint, { method: 'DELETE' });
+    const resource = endpoint.replace(/^\//, '').split('/')[0];
+    invalidateApiCache(resource);
+    return res;
+  },
   postForm: async (endpoint: string, formData: FormData) => {
     const token = localStorage.getItem('token') || localStorage.getItem('access_token');
     const headers: Record<string, string> = {};

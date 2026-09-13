@@ -8,8 +8,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # We don't expect the client to send messages, just listen.
-            # But we need to keep the connection open and detect disconnects.
             data = await websocket.receive_text()
-    except WebSocketDisconnect:
+            # Handle client heartbeat ping to keep Render / proxy connection alive
+            if data and ("ping" in data):
+                await websocket.send_text('{"type":"pong"}')
+    except (WebSocketDisconnect, Exception):
         manager.disconnect(websocket)

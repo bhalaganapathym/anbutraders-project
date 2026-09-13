@@ -760,6 +760,11 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
                 driver_parts.append(f"Driver: {dispatch.driver_name}")
             if dispatch.driver_mobile:
                 driver_parts.append(f"Phone: {dispatch.driver_mobile}")
+                # Mark driver engaged so other devices see busy status
+                d_obj = db.query(Driver).filter(Driver.phone_number == dispatch.driver_mobile).first()
+                if d_obj and d_obj.status != "engaged":
+                    d_obj.status = "engaged"
+                    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "drivers"})
             if dispatch.vehicle_number:
                 driver_parts.append(f"Vehicle: {dispatch.vehicle_number}")
             driver_str = " • ".join(driver_parts) if driver_parts else "Driver: Not assigned"
@@ -780,15 +785,20 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
                 order = db.query(Order).filter(Order.id == dispatch.order_id).first()
                 if order:
                     order.status = "completed"
+            driver_freed = False
             bill = db.query(Bill).filter(Bill.dispatch_id == id).first()
             if bill and bill.driver_id:
                 driver = db.query(Driver).filter(Driver.id == bill.driver_id).first()
                 if driver:
                     driver.status = "free"
+                    driver_freed = True
             elif dispatch.driver_mobile:
                 driver = db.query(Driver).filter(Driver.phone_number == dispatch.driver_mobile).first()
                 if driver:
                     driver.status = "free"
+                    driver_freed = True
+            if driver_freed:
+                background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "drivers"})
 
             notif = Notification(
                 type="dispatch_completed",

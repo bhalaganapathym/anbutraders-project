@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Truck, Menu, HardHat, Tags, Bell, LogOut, Sun, Moon, Receipt, UserSquare, Settings as SettingsIcon, MapPin, DollarSign, Globe, RefreshCw, AlertTriangle, Power
 } from 'lucide-react';
-import { useRealtime } from '@/lib/useRealtime';
+import { useRealtime, useConnectionStatus, realtimeManager } from '@/lib/useRealtime';
 import { api } from '@/lib/api';
 import { useTranslation, translations } from '@/lib/i18n';
 import Modal from '@/components/Modal';
@@ -55,6 +55,7 @@ function AppContent() {
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncLabel, setSyncLabel] = useState('Just now');
+  const connectionStatus = useConnectionStatus();
   const [isPublicTrack, setIsPublicTrack] = useState(() => 
     typeof window !== 'undefined' && (window.location.hash.startsWith('#/track/') || window.location.hash.startsWith('#/receipt/'))
   );
@@ -391,25 +392,50 @@ function AppContent() {
             </h1>
           </div>
 
-          {/* Real-time Last Sync Indicator */}
+          {/* Real-time Connection & Last Sync Indicator */}
           <div 
             className="flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1 rounded-full bg-slate-100/90 dark:bg-slate-800/90 text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700 shadow-xs"
-            title={`Last sync with server: ${lastSyncTime.toLocaleTimeString()}`}
+            title={
+              connectionStatus === 'connected'
+                ? `Connected & Synced: ${lastSyncTime.toLocaleTimeString()}`
+                : connectionStatus === 'connecting'
+                ? 'Reconnecting to realtime server...'
+                : 'Offline. Reconnecting automatically when network recovers.'
+            }
           >
-            <span className={`h-2 w-2 rounded-full shrink-0 ${isSyncing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
-            <span className="hidden md:inline text-slate-400 dark:text-slate-500">Sync:</span>
-            <span className="font-semibold text-slate-700 dark:text-slate-200">{syncLabel}</span>
+            <span
+              className={`h-2 w-2 rounded-full shrink-0 ${
+                connectionStatus === 'disconnected'
+                  ? 'bg-rose-500'
+                  : connectionStatus === 'connecting'
+                  ? 'bg-amber-500 animate-ping'
+                  : isSyncing
+                  ? 'bg-amber-500 animate-ping'
+                  : 'bg-emerald-500'
+              }`}
+            />
+            <span className="hidden md:inline text-slate-400 dark:text-slate-500">
+              {connectionStatus === 'connected' ? 'Sync:' : 'Status:'}
+            </span>
+            <span className="font-semibold text-slate-700 dark:text-slate-200">
+              {connectionStatus === 'connected'
+                ? syncLabel
+                : connectionStatus === 'connecting'
+                ? (lang === 'ta' ? 'இணைகிறது...' : 'Connecting...')
+                : (lang === 'ta' ? 'இணையமில்லை' : 'Offline')}
+            </span>
             <button
               onClick={() => {
                 setLastSyncTime(new Date());
                 setIsSyncing(true);
+                realtimeManager.connect();
                 fetchUnread();
                 setTimeout(() => setIsSyncing(false), 800);
               }}
               className="ml-0.5 p-0.5 text-slate-400 hover:text-amber-600 transition rounded"
-              title="Click to Refresh Sync"
+              title="Click to Refresh / Reconnect"
             >
-              <RefreshCw size={11} className={isSyncing ? 'animate-spin text-amber-600' : ''} />
+              <RefreshCw size={11} className={isSyncing || connectionStatus === 'connecting' ? 'animate-spin text-amber-600' : ''} />
             </button>
           </div>
 
