@@ -26,6 +26,7 @@ import DailyReconciliation from '@/views/DailyReconciliation';
 import PublicReceipt from '@/views/PublicReceipt';
 import TeamPerformance from '@/views/TeamPerformance';
 import OfflineQueueModal from '@/components/OfflineQueueModal';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { subscribeQueueCount } from '@/lib/offlineQueue';
 
 type NavConfig = { id: string; labelKey: keyof typeof translations['en']; icon: typeof LayoutDashboard };
@@ -185,14 +186,16 @@ function AppContent() {
   const navItems = useMemo(() => {
     if (!user) return [];
     const allowed = navConfigs.filter(item => {
-      if (user.role === 'admin') return true;
-      if (user.role === 'billing' || user.role === 'cashier') {
+      const role = (user.role || '').toLowerCase();
+      const isAdmin = role === 'admin' || (user.username || '').toLowerCase() === 'admin';
+      if (isAdmin) return true;
+      if (role === 'billing' || role === 'cashier') {
         return ['dashboard', 'orders', 'pricelist', 'billing', 'reconciliation', 'customers', 'products', 'notifications'].includes(item.id);
       }
-      if (user.role === 'dispatch') {
+      if (role === 'dispatch') {
         return ['dashboard', 'dispatches', 'delivery', 'products', 'notifications'].includes(item.id);
       }
-      if (user.role === 'driver') {
+      if (role === 'driver') {
         return ['delivery', 'notifications'].includes(item.id);
       }
       return false;
@@ -200,12 +203,12 @@ function AppContent() {
 
     return allowed.map(cfg => ({
       id: cfg.id,
-      label: cfg.id === 'delivery' && user.role === 'driver' ? 'இன்றைய டெலிவரி (POD)' : t(cfg.labelKey),
+      label: cfg.id === 'delivery' && (user.role || '').toLowerCase() === 'driver' ? 'இன்றைய டெலிவரி (POD)' : t(cfg.labelKey),
       icon: cfg.icon,
     }));
   }, [user, t]);
 
-  const defaultViewForRole = user?.role === 'driver' ? 'delivery' : 'dashboard';
+  const defaultViewForRole = (user?.role || '').toLowerCase() === 'driver' ? 'delivery' : 'dashboard';
   const activeView = view === 'new_order' ? 'new_order' : (navItems.find((n) => n.id === view)?.id || navItems[0]?.id || defaultViewForRole);
 
   const navigate = (v: string, pushHistory = true) => {
@@ -512,19 +515,21 @@ function AppContent() {
         </header>
 
         <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-8">
-          {activeView === 'dashboard' && <Dashboard onNavigate={navigate} />}
-          {activeView === 'customers' && <Customers />}
-          {activeView === 'products' && <Products />}
-          {activeView === 'pricelist' && (user.role !== 'dispatch' ? <PriceList /> : <Dashboard onNavigate={navigate} />)}
-          {activeView === 'orders' && <Orders onNewOrder={() => { setOrderToEdit(null); navigate('new_order'); }} onEditOrder={(o) => { setOrderToEdit(o); navigate('new_order'); }} />}
-          {activeView === 'dispatches' && <Dispatches onNavigate={navigate} />}
-          {activeView === 'delivery' && <DriverDelivery />}
-          {activeView === 'billing' && <Billing onNavigate={navigate} />}
-          {activeView === 'reconciliation' && <DailyReconciliation />}
-          {activeView === 'drivers' && <Drivers />}
-          {activeView === 'notifications' && <Notifications />}
-          {activeView === 'settings' && <Settings />}
-          {activeView === 'team' && <TeamPerformance />}
+          <ErrorBoundary key={activeView} onReset={() => navigate('dashboard')}>
+            {activeView === 'dashboard' && <Dashboard onNavigate={navigate} />}
+            {activeView === 'customers' && <Customers />}
+            {activeView === 'products' && <Products />}
+            {activeView === 'pricelist' && ((user.role || '').toLowerCase() !== 'dispatch' ? <PriceList /> : <Dashboard onNavigate={navigate} />)}
+            {activeView === 'orders' && <Orders onNewOrder={() => { setOrderToEdit(null); navigate('new_order'); }} onEditOrder={(o) => { setOrderToEdit(o); navigate('new_order'); }} />}
+            {activeView === 'dispatches' && <Dispatches onNavigate={navigate} />}
+            {activeView === 'delivery' && <DriverDelivery />}
+            {activeView === 'billing' && <Billing onNavigate={navigate} />}
+            {activeView === 'reconciliation' && <DailyReconciliation />}
+            {activeView === 'drivers' && <Drivers />}
+            {activeView === 'notifications' && <Notifications />}
+            {activeView === 'settings' && <Settings />}
+            {activeView === 'team' && <TeamPerformance />}
+          </ErrorBoundary>
         </main>
       </div>
 

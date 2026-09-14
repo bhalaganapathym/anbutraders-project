@@ -54,6 +54,12 @@ type DispatchStaffPerf = {
   last_active: string | null;
 };
 
+function formatStaffName(fullName?: string | null, username?: string | null): string {
+  if (fullName && fullName.trim()) return fullName.trim();
+  if (!username) return 'Staff Member';
+  return username.charAt(0).toUpperCase() + username.slice(1);
+}
+
 export default function TeamPerformance() {
   const { t } = useTranslation();
   const toast = useToast();
@@ -401,7 +407,7 @@ export default function TeamPerformance() {
                   ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 border-sky-300 dark:border-sky-800'
                   : 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border-purple-300 dark:border-purple-800';
 
-                const avatarLetter = (u.full_name || u.username).charAt(0).toUpperCase();
+                const avatarLetter = (u.full_name || u.username || 'S').charAt(0).toUpperCase();
 
                 return (
                   <div
@@ -428,7 +434,7 @@ export default function TeamPerformance() {
                           </div>
                           <div>
                             <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
-                              {u.full_name || u.username.title()}
+                              {formatStaffName(u.full_name, u.username)}
                             </h3>
                             <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">
                               <span>@{u.username}</span>
@@ -581,10 +587,10 @@ export default function TeamPerformance() {
                 </div>
                 <div className="mt-3">
                   <h2 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white">
-                    ₹{perfSummary.total_revenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹{(perfSummary.total_revenue ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </h2>
                   <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-1">
-                    {perfSummary.total_bills} bills generated
+                    {perfSummary.total_bills ?? 0} bills generated
                   </p>
                 </div>
               </div>
@@ -600,10 +606,10 @@ export default function TeamPerformance() {
                 </div>
                 <div className="mt-3">
                   <h2 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white">
-                    {perfSummary.total_weight_tons} <span className="text-lg font-bold">Tons</span>
+                    {perfSummary.total_weight_tons ?? 0} <span className="text-lg font-bold">Tons</span>
                   </h2>
                   <p className="text-xs font-semibold text-sky-700 dark:text-sky-400 mt-1">
-                    {perfSummary.total_weight_kg.toLocaleString('en-IN')} kg verified
+                    {(perfSummary.total_weight_kg ?? 0).toLocaleString('en-IN')} kg verified
                   </p>
                 </div>
               </div>
@@ -619,7 +625,7 @@ export default function TeamPerformance() {
                 </div>
                 <div className="mt-3">
                   <h2 className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate">
-                    {perfSummary.top_billing_staff}
+                    {perfSummary.top_billing_staff || 'None'}
                   </h2>
                   <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mt-1">
                     Highest Billing Revenue
@@ -638,7 +644,7 @@ export default function TeamPerformance() {
                 </div>
                 <div className="mt-3">
                   <h2 className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate">
-                    {perfSummary.top_dispatch_staff}
+                    {perfSummary.top_dispatch_staff || 'None'}
                   </h2>
                   <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 mt-1">
                     Most Dispatches Completed
