@@ -24,6 +24,7 @@ export const translations = {
     drivers: 'Drivers',
     notifications: 'Notifications',
     settings: 'Settings',
+    team: 'Team & Performance',
     reports: 'Reports',
     home: 'Home',
 
@@ -237,6 +238,7 @@ export const translations = {
     drivers: 'ஓட்டுநர்கள்',
     notifications: 'அறிவிப்புகள்',
     settings: 'அமைப்புகள்',
+    team: 'குழு & செயல்பாடு',
     reports: 'அறிக்கைகள்',
     home: 'முகப்பு',
 

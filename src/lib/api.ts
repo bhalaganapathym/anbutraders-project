@@ -329,6 +329,7 @@ export type Bill = {
   credit_days?: number | null;
   is_today_payment_overdue?: boolean;
   notes?: string | null;
+  billed_by?: string | null;
   created_at: string;
   driver?: Driver | null;
 };
@@ -356,6 +357,7 @@ export type Dispatch = {
   completed_at?: string | null;
   vehicle_leave_photo_url?: string | null;
   dispatch_team: string | null;
+  dispatched_by?: string | null;
   phase1_draft?: any;
   mismatch_approval_status?: 'pending' | 'approved' | 'rejected' | null;
   mismatch_voice_note_url?: string | null;

@@ -747,6 +747,10 @@ def update_dispatch(id: UUID, dispatch_in: DispatchCreate, background_tasks: Bac
     for key, value in d_data.items():
         if value is not None: # Don't overwrite with none blindly if it wasn't provided, though pydantic will supply defaults
             setattr(dispatch, key, value)
+    if dispatch.dispatch_team and not dispatch.dispatched_by:
+        dispatch.dispatched_by = dispatch.dispatch_team
+    elif dispatch.dispatched_by and not dispatch.dispatch_team:
+        dispatch.dispatch_team = dispatch.dispatched_by
             
     notif_created = False
     if old_status != dispatch.status:

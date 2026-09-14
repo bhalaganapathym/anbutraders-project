@@ -716,6 +716,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         delivery_charge: round2(dChargeVal),
         credit_due_date: isCredit && creditDueDate ? new Date(creditDueDate).toISOString() : null,
         credit_days: isCredit && creditDays !== '' ? Number(creditDays) : null,
+        billed_by: user?.full_name || user?.username || 'Billing Staff'
       });
 
       toast('Bill generated & dispatch team notified with customer details!', 'success');
@@ -1942,6 +1943,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   {selectedDispatch.vehicle_number && (
                     <p><strong>Transport:</strong> Vehicle {selectedDispatch.vehicle_number} {selectedDispatch.driver_name ? `(${selectedDispatch.driver_name})` : ''}</p>
                   )}
+                  <p><strong>Billed By:</strong> {selectedDispatch.bill?.billed_by || user?.full_name || user?.username || 'Billing Staff'}</p>
                 </div>
 
                 <div className="border-t-2 border-black pt-4 flex justify-between items-end text-[10px]">

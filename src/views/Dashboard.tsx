@@ -307,6 +307,13 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
       color: 'bg-teal-600 text-white shadow-teal-600/20',
       border: 'hover:border-teal-500',
     },
+    team: {
+      name: t('team') || 'Team & Performance',
+      icon: Users,
+      view: 'team',
+      color: 'bg-amber-600 text-white shadow-amber-600/20',
+      border: 'hover:border-amber-500',
+    },
     settings: {
       name: t('settings') || 'Settings',
       icon: Settings,
@@ -346,6 +353,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
       allQuickAccessMap.orders,
       allQuickAccessMap.dispatches,
       allQuickAccessMap.billing,
+      allQuickAccessMap.team,
       allQuickAccessMap.customers,
       allQuickAccessMap.pricelist,
       allQuickAccessMap.drivers,

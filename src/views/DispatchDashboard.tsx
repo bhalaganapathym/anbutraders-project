@@ -682,6 +682,8 @@ export default function DispatchDashboard({
         driver_name: driverName.trim() || null,
         driver_mobile: driverMobile.trim() || null,
         notes: remarks,
+        dispatch_team: user?.full_name || user?.username || 'Dispatch Team',
+        dispatched_by: user?.full_name || user?.username || 'Dispatch Team',
         weights: [...(detail.weights || []), ...newWeights],
         photos: [...(detail.photos || []), ...newPhotos]
       });
@@ -726,6 +728,8 @@ export default function DispatchDashboard({
         vehicle_number: vehicleNo.trim() || null,
         driver_name: driverName.trim() || null,
         driver_mobile: driverMobile.trim() || null,
+        dispatch_team: user?.full_name || user?.username || detail.dispatch_team || 'Dispatch Team',
+        dispatched_by: user?.full_name || user?.username || detail.dispatched_by || 'Dispatch Team',
         notes: remarks,
       });
 

@@ -24,6 +24,7 @@ import Settings from '@/views/Settings';
 import DriverDelivery from '@/views/DriverDelivery';
 import DailyReconciliation from '@/views/DailyReconciliation';
 import PublicReceipt from '@/views/PublicReceipt';
+import TeamPerformance from '@/views/TeamPerformance';
 import OfflineQueueModal from '@/components/OfflineQueueModal';
 import { subscribeQueueCount } from '@/lib/offlineQueue';
 
@@ -40,6 +41,7 @@ const navConfigs: NavConfig[] = [
   { id: 'delivery', labelKey: 'delivery_pod', icon: MapPin },
   { id: 'products', labelKey: 'products', icon: Package },
   { id: 'drivers', labelKey: 'drivers', icon: UserSquare },
+  { id: 'team', labelKey: 'team', icon: Users },
   { id: 'notifications', labelKey: 'notifications', icon: Bell },
   { id: 'settings', labelKey: 'settings', icon: SettingsIcon },
 ];
@@ -522,6 +524,7 @@ function AppContent() {
           {activeView === 'drivers' && <Drivers />}
           {activeView === 'notifications' && <Notifications />}
           {activeView === 'settings' && <Settings />}
+          {activeView === 'team' && <TeamPerformance />}
         </main>
       </div>
 

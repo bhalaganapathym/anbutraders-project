@@ -7,6 +7,7 @@ class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     username = Column(String, unique=True, index=True, nullable=False)
+    full_name = Column(String, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     secret_question = Column(String, nullable=True)
@@ -125,6 +126,7 @@ class Dispatch(Base):
     completed_at = Column(DateTime(timezone=True))
     vehicle_leave_photo_url = Column(String, nullable=True)
     dispatch_team = Column(String)
+    dispatched_by = Column(String, nullable=True)
     phase1_draft = Column(JSON, nullable=True)
     mismatch_approval_status = Column(String, nullable=True)  # 'pending', 'approved', 'rejected'
     mismatch_voice_note_url = Column(String, nullable=True)
@@ -228,6 +230,7 @@ class Bill(Base):
     credit_days = Column(Integer, nullable=True)
     is_today_payment_overdue = Column(Boolean, default=False)
     notes = Column(String, nullable=True)
+    billed_by = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
     dispatch = relationship("Dispatch", back_populates="bill")

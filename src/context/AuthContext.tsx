@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type UserRole = 'admin' | 'billing' | 'dispatch';
+export type UserRole = 'admin' | 'billing' | 'dispatch' | 'cashier' | 'driver';
 
 export type User = {
   id: string;
   username: string;
+  full_name?: string;
   email: string;
   role: UserRole;
 };

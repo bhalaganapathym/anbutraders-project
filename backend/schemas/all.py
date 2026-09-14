@@ -11,11 +11,21 @@ class Token(BaseModel):
 # User
 class UserCreate(BaseModel):
     username: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     password: str
-    role: Optional[str] = "Cashier"
+    full_name: Optional[str] = None
+    role: Optional[str] = "billing"
     secret_question: Optional[str] = None
     secret_answer: Optional[str] = None
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
+
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str
 
 class PasswordResetRequest(BaseModel):
     username: str
@@ -25,6 +35,7 @@ class PasswordResetRequest(BaseModel):
 class UserResponse(BaseModel):
     id: UUID
     username: str
+    full_name: Optional[str] = None
     email: str
     role: str
     is_active: bool
@@ -278,6 +289,8 @@ class DispatchCreate(BaseModel):
     notes: Optional[str] = None
     pod_voice_note_url: Optional[str] = None
     pod_voice_note_path: Optional[str] = None
+    dispatch_team: Optional[str] = None
+    dispatched_by: Optional[str] = None
     items: Optional[List[DispatchItemCreate]] = []
     weights: Optional[List[WeightCreate]] = []
     photos: Optional[List[PhotoCreate]] = []
@@ -328,6 +341,7 @@ class DispatchResponse(BaseModel):
     completed_at: Optional[datetime] = None
     vehicle_leave_photo_url: Optional[str] = None
     dispatch_team: Optional[str] = None
+    dispatched_by: Optional[str] = None
     created_at: datetime
     
     order: Optional["OrderResponse"] = None
@@ -455,6 +469,7 @@ class BillCreate(BaseModel):
     credit_days: Optional[int] = None
     is_today_payment_overdue: Optional[bool] = False
     notes: Optional[str] = None
+    billed_by: Optional[str] = None
 
 class BillResponse(BaseModel):
     id: UUID
@@ -474,6 +489,7 @@ class BillResponse(BaseModel):
     credit_days: Optional[int] = None
     is_today_payment_overdue: bool = False
     notes: Optional[str] = None
+    billed_by: Optional[str] = None
     created_at: datetime
     
     driver: Optional[DriverResponse] = None

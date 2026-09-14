@@ -23,10 +23,37 @@ def login_access_token(
     ).first()
     
     if not user:
-        if identifier in ["billing", "dispatch", "admin", "driver"]:
+        SEEDED_USERS = {
+            "sundar": ("Sundar", "sundar@anbu.com", "sundar@anbu123", "billing"),
+            "chandralekha": ("Chandralekha", "chandralekha@anbu.com", "chandra@anbu123", "billing"),
+            "sneka": ("Sneka", "sneka@anbu.com", "sneka@anbu123", "billing"),
+            "dhinesh": ("Dhinesh", "dhinesh@anbu.com", "dhinesh@anbu123", "billing"),
+            "ramana": ("Ramana", "ramana@anbu.com", "ramana@anbu123", "billing"),
+            "praveen": ("Praveen", "praveen@anbu.com", "praveen@anbu123", "dispatch"),
+            "prasath": ("Prasath", "prasath@anbu.com", "prasath@anbu123", "dispatch"),
+            "sathish": ("Sathish", "sathish@anbu.com", "sathish@anbu123", "dispatch"),
+            "hariharan": ("Hariharan", "hariharan@anbu.com", "hariharan@anbu123", "dispatch"),
+        }
+        if identifier in SEEDED_USERS:
+            fn, em, pwd, rl = SEEDED_USERS[identifier]
+            user = User(
+                username=identifier,
+                full_name=fn,
+                email=em,
+                hashed_password=security.get_password_hash(pwd),
+                role=rl,
+                is_active=True,
+                secret_question="What is your favorite color?",
+                secret_answer_hash=security.get_password_hash("blue")
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif identifier in ["billing", "dispatch", "admin", "driver"]:
             default_pwd = "dispatch123" if identifier == "dispatch" else "driver123" if identifier == "driver" else "password123"
             user = User(
                 username=identifier,
+                full_name=identifier.title(),
                 email=f"{identifier}@anbutraders.com",
                 hashed_password=security.get_password_hash(default_pwd),
                 role=identifier,

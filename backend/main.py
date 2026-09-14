@@ -36,9 +36,68 @@ try:
         conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS notes VARCHAR;"))
         conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS pod_voice_note_url VARCHAR;"))
         conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS pod_voice_note_path VARCHAR;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR;"))
+        conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS billed_by VARCHAR;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS dispatched_by VARCHAR;"))
         conn.commit()
 except Exception as e:
     print(f"Schema sync notice: {e}")
+
+def seed_initial_team_members():
+    from db.session import SessionLocal
+    from models.all import User
+    from core import security
+    from sqlalchemy import func
+    
+    INITIAL_STAFF = [
+        # Billing Team
+        {"username": "sundar", "full_name": "Sundar", "email": "sundar@anbu.com", "password": "sundar@anbu123", "role": "billing"},
+        {"username": "chandralekha", "full_name": "Chandralekha", "email": "chandralekha@anbu.com", "password": "chandra@anbu123", "role": "billing"},
+        {"username": "sneka", "full_name": "Sneka", "email": "sneka@anbu.com", "password": "sneka@anbu123", "role": "billing"},
+        {"username": "dhinesh", "full_name": "Dhinesh", "email": "dhinesh@anbu.com", "password": "dhinesh@anbu123", "role": "billing"},
+        {"username": "ramana", "full_name": "Ramana", "email": "ramana@anbu.com", "password": "ramana@anbu123", "role": "billing"},
+        # Dispatch Team
+        {"username": "praveen", "full_name": "Praveen", "email": "praveen@anbu.com", "password": "praveen@anbu123", "role": "dispatch"},
+        {"username": "prasath", "full_name": "Prasath", "email": "prasath@anbu.com", "password": "prasath@anbu123", "role": "dispatch"},
+        {"username": "sathish", "full_name": "Sathish", "email": "sathish@anbu.com", "password": "sathish@anbu123", "role": "dispatch"},
+        {"username": "hariharan", "full_name": "Hariharan", "email": "hariharan@anbu.com", "password": "hariharan@anbu123", "role": "dispatch"},
+    ]
+    
+    db = SessionLocal()
+    try:
+        for staff in INITIAL_STAFF:
+            u = db.query(User).filter(
+                (func.lower(User.username) == staff["username"].lower()) |
+                (func.lower(User.email) == staff["email"].lower())
+            ).first()
+            if not u:
+                new_u = User(
+                    username=staff["username"].lower(),
+                    full_name=staff["full_name"],
+                    email=staff["email"].lower(),
+                    hashed_password=security.get_password_hash(staff["password"]),
+                    role=staff["role"].lower(),
+                    is_active=True,
+                    secret_question="What is your favorite color?",
+                    secret_answer_hash=security.get_password_hash("blue")
+                )
+                db.add(new_u)
+            else:
+                if not u.full_name:
+                    u.full_name = staff["full_name"]
+                if u.role != staff["role"]:
+                    u.role = staff["role"].lower()
+        db.commit()
+    except Exception as e:
+        print(f"Team seeding notice: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+try:
+    seed_initial_team_members()
+except Exception as e:
+    print(f"Startup seeding notice: {e}")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
