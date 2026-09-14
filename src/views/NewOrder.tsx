@@ -13,6 +13,7 @@ import { parseAndCategorizeAddresses } from '@/lib/address';
 import { EstimateBillImage } from '@/components/EstimateBillImage';
 import Modal from '@/components/Modal';
 import html2canvas from 'html2canvas';
+import { useFormDraft } from '@/lib/useFormDraft';
 
 type Line = { product_id: string; quantity: number; unit: string; product: Product };
 
@@ -137,6 +138,43 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   // Order Items
   const [lines, setLines] = useState<Line[]>([]);
   const [draftStatus, setDraftStatus] = useState<'Saved' | 'Saving...'>('Saved');
+  const [draftRestoredNotice, setDraftRestoredNotice] = useState(false);
+
+  interface NewOrderDraftData {
+    customerId?: string;
+    deliveryAddress: string;
+    lines: Line[];
+    isAdvanceOrder: boolean;
+    scheduledDeliveryDate: string;
+    advancePaidAmount: string;
+    advancePaymentMethod: string;
+    advanceNotes: string;
+    unloadingCharge: string;
+    transportCharge: string;
+    transportChargeType: string;
+    customItemRates: Record<string, number>;
+    rateInputs: Record<string, string>;
+    customTotalEstimate: string;
+  }
+
+  const { hasDraft, savedAt, saveDraft, getDraft, clearDraft } = useFormDraft<NewOrderDraftData>(
+    'new_order',
+    !orderToEdit
+  );
+
+  const handleDiscardDraft = () => {
+    clearDraft();
+    setSelectedCustomer(null);
+    setDeliveryAddress('');
+    setLines([]);
+    setAdvancePaidAmount('');
+    setAdvanceNotes('');
+    setCustomItemRates({});
+    setRateInputs({});
+    setCustomTotalEstimate('');
+    setDraftRestoredNotice(false);
+    toast('Unsaved draft discarded', 'info');
+  };
 
   // Load Initial Data
   useEffect(() => {
@@ -237,6 +275,35 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
             setItemDiscounts(loadedDiscounts);
           }
         }
+      } else {
+        // Check for unsaved local draft
+        const draft = getDraft();
+        if (draft) {
+          if (draft.customerId) {
+            const cust = (c as Customer[]).find((x) => x.id === draft.customerId);
+            if (cust) setSelectedCustomer(cust);
+          }
+          if (draft.deliveryAddress) setDeliveryAddress(draft.deliveryAddress);
+          if (draft.isAdvanceOrder) setIsAdvanceOrder(draft.isAdvanceOrder);
+          if (draft.scheduledDeliveryDate) setScheduledDeliveryDate(draft.scheduledDeliveryDate);
+          if (draft.advancePaidAmount) setAdvancePaidAmount(draft.advancePaidAmount);
+          if (draft.advancePaymentMethod) setAdvancePaymentMethod(draft.advancePaymentMethod);
+          if (draft.advanceNotes) setAdvanceNotes(draft.advanceNotes);
+          if (draft.unloadingCharge) setUnloadingCharge(draft.unloadingCharge);
+          if (draft.transportCharge) setTransportCharge(draft.transportCharge);
+          if (draft.transportChargeType) setTransportChargeType(draft.transportChargeType);
+          if (draft.customTotalEstimate) setCustomTotalEstimate(draft.customTotalEstimate);
+          if (draft.customItemRates) setCustomItemRates(draft.customItemRates);
+          if (draft.rateInputs) setRateInputs(draft.rateInputs);
+          if (draft.lines && draft.lines.length > 0) {
+            const mapped = draft.lines.map((l: any) => {
+              const prod = (p as Product[]).find((x) => x.id === l.product_id) || l.product;
+              return prod ? { ...l, product: prod } : null;
+            }).filter(Boolean);
+            setLines(mapped as Line[]);
+          }
+          setDraftRestoredNotice(true);
+        }
       }
     } catch (e) {
       toast('Failed to load initial data', 'error');
@@ -253,12 +320,48 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   };
   
   useEffect(() => {
+    if (orderToEdit) return;
     if (lines.length > 0 || selectedCustomer || deliveryAddress) {
       setDraftStatus('Saving...');
-      const t = setTimeout(() => setDraftStatus('Saved'), 800);
+      const t = setTimeout(() => {
+        saveDraft({
+          customerId: selectedCustomer?.id,
+          deliveryAddress,
+          lines,
+          isAdvanceOrder,
+          scheduledDeliveryDate,
+          advancePaidAmount,
+          advancePaymentMethod,
+          advanceNotes,
+          unloadingCharge,
+          transportCharge,
+          transportChargeType,
+          customItemRates,
+          rateInputs,
+          customTotalEstimate
+        });
+        setDraftStatus('Saved');
+      }, 500);
       return () => clearTimeout(t);
     }
-  }, [lines, selectedCustomer, deliveryAddress]);
+  }, [
+    orderToEdit,
+    lines,
+    selectedCustomer,
+    deliveryAddress,
+    isAdvanceOrder,
+    scheduledDeliveryDate,
+    advancePaidAmount,
+    advancePaymentMethod,
+    advanceNotes,
+    unloadingCharge,
+    transportCharge,
+    transportChargeType,
+    customItemRates,
+    rateInputs,
+    customTotalEstimate,
+    saveDraft
+  ]);
 
   // Handlers
   const handleUseCustomerAddress = (checked: boolean) => {
@@ -720,8 +823,13 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         await api.put(`/orders/${orderToEdit.id}`, payload);
         toast(confirmNow ? 'Estimate confirmed successfully!' : 'Estimate draft updated', 'success');
       } else {
-        await api.post('/orders', payload);
-        toast(confirmNow ? 'Estimate confirmed & booked!' : (isAdvanceOrder ? 'Advance Order booked!' : 'Estimate draft saved'), 'success');
+        const res = await api.post('/orders', payload);
+        clearDraft();
+        if (res && res._offlineQueued) {
+          toast('Order saved to offline queue. Will sync automatically once connected.', 'info');
+        } else {
+          toast(confirmNow ? 'Estimate confirmed & booked!' : (isAdvanceOrder ? 'Advance Order booked!' : 'Estimate draft saved'), 'success');
+        }
       }
 
       if (confirmNow) {
@@ -762,6 +870,21 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {draftRestoredNotice && (
+          <div className="mb-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-2 shadow-xs animate-fade-in">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-600 shrink-0" />
+              <span>Unsaved draft restored from your device ({savedAt ? savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'recently'}).</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-rose-700 bg-white dark:bg-slate-800 rounded-lg border border-rose-200 dark:border-rose-800 shadow-xs transition"
+            >
+              Discard Draft
+            </button>
+          </div>
+        )}
         <div className="flex flex-col lg:flex-row gap-8 items-start">
           
           {/* Left Column (Inputs) */}

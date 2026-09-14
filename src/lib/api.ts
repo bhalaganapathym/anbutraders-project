@@ -1,4 +1,8 @@
 import { compressImage } from './imageCompressor';
+import { enqueueRequest, replayOfflineQueue } from './offlineQueue';
+import { saveMediaLocally } from './mediaQueue';
+
+export { replayOfflineQueue };
 
 const getApiUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
@@ -34,6 +38,13 @@ export function invalidateApiCache(pattern?: string) {
   }
 }
 
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'req-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+}
+
 async function fetchApi(endpoint: string, options: RequestInit = {}, retries = 2): Promise<any> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
@@ -45,8 +56,18 @@ async function fetchApi(endpoint: string, options: RequestInit = {}, retries = 2
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const method = (options.method || 'GET').toUpperCase();
+  const isMutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+
+  // Attach idempotency key for mutating requests
+  let idempotencyKey = headers['Idempotency-Key'] || headers['idempotency-key'];
+  if (isMutating && !idempotencyKey) {
+    idempotencyKey = generateIdempotencyKey();
+    headers['Idempotency-Key'] = idempotencyKey;
+  }
+
   // Check cache for GET requests on catalog endpoints
-  const isGet = !options.method || options.method === 'GET';
+  const isGet = method === 'GET';
   const isCacheable = isGet && CACHEABLE_ENDPOINTS.some((prefix) => endpoint.startsWith(prefix));
 
   if (isCacheable) {
@@ -54,6 +75,26 @@ async function fetchApi(endpoint: string, options: RequestInit = {}, retries = 2
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
       return cached.data;
     }
+  }
+
+  // If currently offline and this is a mutating request (not auth/login), enqueue into Outbox
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  const isAuthEndpoint = endpoint.includes('/auth') || endpoint.includes('/login');
+
+  if (isOffline && isMutating && !isAuthEndpoint) {
+    await enqueueRequest({
+      url: `${API_URL}${endpoint}`,
+      method: method as any,
+      body: options.body ? JSON.parse(options.body as string) : undefined,
+      headers,
+      idempotencyKey,
+      description: `${method} ${endpoint.replace(/^\/api\/v1/, '')}`
+    });
+    return {
+      _offlineQueued: true,
+      status: 'queued',
+      message: 'Saved to offline queue. Will sync automatically once connected.'
+    };
   }
 
   let attempt = 0;
@@ -82,6 +123,26 @@ async function fetchApi(endpoint: string, options: RequestInit = {}, retries = 2
         attempt++;
         await new Promise((r) => setTimeout(r, attempt * 400));
         continue;
+      }
+      // If network completely failed on mutating request, queue it offline rather than losing user work
+      if (isMutating && !isAuthEndpoint && (err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('NetworkError'))) {
+        try {
+          await enqueueRequest({
+            url: `${API_URL}${endpoint}`,
+            method: method as any,
+            body: options.body ? JSON.parse(options.body as string) : undefined,
+            headers,
+            idempotencyKey,
+            description: `${method} ${endpoint.replace(/^\/api\/v1/, '')}`
+          });
+          return {
+            _offlineQueued: true,
+            status: 'queued',
+            message: 'Saved to offline queue. Will sync automatically once connected.'
+          };
+        } catch (queueErr) {
+          // fallback to throw original error
+        }
       }
       throw err;
     }
@@ -129,21 +190,45 @@ export const api = {
     }
     return res.json();
   },
-  upload: async (endpoint: string, file: File) => {
+  upload: async (endpoint: string, file: File, caption?: string) => {
     // Compress image automatically before sending over network to save Supabase storage & Render memory
     const optimizedFile = await compressImage(file);
+    
+    // Save locally in IndexedDB first so photo is never lost on network disconnect
+    let localSaved: { id: string; localUrl: string } | null = null;
+    try {
+      localSaved = await saveMediaLocally(optimizedFile, file.name, endpoint, caption);
+    } catch (e) {
+      // IndexedDB storage optional fallback
+    }
+
     const formData = new FormData();
     formData.append('file', optimizedFile);
+    if (caption) formData.append('caption', caption);
+    
     const token = localStorage.getItem('token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${API_URL}${endpoint}`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-    if (!res.ok) throw new Error('Upload failed');
-    return res.json();
+
+    try {
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      return await res.json();
+    } catch (uploadErr) {
+      // If network failed, return local blob URL with offline indicator so preview still works
+      if (localSaved) {
+        return {
+          url: localSaved.localUrl,
+          _offlinePending: true,
+          message: 'Saved locally. Photo will upload automatically once connected.'
+        };
+      }
+      throw uploadErr;
+    }
   }
 };
 

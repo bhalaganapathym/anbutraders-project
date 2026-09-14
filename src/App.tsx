@@ -24,6 +24,8 @@ import Settings from '@/views/Settings';
 import DriverDelivery from '@/views/DriverDelivery';
 import DailyReconciliation from '@/views/DailyReconciliation';
 import PublicReceipt from '@/views/PublicReceipt';
+import OfflineQueueModal from '@/components/OfflineQueueModal';
+import { subscribeQueueCount } from '@/lib/offlineQueue';
 
 type NavConfig = { id: string; labelKey: keyof typeof translations['en']; icon: typeof LayoutDashboard };
 
@@ -56,11 +58,17 @@ function AppContent() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncLabel, setSyncLabel] = useState('Just now');
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [offlineQueueCount, setOfflineQueueCount] = useState(0);
+  const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const connectionStatus = useConnectionStatus();
   const [isPublicTrack, setIsPublicTrack] = useState(() => 
     typeof window !== 'undefined' && (window.location.hash.startsWith('#/track/') || window.location.hash.startsWith('#/receipt/'))
   );
   const { t, lang, changeLanguage } = useTranslation();
+
+  useEffect(() => {
+    return subscribeQueueCount(setOfflineQueueCount);
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -450,6 +458,18 @@ function AppContent() {
             </button>
           </div>
 
+          {/* Offline Outbox Queue Badge */}
+          {offlineQueueCount > 0 && (
+            <button
+              onClick={() => setIsQueueModalOpen(true)}
+              className="flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1 rounded-full bg-amber-500/15 dark:bg-amber-500/20 text-[10px] sm:text-xs font-bold text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 shadow-xs hover:bg-amber-500/25 transition cursor-pointer"
+              title={`${offlineQueueCount} offline action(s) waiting to sync`}
+            >
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              <span>{offlineQueueCount} {lang === 'ta' ? 'காத்திருப்பு' : 'queued'}</span>
+            </button>
+          )}
+
           <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
             {/* Tamil / English Switch */}
             <button
@@ -603,6 +623,9 @@ function AppContent() {
           </button>
         )}
       </nav>
+
+      {/* Offline Outbox Queue Management Modal */}
+      <OfflineQueueModal isOpen={isQueueModalOpen} onClose={() => setIsQueueModalOpen(false)} />
     </div>
   );
 }

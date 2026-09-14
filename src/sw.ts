@@ -1,11 +1,54 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
+import { registerRoute } from 'workbox-routing';
+import { NetworkFirst, CacheFirst } from 'workbox-strategies';
+import { ExpirationPlugin } from 'workbox-expiration';
+import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 
 declare let self: ServiceWorkerGlobalScope;
 
 // Precache static assets compiled by Vite
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+
+// 1. Runtime cache for catalog APIs (/products, /customers, /drivers, /vehicles)
+// Uses NetworkFirst with 3s timeout: falls back to local cache when offline or in yard dead zone
+registerRoute(
+  ({ url }) => url.pathname.includes('/api/v1/products') || 
+               url.pathname.includes('/api/v1/customers') ||
+               url.pathname.includes('/api/v1/drivers') ||
+               url.pathname.includes('/api/v1/vehicles'),
+  new NetworkFirst({
+    cacheName: 'anbu-catalog-cache',
+    networkTimeoutSeconds: 3,
+    plugins: [
+      new CacheableResponsePlugin({
+        statuses: [0, 200]
+      }),
+      new ExpirationPlugin({
+        maxEntries: 50,
+        maxAgeSeconds: 24 * 60 * 60 // 24 hours
+      })
+    ]
+  })
+);
+
+// 2. Cache external web fonts and icons
+registerRoute(
+  ({ url }) => url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
+  new CacheFirst({
+    cacheName: 'google-fonts-cache',
+    plugins: [
+      new CacheableResponsePlugin({
+        statuses: [0, 200]
+      }),
+      new ExpirationPlugin({
+        maxEntries: 30,
+        maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+      })
+    ]
+  })
+);
 
 // Background Push Notification Listener
 self.addEventListener('push', (event: PushEvent) => {

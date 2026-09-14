@@ -45,6 +45,8 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
+from core.idempotency import IdempotencyMiddleware
+
 # Set all CORS enabled origins
 app.add_middleware(
     CORSMiddleware,
@@ -53,6 +55,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Idempotency Middleware to prevent duplicate operations during network retry
+app.add_middleware(IdempotencyMiddleware, max_entries=500, ttl_seconds=600)
 
 os.makedirs("uploads/voice_notes", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
