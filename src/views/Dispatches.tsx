@@ -648,13 +648,22 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
             })}
           </div>
 
-          {/* DESKTOP TABLE VIEW (>= 768px) */}
-          <div className="hidden md:block table-wrap">
-            <table className="w-full">
-              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/75">
+          {/* DESKTOP TABLE VIEW (>= 768px) - Zero Horizontal Scroll Fit */}
+          <div className="hidden md:block w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <table className="w-full table-fixed divide-y divide-slate-100 dark:divide-slate-800 text-xs sm:text-sm">
+              <colgroup>
+                {user?.role === 'admin' && <col className="w-9" />}
+                <col className="w-[14%]" />
+                <col className="w-[23%]" />
+                <col className="w-[18%]" />
+                <col className="w-[19%]" />
+                <col className="w-[11%]" />
+                <col className="w-[15%]" />
+              </colgroup>
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80">
                 <tr>
                   {user?.role === 'admin' && (
-                    <th className="th w-10">
+                    <th className="px-2 py-2.5 text-center w-9">
                       <input
                         type="checkbox"
                         checked={selectedIds.size === filteredDispatches.length && filteredDispatches.length > 0}
@@ -663,12 +672,12 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       />
                     </th>
                   )}
-                  <th className="th">Dispatch No</th>
-                  <th className="th">Customer</th>
-                  <th className="th">Vehicle / Driver</th>
-                  <th className="th">Status</th>
-                  <th className="th">Time Elapsed</th>
-                  <th className="th text-right">Actions</th>
+                  <th className="px-2.5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Dispatch No</th>
+                  <th className="px-2.5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Customer</th>
+                  <th className="px-2.5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Vehicle / Driver</th>
+                  <th className="px-2.5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Status</th>
+                  <th className="px-2.5 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Elapsed</th>
+                  <th className="px-2.5 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-500">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -680,7 +689,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition ${isSelected ? 'bg-amber-50/30' : ''}`}
                     >
                       {user?.role === 'admin' && (
-                        <td className="td">
+                        <td className="px-2 py-2 text-center">
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -689,91 +698,117 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                           />
                         </td>
                       )}
-                      <td className="td">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => setDetail(d)} className="font-semibold text-slate-800 dark:text-slate-100 hover:underline">
+                      <td className="px-2.5 py-2">
+                        <div className="flex flex-col items-start gap-0.5">
+                          <button onClick={() => setDetail(d)} className="font-mono font-bold text-slate-900 dark:text-slate-100 hover:text-amber-600 truncate max-w-full">
                             {d.dispatch_no}
                           </button>
                           {d.total_trips && d.total_trips > 1 && (
-                            <span className="inline-flex items-center text-[10px] font-black text-purple-800 bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
+                            <span className="inline-flex items-center text-[10px] font-black text-purple-800 bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800">
                               Trip {d.trip_number || 1}/{d.total_trips}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="td font-medium">{d.customer?.name ?? 'Unknown'}</td>
-                      <td className="td">
-                        {d.vehicle_number || d.driver_name ? (
-                          <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
-                            <Truck size={14} className="text-amber-600" /> {d.vehicle_number || ''} {d.driver_name ? `(${d.driver_name})` : ''}
+                      <td className="px-2.5 py-2">
+                        <div className="truncate" title={d.customer?.name ?? 'Unknown Customer'}>
+                          <span className="font-bold text-slate-800 dark:text-slate-200 block truncate">
+                            {d.customer?.name ?? 'Unknown Customer'}
                           </span>
-                        ) : (
-                          <span className="text-slate-400 italic">Not set</span>
-                        )}
-                      </td>
-                      <td className="td">
-                        <div className="flex flex-col gap-1 items-start">
-                          <DispatchStatusBadge status={d.status} />
-                          {d.verifying_by && d.status === 'pending' && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
-                              🔍 Verifying: {d.verifying_by}
-                            </span>
-                          )}
-                          {d.dispatched_by && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                              📦 {d.dispatched_by}
-                            </span>
-                          )}
-                          {d.mismatch_approval_status === 'pending' && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
-                              <Mic size={10} className="animate-pulse text-amber-600" /> Mismatch Pending
-                            </span>
-                          )}
-                          {d.mismatch_approval_status === 'approved' && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
-                              <CheckCircle2 size={10} className="text-emerald-600" /> Mismatch Approved
-                            </span>
-                          )}
-                          {d.pod_voice_note_url && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-300">
-                              <Volume2 size={10} className="text-indigo-600" /> Driver Voice POD
+                          {d.customer?.phone && (
+                            <span className="text-[11px] text-slate-400 block truncate">
+                              {d.customer.phone}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="td">
+                      <td className="px-2.5 py-2">
+                        <div className="truncate" title={`${d.vehicle_number || ''} ${d.driver_name || ''}`.trim() || 'Not set'}>
+                          {d.vehicle_number || d.driver_name ? (
+                            <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300 truncate">
+                              <Truck size={13} className="text-amber-600 shrink-0" />
+                              <span className="truncate">{d.vehicle_number || ''} {d.driver_name ? `(${d.driver_name})` : ''}</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic text-xs">Not set</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-2.5 py-2">
+                        <div className="flex flex-col gap-1 items-start max-w-full overflow-hidden">
+                          <DispatchStatusBadge status={d.status} />
+                          {d.verifying_by && d.status === 'pending' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-800 truncate max-w-full">
+                              🔍 {d.verifying_by}
+                            </span>
+                          )}
+                          {d.dispatched_by && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300 px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-800 truncate max-w-full">
+                              📦 {d.dispatched_by}
+                            </span>
+                          )}
+                          {d.mismatch_approval_status === 'pending' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300">
+                              <Mic size={10} className="animate-pulse text-amber-600 shrink-0" /> Mismatch
+                            </span>
+                          )}
+                          {d.mismatch_approval_status === 'approved' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-300">
+                              <CheckCircle2 size={10} className="text-emerald-600 shrink-0" /> Approved
+                            </span>
+                          )}
+                          {d.pod_voice_note_url && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-800 bg-indigo-100 px-1.5 py-0.2 rounded border border-indigo-300">
+                              <Volume2 size={10} className="text-indigo-600 shrink-0" /> Voice POD
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-2.5 py-2">
                         <WaitClock
                           timestamp={d.order?.confirmed_at || d.created_at}
                           endTime={d.completed_at || d.updated_at}
                           isCompleted={d.status === 'completed'}
                         />
                       </td>
-                      <td className="td text-right">
-                        <div className="flex justify-end items-center gap-1">
+                      <td className="px-2.5 py-2 text-right">
+                        <div className="flex justify-end items-center gap-1 shrink-0">
                           {(d.mismatch_approval_status === 'pending' || d.mismatch_voice_note_url) && (
                             <button
+                              type="button"
                               onClick={() => handleOpenApprovalModal(d)}
-                              className="btn-ghost px-2 py-1 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-bold text-xs flex items-center gap-1 rounded-md"
+                              className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg shadow-sm transition"
                               title={user?.role === 'admin' ? "Review Dispatcher Voice Note" : "Listen to Voice Note"}
                             >
-                              <Mic size={13} /> {user?.role === 'admin' ? 'Review Voice Note' : 'Voice Note'}
+                              <Mic size={14} className="animate-pulse" />
                             </button>
                           )}
                           {d.customer?.phone && (
                             <button
+                              type="button"
                               onClick={() => handleWhatsAppAlert(d)}
-                              className="btn-ghost p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition"
                               title="Send WhatsApp Update"
                             >
-                              <MessageSquare size={15} />
+                              <MessageSquare size={14} />
                             </button>
                           )}
-                          <button onClick={() => setDetail(d)} className="btn-ghost p-1.5 text-blue-600 hover:bg-blue-50" title="Verify / View">
-                            <Package size={15} />
+                          <button 
+                            type="button"
+                            onClick={() => setDetail(d)} 
+                            className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 transition"
+                            title="Open Verification / Dispatch"
+                          >
+                            <Package size={13} /> Open
                           </button>
                           {user?.role === 'admin' && (
-                            <button onClick={() => removeDispatch(d)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" title="Delete">
-                              <Trash2 size={15} />
+                            <button 
+                              type="button"
+                              onClick={() => removeDispatch(d)} 
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition" 
+                              title="Delete Dispatch"
+                            >
+                              <Trash2 size={14} />
                             </button>
                           )}
                         </div>

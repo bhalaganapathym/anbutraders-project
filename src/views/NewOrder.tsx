@@ -54,7 +54,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const [selectedBrand, setSelectedBrand] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [itemQty, setItemQty] = useState<number | ''>('');
+  const [itemQty, setItemQty] = useState<string>('');
   const [itemUnit, setItemUnit] = useState('nos');
   const [targetWeightInput, setTargetWeightInput] = useState('');
   const [steelInputMode, setSteelInputMode] = useState<'items' | 'kg'>('items');
@@ -392,11 +392,12 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     setTargetWeightInput('');
   };
 
-  const handleQtyChange = (val: number | '') => {
+  const handleQtyChange = (val: string) => {
     setItemQty(val);
+    const num = parseFloat(val);
     const stdWeight = Number(selectedProduct?.standard_weight || 0);
-    if (stdWeight > 0 && typeof val === 'number' && val > 0) {
-      setTargetWeightInput((val * stdWeight).toFixed(2));
+    if (stdWeight > 0 && !isNaN(num) && num > 0) {
+      setTargetWeightInput((num * stdWeight).toFixed(2));
     } else {
       setTargetWeightInput('');
     }
@@ -408,7 +409,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     const targetWt = parseFloat(wtVal);
     if (stdWeight > 0 && !isNaN(targetWt) && targetWt > 0) {
       const calculatedNos = Math.max(1, Math.round(targetWt / stdWeight));
-      setItemQty(calculatedNos);
+      setItemQty(String(calculatedNos));
     } else {
       setItemQty('');
     }
@@ -416,7 +417,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
 
   const handleAddItem = () => {
     if (!selectedProduct) return;
-    if (!itemQty || typeof itemQty !== 'number' || itemQty <= 0) {
+    const numQty = parseFloat(itemQty);
+    if (isNaN(numQty) || numQty <= 0) {
       toast('Please enter a valid quantity', 'error');
       return;
     }
@@ -426,7 +428,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     }
     setLines([...lines, { 
       product_id: selectedProduct.id, 
-      quantity: itemQty, 
+      quantity: numQty, 
       unit: itemUnit || selectedProduct.unit || 'nos',
       product: selectedProduct 
     }]);
@@ -520,7 +522,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   };
   
   const updateLineQty = (pid: string, delta: number) => {
-    setLines(lines.map(l => l.product_id === pid ? { ...l, quantity: Math.max(1, l.quantity + delta) } : l));
+    setLines(lines.map(l => l.product_id === pid ? { ...l, quantity: Math.max(0.1, round2(l.quantity + delta)) } : l));
   };
   
   const removeLine = (pid: string) => {
@@ -1442,9 +1444,10 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                 inputMode="decimal"
                                 value={itemQty}
                                 onChange={e => {
-                                  const raw = e.target.value.replace(/[^0-9.]/g, '');
-                                  const parsed = raw === '' ? '' : parseFloat(raw);
-                                  handleQtyChange(parsed);
+                                  let val = e.target.value.replace(/[^0-9.]/g, '');
+                                  const parts = val.split('.');
+                                  if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                                  handleQtyChange(val);
                                 }}
                                 placeholder="Enter count in pieces (e.g. 10 or 0.5)..."
                                 className="w-full rounded-xl border-2 border-slate-300 p-2.5 pr-14 text-center text-lg font-black text-slate-900 placeholder:text-slate-400 placeholder:font-medium placeholder:text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
@@ -1452,8 +1455,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                               <span className="absolute right-3 text-xs font-black text-slate-500 pointer-events-none uppercase">nos</span>
                             </div>
                             <p className="text-xs font-bold text-slate-600 mt-2">
-                              ➔ Weight: {typeof itemQty === 'number' && itemQty > 0 ? (
-                                <><strong className="text-blue-700">{(itemQty * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg</strong> ({selectedProduct.standard_weight} kg/no)</>
+                              ➔ Weight: {parseFloat(itemQty) > 0 ? (
+                                <><strong className="text-blue-700">{(parseFloat(itemQty) * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg</strong> ({selectedProduct.standard_weight} kg/no)</>
                               ) : (
                                 <span className="text-slate-400 font-medium">— kg ({selectedProduct.standard_weight} kg/no)</span>
                               )}
@@ -1480,8 +1483,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                               <span className="absolute right-3 text-xs font-black text-blue-700 pointer-events-none uppercase">kg</span>
                             </div>
                             <p className="text-xs font-bold text-blue-800 mt-2">
-                              ➔ Converts to: {typeof itemQty === 'number' && itemQty > 0 ? (
-                                <><strong className="text-amber-600 text-sm">{itemQty} nos</strong> ({(itemQty * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg actual weight)</>
+                              ➔ Converts to: {parseFloat(itemQty) > 0 ? (
+                                <><strong className="text-amber-600 text-sm">{itemQty} nos</strong> ({(parseFloat(itemQty) * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg actual weight)</>
                               ) : (
                                 <span className="text-blue-400 font-medium">— nos</span>
                               )}
@@ -1490,8 +1493,9 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                         )}
 
                         {(() => {
-                          const hasQty = typeof itemQty === 'number' && itemQty > 0;
-                          const pr = calculateProductPrice(selectedProduct, hasQty ? itemQty : 1);
+                          const numQty = parseFloat(itemQty) || 0;
+                          const hasQty = numQty > 0;
+                          const pr = calculateProductPrice(selectedProduct, hasQty ? numQty : 1);
                           return (
                             <div className="p-3 bg-blue-100/70 rounded-xl text-xs font-bold text-blue-950 flex flex-wrap items-center justify-between gap-2 border border-blue-200">
                               <span>
@@ -1529,9 +1533,10 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                 inputMode="decimal"
                                 value={itemQty}
                                 onChange={e => {
-                                  const raw = e.target.value.replace(/[^0-9.]/g, '');
-                                  const parsed = raw === '' ? '' : parseFloat(raw);
-                                  setItemQty(parsed);
+                                  let val = e.target.value.replace(/[^0-9.]/g, '');
+                                  const parts = val.split('.');
+                                  if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                                  setItemQty(val);
                                 }}
                                 placeholder="Enter quantity (e.g. 5 or 0.5)..."
                                 className="w-full rounded-xl border-2 border-slate-300 p-2 pr-12 text-center text-base font-black text-slate-900 placeholder:text-slate-400 placeholder:font-medium placeholder:text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
@@ -1540,8 +1545,9 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                             </div>
                           </div>
                           {(() => {
-                            const hasQty = typeof itemQty === 'number' && itemQty > 0;
-                            const pr = calculateProductPrice(selectedProduct, hasQty ? itemQty : 1);
+                            const numQty = parseFloat(itemQty) || 0;
+                            const hasQty = numQty > 0;
+                            const pr = calculateProductPrice(selectedProduct, hasQty ? numQty : 1);
                             return (
                               <div className="pt-2 text-sm font-bold text-slate-700">
                                 {hasQty ? (
@@ -1712,15 +1718,16 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                 <button onClick={() => updateLineQty(line.product_id, -1)} className="rounded-l-lg p-2 hover:bg-slate-100 text-slate-600 transition"><Minus size={14} /></button>
                                 <input
                                   type="number"
-                                  min="1"
+                                  step="any"
+                                  min="0.01"
                                   value={line.quantity}
                                   onChange={(e) => {
-                                    const q = parseInt(e.target.value, 10);
-                                    if (!isNaN(q) && q >= 1) {
+                                    const q = parseFloat(e.target.value);
+                                    if (!isNaN(q) && q > 0) {
                                       setLines(lines.map(l => l.product_id === line.product_id ? { ...l, quantity: q } : l));
                                     }
                                   }}
-                                  className="w-12 text-center font-semibold text-slate-900 text-sm outline-none"
+                                  className="w-16 text-center font-bold text-slate-900 text-sm outline-none"
                                 />
                                 <button onClick={() => updateLineQty(line.product_id, 1)} className="rounded-r-lg p-2 hover:bg-slate-100 text-slate-600 transition"><Plus size={14} /></button>
                               </div>
