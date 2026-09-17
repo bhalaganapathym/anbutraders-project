@@ -87,7 +87,7 @@ def send_web_push(
             "tag": tag,
             "icon": "/pwa-192x192.png",
             "badge": "/pwa-192x192.png",
-            "sound": "/alert-tone.mp3",
+            "sound": "default",
             "timestamp": int(1000 * datetime.now(timezone.utc).timestamp())
         })
 

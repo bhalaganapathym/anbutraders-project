@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bell, BellOff, BellRing, Smartphone, CheckCircle, AlertCircle, RefreshCw, Send } from 'lucide-react';
+import { Bell, BellOff, BellRing, Smartphone, CheckCircle, AlertCircle, RefreshCw, Send, Volume2 } from 'lucide-react';
 import {
   isPushNotificationSupported,
   getPushSubscriptionState,
@@ -8,6 +8,7 @@ import {
   sendTestPushNotification,
   type PushStatus
 } from '@/lib/push';
+import { testNotificationSound } from '@/lib/sound';
 import { useToast } from './Toast';
 import { useAuth } from '@/context/AuthContext';
 
@@ -59,6 +60,24 @@ export default function PushNotificationManager({ variant = 'card' }: Props) {
       toast(err?.message || 'Action failed', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [testingSound, setTestingSound] = useState(false);
+
+  const handleTestSound = async () => {
+    setTestingSound(true);
+    try {
+      const res = await testNotificationSound();
+      if (res.iphoneNotice) {
+        toast('🔔 Alert tone played! On iPhones: Turn OFF the Silent switch (left side) and raise volume if inaudible.', 'info');
+      } else {
+        toast('🔔 Alert tone played successfully!', 'success');
+      }
+    } catch {
+      toast('Failed to play alert tone', 'error');
+    } finally {
+      setTimeout(() => setTestingSound(false), 1200);
     }
   };
 
@@ -221,6 +240,17 @@ export default function PushNotificationManager({ variant = 'card' }: Props) {
           {status.isSubscribed ? 'Disable Push Notifications' : 'Enable Mobile Push Notifications'}
         </button>
 
+        <button
+          type="button"
+          onClick={handleTestSound}
+          disabled={testingSound}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 flex items-center gap-1.5 transition shrink-0"
+          title="Test Alert Chime on this device"
+        >
+          <Volume2 size={15} className={testingSound ? 'animate-bounce text-amber-600' : ''} />
+          {testingSound ? 'Playing...' : 'Test Sound'}
+        </button>
+
         {status.isSubscribed && (
           <button
             type="button"
@@ -232,6 +262,20 @@ export default function PushNotificationManager({ variant = 'card' }: Props) {
             Test Push
           </button>
         )}
+      </div>
+
+      {/* iPhone / iOS Alert Tone Guidance Note */}
+      <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 rounded-xl text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
+        <div className="font-bold flex items-center gap-1.5">
+          <Smartphone size={13} className="text-amber-600" />
+          <span>iPhone (iOS) Notification Sound Guide:</span>
+        </div>
+        <p className="text-amber-800 dark:text-amber-300 leading-relaxed">
+          • <strong>Silent Switch:</strong> Turn <strong>OFF</strong> the physical Silent switch on the left side of your iPhone (Ringer mode). Apple completely mutes web alert tones when silent mode is on.
+        </p>
+        <p className="text-amber-800 dark:text-amber-300 leading-relaxed">
+          • <strong>Lock Screen Chime:</strong> Tap <em>Share → Add to Home Screen</em> to install. Ensure Sounds are enabled in iPhone <em>Settings → Notifications → Anbu Traders</em>.
+        </p>
       </div>
     </div>
   );
