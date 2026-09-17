@@ -1,12 +1,12 @@
 // Audio Chime & Loud High-Tone Alert Utility (Anbu Traders)
-// Optimized specifically for iPhones (iOS Safari / WebKit) & Android PWA.
-// Plays a piercing, high-frequency 3-second dual-pulse alert tone (1400Hz / 1750Hz)
-// with multi-channel redundancy (Web Audio Synthesizer + HTML5 Audio + Haptic Vibration).
+// Optimized for iPhones (iOS Safari / WebKit) & Android PWA.
+// Plays a high-frequency, piercing 3-second dual-pulse alert tone (1400Hz / 1750Hz).
+// Features strict cooldown debounce and single-shot gesture unlocking to prevent continuous looping.
 
 let audioCtx: AudioContext | null = null;
 let cachedAudioElem: HTMLAudioElement | null = null;
 let lastPlayTimestamp = 0;
-let isListeningForUnlock = false;
+let isAudioUnlocked = false;
 
 /**
  * Returns the singleton AudioContext, supporting both standard and legacy webkitAudioContext.
@@ -23,7 +23,7 @@ function getAudioContext(): AudioContext | null {
 }
 
 /**
- * Returns the cached HTML5 Audio element configured for iOS WebKit inline playback.
+ * Returns the cached HTML5 Audio element.
  */
 function getAudioElement(): HTMLAudioElement | null {
   if (typeof window === 'undefined') return null;
@@ -31,78 +31,49 @@ function getAudioElement(): HTMLAudioElement | null {
     cachedAudioElem = new Audio('/alert-tone.wav');
     cachedAudioElem.volume = 1.0;
     cachedAudioElem.preload = 'auto';
-    cachedAudioElem.playsInline = true;
-    (cachedAudioElem as any).webkitPlaysInline = true;
   }
   return cachedAudioElem;
 }
 
 /**
- * Unlocks WebKit AudioContext by scheduling an inaudible 1-sample buffer within a user gesture.
- * Crucial for iOS Safari so subsequent async alerts can play without being blocked by autoplay policy.
- */
-function unlockWebAudio(ctx: AudioContext) {
-  if (ctx.state === 'suspended' || (ctx.state as any) === 'interrupted') {
-    ctx.resume().catch(() => {});
-  }
-  try {
-    const buffer = ctx.createBuffer(1, 1, 22050);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
-  } catch {
-    // Ignore unlock buffer error
-  }
-}
-
-/**
- * Unlocks HTML5 Audio on iOS by pre-rolling play() and pause() during a user interaction.
- */
-function unlockAudioElement(elem: HTMLAudioElement) {
-  try {
-    const playPromise = elem.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          elem.pause();
-          elem.currentTime = 0;
-        })
-        .catch(() => {});
-    }
-  } catch {
-    // Ignore pre-roll error
-  }
-}
-
-/**
- * Global persistent gesture listener.
- * On iOS Safari, the AudioContext is suspended when the phone locks or tab changes.
- * By keeping a lightweight passive listener on touch/click, any subsequent user interaction
- * immediately refreshes the audio session back to 'running'.
+ * Single-shot user gesture unlocker for mobile Safari / Chrome.
+ * Resumes AudioContext on the first touch or tap without playing any audio.
+ * Immediately unbinds all listeners to prevent repeated execution.
  */
 export function initAudioOnUserInteraction() {
-  if (typeof window === 'undefined' || isListeningForUnlock) return;
-  isListeningForUnlock = true;
+  if (typeof window === 'undefined' || isAudioUnlocked) return;
 
-  const handleUserGesture = () => {
+  const unlock = () => {
+    if (isAudioUnlocked) return;
+    isAudioUnlocked = true;
+
+    // 1. Silent Web Audio context resume
     const ctx = getAudioContext();
-    if (ctx) {
-      unlockWebAudio(ctx);
+    if (ctx && (ctx.state === 'suspended' || (ctx.state as any) === 'interrupted')) {
+      ctx.resume().catch(() => {});
     }
+
+    // 2. Pre-load audio element without triggering playback
     const elem = getAudioElement();
     if (elem) {
-      unlockAudioElement(elem);
+      try {
+        elem.load();
+      } catch {}
     }
+
+    // 3. Remove all unlock listeners immediately so they NEVER fire again
+    const events = ['touchstart', 'touchend', 'pointerdown', 'click', 'keydown'];
+    events.forEach((evt) => {
+      window.removeEventListener(evt, unlock);
+    });
   };
 
-  // Listen on standard user gesture events passively
   const events = ['touchstart', 'touchend', 'pointerdown', 'click', 'keydown'];
   events.forEach((evt) => {
-    window.addEventListener(evt, handleUserGesture, { passive: true });
+    window.addEventListener(evt, unlock, { once: true, passive: true });
   });
 
-  // Wake up audio context when user returns to app or screen turns back on
+  // Re-wake audio context silently when user switches back to the tab
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       const ctx = getAudioContext();
@@ -118,89 +89,91 @@ export function initAudioOnUserInteraction() {
       ctx.resume().catch(() => {});
     }
   });
+}
 
-  // Listen for background push postMessage from Service Worker to trigger foreground chime
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data?.type === 'PLAY_NOTIFICATION_CHIME') {
-        playNotificationChime();
-      }
-    });
-  }
+// Listen for background push postMessage from Service Worker ONCE
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'PLAY_NOTIFICATION_CHIME') {
+      playNotificationChime();
+    }
+  });
 }
 
 /**
- * Plays the loud, piercing 3-second alert chime with dual-channel fallback.
- * @param force If true, ignores the 3.5-second debounce (useful for manual test button).
+ * Plays the loud, piercing alert chime once.
+ * Protected with a strict 4.0-second cooldown to completely prevent continuous looping.
+ * @param force If true, ignores cooldown (used exclusively by manual Test Sound button).
  */
 export async function playNotificationChime(force: boolean = false): Promise<boolean> {
   const nowMs = Date.now();
-  if (!force && nowMs - lastPlayTimestamp < 3500) {
+  // Strict 4.0s debounce: block repeated triggers from WebSocket, Push, or multiple tabs
+  if (!force && nowMs - lastPlayTimestamp < 4000) {
     return false;
   }
   lastPlayTimestamp = nowMs;
 
-  let played = false;
-
-  // 1. Haptic Vibration (Physical sensory alert on mobile phones)
+  // 1. Mobile sensory haptic vibration
   try {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       navigator.vibrate([350, 100, 350, 100, 350]);
     }
   } catch {}
 
-  // 2. HTML5 Audio Element playback (direct hardware media channel)
+  let playedHtml5 = false;
+
+  // 2. Primary: HTML5 Audio element playback (/alert-tone.wav)
   try {
     const elem = getAudioElement();
     if (elem) {
       elem.currentTime = 0;
       elem.volume = 1.0;
-      const p = elem.play();
-      if (p !== undefined) {
-        p.then(() => {
-          played = true;
-        }).catch(() => {
-          // Autoplay blocked; Web Audio synthesizer below will execute
-        });
+      const playPromise = elem.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+        playedHtml5 = true;
       }
     }
-  } catch {}
-
-  // 3. Web Audio Synthesizer (Loud 1400Hz & 1750Hz harmonic beeps)
-  try {
-    const ctx = getAudioContext();
-    if (ctx) {
-      if (ctx.state === 'suspended' || (ctx.state as any) === 'interrupted') {
-        await ctx.resume().catch(() => {});
-      }
-      playSynthesizerChime(ctx);
-      played = true;
-    }
-  } catch (err) {
-    console.warn('Alert tone synthesizer notice:', err);
+  } catch {
+    playedHtml5 = false;
   }
 
-  return played;
+  // 3. Fallback: Only run Web Audio synthesizer if HTML5 Audio was blocked by autoplay
+  if (!playedHtml5) {
+    try {
+      const ctx = getAudioContext();
+      if (ctx) {
+        if (ctx.state === 'suspended' || (ctx.state as any) === 'interrupted') {
+          await ctx.resume().catch(() => {});
+        }
+        playSynthesizerChime(ctx);
+      }
+    } catch (err) {
+      console.warn('Alert tone synthesizer notice:', err);
+    }
+  }
+
+  return true;
 }
 
 /**
  * Schedules high-intensity dual-pulse alert tones across 3.0 seconds.
- * Uses safe linear ramp and exponential decay parameters to prevent iOS WebKit monotonic-time exceptions.
+ * 5 distinct cycles of 1400Hz and 1750Hz harmonic beeps.
  */
 function playSynthesizerChime(ctx: AudioContext) {
   const startBase = Math.max(ctx.currentTime, 0) + 0.05;
   const totalDuration = 3.0;
-  const pulseCycle = 0.60; // 5 cycles across 3.0 seconds
+  const pulseCycle = 0.60;
   const numCycles = Math.ceil(totalDuration / pulseCycle);
 
   for (let c = 0; c < numCycles; c++) {
     const cycleStart = startBase + c * pulseCycle;
     if (cycleStart >= startBase + totalDuration) break;
 
-    // Pulse 1: 1400 Hz (piercing shop alert)
+    // Pulse 1: 1400 Hz
     createBeep(ctx, 1400, cycleStart, 0.18, 0.85);
 
-    // Pulse 2: 1750 Hz (high alert)
+    // Pulse 2: 1750 Hz
     createBeep(ctx, 1750, cycleStart + 0.22, 0.18, 0.90);
   }
 }
@@ -239,16 +212,12 @@ function createBeep(ctx: AudioContext, freq: number, start: number, duration: nu
 
 /**
  * Explicit user-triggered test of the notification chime.
- * Unlocks and plays the chime immediately with force=true.
+ * Unlocks audio engine and plays the chime once immediately with force=true.
  */
 export async function testNotificationSound(): Promise<{ success: boolean; iphoneNotice: boolean }> {
   const ctx = getAudioContext();
-  if (ctx) {
-    unlockWebAudio(ctx);
-  }
-  const elem = getAudioElement();
-  if (elem) {
-    unlockAudioElement(elem);
+  if (ctx && (ctx.state === 'suspended' || (ctx.state as any) === 'interrupted')) {
+    ctx.resume().catch(() => {});
   }
   await playNotificationChime(true);
   
