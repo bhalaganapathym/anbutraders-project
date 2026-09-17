@@ -358,6 +358,11 @@ export type Dispatch = {
   vehicle_leave_photo_url?: string | null;
   dispatch_team: string | null;
   dispatched_by?: string | null;
+  verifying_by?: string | null;
+  trip_number?: number;
+  total_trips?: number;
+  master_dispatch_id?: string | null;
+  bill_id?: string | null;
   phase1_draft?: any;
   mismatch_approval_status?: 'pending' | 'approved' | 'rejected' | null;
   mismatch_voice_note_url?: string | null;

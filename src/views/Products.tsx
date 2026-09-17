@@ -45,7 +45,7 @@ const empty: Form = {
   piece_weight_kg: ''
 };
 
-const categories = ['Steel', 'Cement', 'TMT Bars', 'AAC Blocks', 'Pipes', 'Paste', 'Liquid', 'Other'];
+const categories = ['Steel', 'Cement', 'TMT Bars', 'AAC Blocks', 'Rings', 'Pipes', 'Paste', 'Liquid', 'Other'];
 const knownBrands = ['Tata Steel', 'iSteel', 'Sumangala', 'Suryadev', 'Ultratech', 'Dalmia', 'Chettinad'];
 const knownSizes = ['8mm', '10mm', '12mm', '16mm', '20mm', '25mm', '32mm', '4 inch', '6 inch', '8 inch', '9 inch'];
 
@@ -54,6 +54,8 @@ const categoryColor: Record<string, string> = {
   Cement: 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
   'TMT Bars': 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
   'AAC Blocks': 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  Rings: 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800',
+  RINGS: 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800',
   Pipes: 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
   Paste: 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
   Liquid: 'bg-cyan-50 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
@@ -79,6 +81,8 @@ export default function Products() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<Form>(empty);
   const [saving, setSaving] = useState(false);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategoryText, setCustomCategoryText] = useState('');
 
   // Brand Price Adjuster State
   const [brandAdjustOpen, setBrandAdjustOpen] = useState(false);
@@ -119,7 +123,7 @@ export default function Products() {
     ])
   );
 
-  const availableCategories = ['All', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
+  const availableCategories = ['All', ...Array.from(new Set([...categories, ...(products.map(p => p.category).filter(Boolean) as string[])]))];
 
   const brandProducts = products.filter(
     (p) => (p.brand || '').toLowerCase() === selectedBrand.toLowerCase()
@@ -237,6 +241,8 @@ export default function Products() {
   const openNew = () => {
     setEditing(null);
     setForm(empty);
+    setIsCustomCategory(false);
+    setCustomCategoryText('');
     setOpen(true);
   };
 
@@ -244,12 +250,17 @@ export default function Products() {
     setEditing(p);
     const pPrice = Number(p.price ?? 0);
     const pStdWeight = Number(p.standard_weight ?? p.piece_weight_kg ?? 0);
+    const isStandardCat = categories.map(c => c.toUpperCase()).includes((p.category || '').toUpperCase());
+    setIsCustomCategory(!isStandardCat);
+    setCustomCategoryText(!isStandardCat ? (p.category || '').toUpperCase() : '');
+
+    const isAac = p.is_aac_block || (p.category || '').toUpperCase().includes('AAC');
     setForm({
       name: p.name.toUpperCase(),
       category: p.category.toUpperCase(),
       unit: p.unit.toUpperCase(),
       price: String(pPrice),
-      rate_per_kg: pStdWeight > 0 ? (pPrice / pStdWeight).toFixed(2) : '0',
+      rate_per_kg: (!isAac && pStdWeight > 0) ? (pPrice / pStdWeight).toFixed(2) : '0',
       stock_qty: String(p.stock_qty ?? 0),
       brand: (p.brand ?? '').toUpperCase(),
       size: (p.size ?? '').toUpperCase(),
@@ -263,7 +274,13 @@ export default function Products() {
     setOpen(true);
   };
 
+  const isFormAac = form.is_aac_block || form.category.toUpperCase() === 'AAC BLOCKS' || form.category.toUpperCase().includes('AAC');
+
   const handleRatePerKgChange = (val: string) => {
+    if (isFormAac) {
+      setForm(prev => ({ ...prev, rate_per_kg: val }));
+      return;
+    }
     const rNum = parseFloat(val) || 0;
     const wNum = parseFloat(form.standard_weight) || 0;
     const newPrice = wNum > 0 ? (rNum * wNum).toFixed(2) : form.price;
@@ -271,6 +288,10 @@ export default function Products() {
   };
 
   const handlePriceChange = (val: string) => {
+    if (isFormAac) {
+      setForm(prev => ({ ...prev, price: val, rate_per_kg: '0' }));
+      return;
+    }
     const pNum = parseFloat(val) || 0;
     const wNum = parseFloat(form.standard_weight) || 0;
     const newRate = wNum > 0 ? (pNum / wNum).toFixed(2) : form.rate_per_kg;
@@ -278,6 +299,10 @@ export default function Products() {
   };
 
   const handleStdWeightChange = (val: string) => {
+    if (isFormAac) {
+      setForm(prev => ({ ...prev, standard_weight: val, piece_weight_kg: val }));
+      return;
+    }
     const wNum = parseFloat(val) || 0;
     const rNum = parseFloat(form.rate_per_kg) || 0;
     const newPrice = (rNum > 0 && wNum > 0) ? (rNum * wNum).toFixed(2) : form.price;
@@ -514,7 +539,8 @@ export default function Products() {
             {filtered.map((p) => {
               const stdWt = Number(p.standard_weight || p.piece_weight_kg || 0);
               const hasWeight = stdWt > 0;
-              const rateKg = hasWeight ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
+              const isAac = p.is_aac_block || (p.category || '').toUpperCase().includes('AAC');
+              const rateKg = (!isAac && hasWeight) ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
               const catClass = categoryColor[p.category] || categoryColor.Other;
 
               return (
@@ -636,7 +662,8 @@ export default function Products() {
                 {filtered.map((p) => {
                   const stdWt = Number(p.standard_weight || p.piece_weight_kg || 0);
                   const hasWeight = stdWt > 0;
-                  const rateKg = hasWeight ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
+                  const isAac = p.is_aac_block || (p.category || '').toUpperCase().includes('AAC');
+                  const rateKg = (!isAac && hasWeight) ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
                   const catClass = categoryColor[p.category] || categoryColor.Other;
 
                   return (
@@ -788,16 +815,53 @@ export default function Products() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Category</label>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value.toUpperCase() })}
-                className="input uppercase font-semibold"
-              >
-                {categories.map((c) => (
-                  <option key={c} value={c.toUpperCase()}>{c.toUpperCase()}</option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="label mb-0">Category</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isCustomCategory;
+                    setIsCustomCategory(next);
+                    if (!next) {
+                      setForm({ ...form, category: categories[0].toUpperCase() });
+                    }
+                  }}
+                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  {isCustomCategory ? '← Choose list' : '+ Type custom'}
+                </button>
+              </div>
+              {isCustomCategory ? (
+                <input
+                  value={customCategoryText || form.category}
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase();
+                    setCustomCategoryText(val);
+                    setForm({ ...form, category: val });
+                  }}
+                  className="input uppercase font-bold text-indigo-700 dark:text-indigo-300"
+                  placeholder="TYPE CATEGORY (E.G. RINGS, TILES...)"
+                  autoFocus
+                />
+              ) : (
+                <select
+                  value={form.category}
+                  onChange={(e) => {
+                    if (e.target.value === '__NEW__') {
+                      setIsCustomCategory(true);
+                      setCustomCategoryText('');
+                    } else {
+                      setForm({ ...form, category: e.target.value.toUpperCase() });
+                    }
+                  }}
+                  className="input uppercase font-semibold"
+                >
+                  {Array.from(new Set([...categories, ...(products.map(p => p.category).filter(Boolean) as string[])])).map((c) => (
+                    <option key={c} value={c.toUpperCase()}>{c.toUpperCase()}</option>
+                  ))}
+                  <option value="__NEW__">➕ + TYPE NEW CATEGORY...</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="label">Unit</label>
@@ -842,15 +906,15 @@ export default function Products() {
           {/* Standard Weight & Tolerances */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
             <div>
-              <label className="label">Std Weight (kg)</label>
+              <label className="label">{isFormAac ? 'Piece Weight (kg)' : 'Std Weight (kg)'}</label>
               <input
                 type="number"
-                value={form.standard_weight}
+                value={isFormAac ? (form.piece_weight_kg || form.standard_weight) : form.standard_weight}
                 onChange={(e) => handleStdWeightChange(e.target.value)}
                 className="input font-bold"
                 min="0"
                 step="0.001"
-                placeholder="e.g. 7.3"
+                placeholder={isFormAac ? 'e.g. 12.5' : 'e.g. 7.3'}
               />
             </div>
             <div>
@@ -917,7 +981,7 @@ export default function Products() {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={form.piece_weight_kg}
+                    value={form.piece_weight_kg || form.standard_weight}
                     onChange={(e) => setForm({ ...form, piece_weight_kg: e.target.value, standard_weight: e.target.value })}
                     className="input font-semibold text-xs py-1.5"
                     placeholder="e.g. 12.5"
@@ -927,47 +991,72 @@ export default function Products() {
             </div>
           </div>
 
-          {/* Linked Rate per kg & Unit Price */}
+          {/* Pricing Section */}
           <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-            <div className="grid grid-cols-2 gap-4">
+            {isFormAac ? (
               <div>
-                <label className="label flex items-center gap-1">
-                  <Scale size={13} className="text-indigo-600" /> Rate per kg (₹/kg)
+                <label className="label font-bold text-slate-800 dark:text-slate-200">
+                  Price per Block / Piece (₹)
                 </label>
                 <div className="relative">
                   <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="number"
-                    value={form.rate_per_kg}
-                    onChange={(e) => handleRatePerKgChange(e.target.value)}
-                    className="input pl-8 font-bold text-indigo-700 dark:text-indigo-300"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Price per {form.unit || 'unit'} (₹)</label>
-                <div className="relative">
-                  <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="number"
                     value={form.price}
-                    onChange={(e) => handlePriceChange(e.target.value)}
+                    onChange={(e) => setForm(prev => ({ ...prev, price: e.target.value, rate_per_kg: '0' }))}
                     className="input pl-8 font-bold text-slate-800 dark:text-slate-100"
                     min="0"
                     step="0.01"
+                    placeholder="e.g. 55.00"
                   />
                 </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  🧱 For AAC Blocks, pricing is set directly per block/piece, independent of rate per kg.
+                </p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label flex items-center gap-1">
+                      <Scale size={13} className="text-indigo-600" /> Rate per kg (₹/kg)
+                    </label>
+                    <div className="relative">
+                      <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="number"
+                        value={form.rate_per_kg}
+                        onChange={(e) => handleRatePerKgChange(e.target.value)}
+                        className="input pl-8 font-bold text-indigo-700 dark:text-indigo-300"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
 
-            {parseFloat(form.standard_weight) > 0 && (
-              <div className="text-xs text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800 p-2.5 rounded-lg border border-indigo-200/80 dark:border-indigo-800 font-medium">
-                💡 1 {form.unit || 'piece'} ({form.standard_weight} kg) × ₹{parseFloat(form.rate_per_kg) || 0}/kg = <strong>₹{parseFloat(form.price) || 0} / {form.unit || 'piece'}</strong>
-              </div>
+                  <div>
+                    <label className="label">Price per {form.unit || 'unit'} (₹)</label>
+                    <div className="relative">
+                      <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="number"
+                        value={form.price}
+                        onChange={(e) => handlePriceChange(e.target.value)}
+                        className="input pl-8 font-bold text-slate-800 dark:text-slate-100"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {parseFloat(form.standard_weight) > 0 && (
+                  <div className="text-xs text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800 p-2.5 rounded-lg border border-indigo-200/80 dark:border-indigo-800 font-medium">
+                    💡 1 {form.unit || 'piece'} ({form.standard_weight} kg) × ₹{parseFloat(form.rate_per_kg) || 0}/kg = <strong>₹{parseFloat(form.price) || 0} / {form.unit || 'piece'}</strong>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

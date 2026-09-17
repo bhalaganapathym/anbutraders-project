@@ -416,8 +416,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
 
   const handleAddItem = () => {
     if (!selectedProduct) return;
-    if (!itemQty || typeof itemQty !== 'number' || itemQty < 1) {
-      toast('Please enter a quantity', 'error');
+    if (!itemQty || typeof itemQty !== 'number' || itemQty <= 0) {
+      toast('Please enter a valid quantity', 'error');
       return;
     }
     if (lines.some(l => l.product_id === selectedProduct.id)) {
@@ -608,10 +608,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const unloadingNum = round2(parseFloat(unloadingCharge) || 0);
   const transportNum = round2(parseFloat(transportCharge) || 0);
   const grandTotal = round2(Math.max(0, itemSubtotal - totalDiscountAmount + unloadingNum + transportNum));
-  const effectiveGrandTotal = customTotalEstimate !== '' && !isNaN(parseFloat(customTotalEstimate))
-    ? round2(Math.max(0, parseFloat(customTotalEstimate)))
-    : grandTotal;
-  const estimateAdjustment = round2(effectiveGrandTotal - grandTotal);
+  const effectiveGrandTotal = grandTotal;
+  const estimateAdjustment = 0;
 
   // WhatsApp Integration
   const generateWhatsAppMessage = () => {
@@ -1441,15 +1439,14 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                             <div className="relative flex items-center">
                               <input
                                 type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
+                                inputMode="decimal"
                                 value={itemQty}
                                 onChange={e => {
-                                  const raw = e.target.value.replace(/\D/g, '');
-                                  const parsed = raw === '' ? '' : parseInt(raw, 10);
+                                  const raw = e.target.value.replace(/[^0-9.]/g, '');
+                                  const parsed = raw === '' ? '' : parseFloat(raw);
                                   handleQtyChange(parsed);
                                 }}
-                                placeholder="Enter count in pieces (e.g. 10)..."
+                                placeholder="Enter count in pieces (e.g. 10 or 0.5)..."
                                 className="w-full rounded-xl border-2 border-slate-300 p-2.5 pr-14 text-center text-lg font-black text-slate-900 placeholder:text-slate-400 placeholder:font-medium placeholder:text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
                               />
                               <span className="absolute right-3 text-xs font-black text-slate-500 pointer-events-none uppercase">nos</span>
@@ -1529,15 +1526,14 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                             <div className="relative flex items-center">
                               <input
                                 type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
+                                inputMode="decimal"
                                 value={itemQty}
                                 onChange={e => {
-                                  const raw = e.target.value.replace(/\D/g, '');
-                                  const parsed = raw === '' ? '' : parseInt(raw, 10);
+                                  const raw = e.target.value.replace(/[^0-9.]/g, '');
+                                  const parsed = raw === '' ? '' : parseFloat(raw);
                                   setItemQty(parsed);
                                 }}
-                                placeholder="Enter quantity (e.g. 5)..."
+                                placeholder="Enter quantity (e.g. 5 or 0.5)..."
                                 className="w-full rounded-xl border-2 border-slate-300 p-2 pr-12 text-center text-base font-black text-slate-900 placeholder:text-slate-400 placeholder:font-medium placeholder:text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
                               />
                               <span className="absolute right-3 text-xs font-bold text-slate-500 pointer-events-none">{selectedProduct.unit || 'nos'}</span>
@@ -1827,40 +1823,16 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                 </div>
               </div>
               
-              <div className="border-t border-slate-200 border-dashed pt-3 space-y-1">
+              <div className="border-t-2 border-slate-200 border-dashed pt-3 space-y-1">
                 <div className="flex justify-between items-center text-slate-900">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-bold">Total Estimate</span>
-                    {customTotalEstimate !== '' && (
-                      <button
-                        type="button"
-                        onClick={() => setCustomTotalEstimate('')}
-                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-0.5 shadow-sm"
-                        title="Reset to calculated estimate"
-                      >
-                        <RotateCcw size={10} /> Reset
-                      </button>
-                    )}
+                    <span className="text-sm font-black uppercase tracking-wider text-slate-800">Total Estimate</span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Calculated</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-400 font-bold text-sm">₹</span>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={customTotalEstimate !== '' ? customTotalEstimate : grandTotal.toFixed(2)}
-                      onChange={(e) => setCustomTotalEstimate(e.target.value)}
-                      className="w-28 sm:w-36 text-right rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm font-black text-blue-600 outline-none focus:border-blue-500 focus:bg-white transition"
-                      title="Click to edit Total Estimate"
-                    />
-                  </div>
+                  <span className="text-xl sm:text-2xl font-black text-blue-600">
+                    ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
-                {customTotalEstimate !== '' && (
-                  <p className="text-[10px] text-slate-400 text-right">
-                    Calculated: ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    {estimateAdjustment !== 0 && ` (${estimateAdjustment > 0 ? '+' : ''}₹${estimateAdjustment.toFixed(2)})`}
-                  </p>
-                )}
               </div>
 
               {/* Advance Booking Details in Summary */}
@@ -2001,6 +1973,84 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                           ₹{pInfo.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
+                    </div>
+
+                    {/* Hidden +/- Rate Adjustment for credit customers or custom markup */}
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-black text-slate-800 dark:text-slate-200">
+                            🔒 +/- Rate Adjustment (Hidden from Customer)
+                          </span>
+                          <span className="text-[9px] font-bold text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.5 rounded">
+                            Credit/Special Rate
+                          </span>
+                        </div>
+                        {customItemRates[line.product_id] !== undefined && (
+                          <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                            Effective Rate: ₹{customItemRates[line.product_id].toFixed(2)} {pInfo.isSteel ? '/kg' : `/${line.unit || 'unit'}`}
+                          </span>
+                        )}
+                      </div>
+
+                      {(() => {
+                        const catalogInfo = calculateProductPrice(line.product, line.quantity, null);
+                        const baseCatalogRate = catalogInfo.isSteel ? catalogInfo.ratePerKg : catalogInfo.unitPrice;
+                        const currentCustomRate = customItemRates[line.product_id];
+                        const diff = currentCustomRate !== undefined ? round2(currentCustomRate - baseCatalogRate) : 0;
+                        return (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <div className="relative flex-1">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">+/-</span>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={currentCustomRate !== undefined ? diff : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') {
+                                      setCustomItemRates(prev => {
+                                        const n = { ...prev };
+                                        delete n[line.product_id];
+                                        return n;
+                                      });
+                                    } else {
+                                      const parsed = parseFloat(val);
+                                      if (!isNaN(parsed)) {
+                                        setCustomItemRates(prev => ({
+                                          ...prev,
+                                          [line.product_id]: round2(baseCatalogRate + parsed)
+                                        }));
+                                      }
+                                    }
+                                  }}
+                                  placeholder="e.g. +2.00 (credit markup) or -1.50"
+                                  className="input pl-8 py-1 text-xs font-bold text-indigo-700 dark:text-indigo-300"
+                                />
+                              </div>
+                              {currentCustomRate !== undefined && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCustomItemRates(prev => {
+                                      const n = { ...prev };
+                                      delete n[line.product_id];
+                                      return n;
+                                    });
+                                  }}
+                                  className="text-[11px] font-bold text-rose-600 hover:underline px-1.5 shrink-0"
+                                >
+                                  Reset
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                              💡 Base: ₹{baseCatalogRate.toFixed(2)} | Billed to customer as standard unit rate (no surcharge text shown).
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 items-end">

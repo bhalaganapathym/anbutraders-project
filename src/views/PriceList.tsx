@@ -6,13 +6,15 @@ import { useToast } from '@/components/Toast';
 import { Search, IndianRupee, Pencil, Layers, Scale, Box, Check, Sparkles, X } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
-const categories = ['Steel', 'Cement', 'TMT Bars', 'AAC Blocks', 'Pipes', 'Paste', 'Liquid', 'Other'];
+const categories = ['Steel', 'Cement', 'TMT Bars', 'AAC Blocks', 'Rings', 'Pipes', 'Paste', 'Liquid', 'Other'];
 
 const categoryColor: Record<string, string> = {
   Steel: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700',
   Cement: 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
   'TMT Bars': 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
   'AAC Blocks': 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  Rings: 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800',
+  RINGS: 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800',
   Pipes: 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
   Paste: 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
   Liquid: 'bg-cyan-50 dark:bg-cyan-950/50 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
@@ -51,7 +53,7 @@ export default function PriceList() {
 
   useRealtime('products', load);
 
-  const availableCategories = ['All', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
+  const availableCategories = ['All', ...Array.from(new Set([...categories, ...(products.map(p => p.category).filter(Boolean) as string[])]))];
 
   const filtered = products
     .filter((p) => activeCat === 'All' || p.category?.toUpperCase() === activeCat.toUpperCase())
@@ -209,7 +211,8 @@ export default function PriceList() {
             {filtered.map((p) => {
               const stdWt = Number(p.standard_weight || p.piece_weight_kg || 0);
               const hasWeight = stdWt > 0;
-              const rateKg = hasWeight ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
+              const isAac = p.is_aac_block || (p.category || '').toUpperCase().includes('AAC');
+              const rateKg = (!isAac && hasWeight) ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
               const catClass = categoryColor[p.category] || categoryColor.Other;
 
               return (
@@ -307,7 +310,8 @@ export default function PriceList() {
                 {filtered.map((p) => {
                   const stdWt = Number(p.standard_weight || p.piece_weight_kg || 0);
                   const hasWeight = stdWt > 0;
-                  const rateKg = hasWeight ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
+                  const isAac = p.is_aac_block || (p.category || '').toUpperCase().includes('AAC');
+                  const rateKg = (!isAac && hasWeight) ? ((p.price ?? 0) / stdWt).toFixed(2) : null;
                   const catClass = categoryColor[p.category] || categoryColor.Other;
 
                   return (

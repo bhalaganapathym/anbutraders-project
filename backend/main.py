@@ -39,6 +39,11 @@ try:
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR;"))
         conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS billed_by VARCHAR;"))
         conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS dispatched_by VARCHAR;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS verifying_by VARCHAR;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS trip_number INTEGER DEFAULT 1;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS total_trips INTEGER DEFAULT 1;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS master_dispatch_id UUID;"))
+        conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS bill_id UUID;"))
         conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by VARCHAR;"))
         conn.commit()
 except Exception as e:

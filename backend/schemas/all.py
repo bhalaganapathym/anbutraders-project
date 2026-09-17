@@ -291,12 +291,29 @@ class DispatchCreate(BaseModel):
     pod_voice_note_path: Optional[str] = None
     dispatch_team: Optional[str] = None
     dispatched_by: Optional[str] = None
+    verifying_by: Optional[str] = None
+    trip_number: Optional[int] = 1
+    total_trips: Optional[int] = 1
+    master_dispatch_id: Optional[UUID] = None
+    bill_id: Optional[UUID] = None
     items: Optional[List[DispatchItemCreate]] = []
     weights: Optional[List[WeightCreate]] = []
     photos: Optional[List[PhotoCreate]] = []
 
 class DispatchDraftUpdate(BaseModel):
     phase1_draft: Any
+
+class StartVerifyingPayload(BaseModel):
+    verifying_by: str
+
+class SplitTripItem(BaseModel):
+    item_id: UUID
+    trip1_quantity: float
+    trip2_quantity: float
+
+class SplitTripPayload(BaseModel):
+    trip1_items: List[SplitTripItem]
+    vehicle_capacity_note: Optional[str] = "Split due to vehicle capacity"
 
 class WeightMismatchDecision(BaseModel):
     decision: str  # 'approved' or 'rejected'
@@ -342,6 +359,11 @@ class DispatchResponse(BaseModel):
     vehicle_leave_photo_url: Optional[str] = None
     dispatch_team: Optional[str] = None
     dispatched_by: Optional[str] = None
+    verifying_by: Optional[str] = None
+    trip_number: Optional[int] = 1
+    total_trips: Optional[int] = 1
+    master_dispatch_id: Optional[UUID] = None
+    bill_id: Optional[UUID] = None
     created_at: datetime
     
     order: Optional["OrderResponse"] = None

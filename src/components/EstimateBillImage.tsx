@@ -95,15 +95,8 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
     const discountNum = round2(Number(order.discount_amount || 0));
     const calculatedGrandTotal = round2(Math.max(0, itemsSubtotal - discountNum + unloadingNum + transportNum));
 
-    const customTotal = order.custom_total ?? (
-      order.discount_details && typeof order.discount_details === 'object' && !Array.isArray(order.discount_details)
-        ? (order.discount_details as any).custom_total_estimate
-        : null
-    );
-    const grandTotal = customTotal !== null && customTotal !== undefined && !isNaN(Number(customTotal))
-      ? round2(Math.max(0, Number(customTotal)))
-      : calculatedGrandTotal;
-    const estAdjustment = round2(grandTotal - calculatedGrandTotal);
+    const grandTotal = calculatedGrandTotal;
+    const estAdjustment = 0;
 
     const estNo = order.order_no || (order.id ? order.id.substring(0, 8).toUpperCase() : 'EST');
     const dateStr = order.created_at

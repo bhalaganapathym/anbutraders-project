@@ -355,9 +355,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
       }, 0) || 0
     );
     const calculatedTotal = round2(itemsTotal + uChargeVal + dChargeVal);
-    const total = customTotalBill !== '' && !isNaN(parseFloat(customTotalBill))
-      ? round2(Math.max(0, parseFloat(customTotalBill)))
-      : calculatedTotal;
+    const total = calculatedTotal;
     
     if (paymentMethod === 'full payment done') {
       setPaidAmount(total.toFixed(2));
@@ -659,10 +657,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
     const uChargeVal = parseFloat(unloadingCharge) || 0;
     const dChargeVal = parseFloat(deliveryCharge) || 0;
     const calcGrandTotal = round2(totalAmount + uChargeVal + dChargeVal);
-    const finalBillTotal = customTotalBill !== '' && !isNaN(parseFloat(customTotalBill))
-      ? round2(Math.max(0, parseFloat(customTotalBill)))
-      : calcGrandTotal;
-    const adjustment = round2(finalBillTotal - calcGrandTotal);
+    const finalBillTotal = calcGrandTotal;
+    const adjustment = 0;
 
     const paidVal = round2(parseFloat(paidAmount) || 0);
     const toCollectVal = round2(parseFloat(toCollectAmount) || 0);
@@ -829,10 +825,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
   const uCharge = parseFloat(unloadingCharge) || 0;
   const dCharge = parseFloat(deliveryCharge) || 0;
   const grandTotalAmount = round2(totalAmount + uCharge + dCharge);
-  const effectiveTotalBill = customTotalBill !== '' && !isNaN(parseFloat(customTotalBill))
-    ? round2(Math.max(0, parseFloat(customTotalBill)))
-    : grandTotalAmount;
-  const billAdjustment = round2(effectiveTotalBill - grandTotalAmount);
+  const effectiveTotalBill = grandTotalAmount;
+  const billAdjustment = 0;
 
   const customerPriorDues = round2(Number(selectedCustomer?.pending_amount || 0));
   const priorPaidVal = round2(parseFloat(priorPendingPaid) || 0);
@@ -1019,55 +1013,29 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
         {selectedDispatch && (
           <div className="space-y-6">
             
-            {/* Prominent Total Bill Display at the Top (Bold & Big, Editable) */}
+            {/* Prominent Total Bill Display at the Top (Bold & Strictly Calculated) */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-extrabold uppercase tracking-wider text-blue-100">Total Bill Amount</span>
-                  {customTotalBill !== '' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomTotalBill('');
-                        if (paymentMethod === 'full payment done') {
-                          setPaidAmount(grandTotalAmount.toFixed(2));
-                          setToCollectAmount('0.00');
-                        } else if (paymentMethod === 'full payment on site' || paymentMethod === 'credit' || paymentMethod === 'today payment') {
-                          setPaidAmount('0.00');
-                          setToCollectAmount(grandTotalAmount.toFixed(2));
-                        } else if (paymentMethod.includes('partial')) {
-                          setToCollectAmount(round2(Math.max(0, grandTotalAmount - round2(paidAmount))).toFixed(2));
-                        }
-                      }}
-                      className="text-[10px] font-bold bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded transition flex items-center gap-1 shadow-sm"
-                      title="Reset to calculated total"
-                    >
-                      <RotateCcw size={10} /> Reset (₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})
-                    </button>
-                  )}
+                  <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full">Calculated</span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-3xl sm:text-4xl font-black text-white">₹</span>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={customTotalBill !== '' ? customTotalBill : effectiveTotalBill.toFixed(2)}
-                    onChange={(e) => handleCustomTotalBillChange(e.target.value)}
-                    className="text-2xl sm:text-3xl font-black bg-white/15 hover:bg-white/25 focus:bg-white text-white focus:text-slate-900 border border-white/30 focus:border-white rounded-lg px-2.5 py-1 outline-none transition w-48 sm:w-64 shadow-inner"
-                    title="Click to edit Total Bill Amount"
-                  />
+                  <span className="text-3xl sm:text-4xl font-black text-white">
+                    ₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
-                {customTotalBill !== '' && (
-                  <p className="text-[11px] text-blue-200 mt-1 font-medium">
-                    Calculated: ₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    {billAdjustment !== 0 && ` (${billAdjustment > 0 ? '+' : ''}₹${billAdjustment.toFixed(2)})`}
-                  </p>
-                )}
               </div>
               <div className="text-right">
                 <span className="badge bg-white/20 text-white text-xs font-bold uppercase">{selectedDispatch.dispatch_no}</span>
                 <p className="text-sm font-semibold text-blue-100 mt-1">{selectedDispatch.customer?.name}</p>
+                {selectedDispatch.trip_number && selectedDispatch.trip_number > 1 && (
+                  <div className="mt-1">
+                    <span className="badge bg-amber-400 text-amber-950 font-black text-[10px] uppercase">
+                      Trip {selectedDispatch.trip_number} of {selectedDispatch.total_trips || 2} (Single Order Bill)
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1773,6 +1741,33 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
               </div>
             </div>
 
+            {/* Mobile Sticky Bottom Bar for fast billing */}
+            <div className="sm:hidden sticky bottom-0 -mx-4 -mb-4 p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl flex items-center justify-between gap-2 z-20">
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block uppercase">Total Bill</span>
+                <span className="text-lg font-black text-blue-600 dark:text-blue-400">₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDispatch(null)}
+                  className="btn-secondary text-xs px-3 py-2"
+                >
+                  Close
+                </button>
+                {selectedDispatch.status === 'sent_to_billing' && (
+                  <button
+                    type="button"
+                    onClick={handleCreateBill}
+                    disabled={creatingBill}
+                    className="btn-primary bg-blue-600 hover:bg-blue-700 text-xs font-bold px-4 py-2"
+                  >
+                    {creatingBill ? 'Confirming...' : 'Confirm Bill'}
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Hidden Printable Bill Element matching Anbu Traders official image */}
             <div className="fixed top-[-9999px] left-[-9999px]">
               <div ref={printRef} className="w-[794px] bg-white text-black p-8 text-xs font-sans border-2 border-black space-y-4">
@@ -2030,6 +2025,83 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                           ₹{finalLineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
+                    </div>
+
+                    {/* Hidden +/- Rate Adjustment for credit customers or custom markup */}
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-black text-slate-800 dark:text-slate-200">
+                            🔒 +/- Rate Adjustment (Hidden from Customer)
+                          </span>
+                          <span className="text-[9px] font-bold text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.5 rounded">
+                            Credit/Special Rate
+                          </span>
+                        </div>
+                        {customItemRates[item.product_id || item.id] !== undefined && (
+                          <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                            Effective Rate: ₹{customItemRates[item.product_id || item.id].toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+
+                      {(() => {
+                        const targetKey = item.product_id || item.id;
+                        const currentRate = customItemRates[targetKey];
+                        const diff = currentRate !== undefined ? round2(currentRate - origPrice) : 0;
+                        return (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <div className="relative flex-1">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">+/-</span>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={currentRate !== undefined ? diff : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') {
+                                      setCustomItemRates(prev => {
+                                        const n = { ...prev };
+                                        delete n[targetKey];
+                                        return n;
+                                      });
+                                    } else {
+                                      const parsed = parseFloat(val);
+                                      if (!isNaN(parsed)) {
+                                        setCustomItemRates(prev => ({
+                                          ...prev,
+                                          [targetKey]: round2(origPrice + parsed)
+                                        }));
+                                      }
+                                    }
+                                  }}
+                                  placeholder="e.g. +2.00 (credit markup) or -1.50"
+                                  className="input pl-8 py-1 text-xs font-bold text-indigo-700 dark:text-indigo-300"
+                                />
+                              </div>
+                              {currentRate !== undefined && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCustomItemRates(prev => {
+                                      const n = { ...prev };
+                                      delete n[targetKey];
+                                      return n;
+                                    });
+                                  }}
+                                  className="text-[11px] font-bold text-rose-600 hover:underline px-1.5 shrink-0"
+                                >
+                                  Reset
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                              💡 Catalog: ₹{origPrice.toFixed(2)} | Billed to customer as standard unit rate (no surcharge text shown).
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 items-end">

@@ -162,6 +162,20 @@ export default function DispatchDashboard({
   const [driverMobile, setDriverMobile] = useState(detail.driver_mobile || '');
   const [remarks, setRemarks] = useState(detail.notes || '');
 
+  // Record current user as active verifier when opening pending dispatch
+  useEffect(() => {
+    const verifierName = user?.full_name || user?.name || user?.username || 'Dispatch Team';
+    if (detail.status === 'pending') {
+      api.patch(`/dispatches/${detail.id}/start-verifying`, { verifying_by: verifierName })
+        .then((res: any) => {
+          if (res && res.verifying_by) {
+            detail.verifying_by = res.verifying_by;
+          }
+        })
+        .catch(() => {});
+    }
+  }, [detail.id, detail.status, user]);
+
   // Initialize state from saved draft (backend + local fallback)
   useEffect(() => {
     if (detail.status === 'completed') return; // Read-only if completed
@@ -369,9 +383,21 @@ export default function DispatchDashboard({
     try {
       await api.post(`/dispatches/${detail.id}/mismatch-decision`, {
         decision,
-        approved_by: user?.name || 'Admin',
+        approved_by: user?.full_name || user?.name || 'Admin',
         rejection_reason: reason || null,
       });
+      detail.mismatch_approval_status = decision;
+      if (decision === 'approved') {
+        setItemVerification(prev => {
+          const next = { ...prev };
+          detailItems.forEach(it => {
+            if (next[it.id]) {
+              next[it.id] = { ...next[it.id], verified: true };
+            }
+          });
+          return next;
+        });
+      }
       toast(`Weight mismatch ${decision === 'approved' ? 'approved' : 'rejected'} successfully`, 'success');
       onRefresh();
     } catch (err: any) {
@@ -442,41 +468,63 @@ export default function DispatchDashboard({
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Multiple Goods / Vehicle Leaving Photos
+  // Multiple Goods / Vehicle Leaving Photos (Live Camera Only)
   const [goodsPhotos, setGoodsPhotos] = useState<GoodsPhotoItem[]>([]);
   const [enlargedPhotoUrl, setEnlargedPhotoUrl] = useState<string | null>(null);
-  const goodsFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (videoRef.current && cameraStream) {
-      videoRef.current.srcObject = cameraStream;
-    }
-  }, [cameraStream, cameraModalOpen]);
+  // Split Trip Modal State (For Vehicle Capacity limits)
+  const [splitModalOpen, setSplitModalOpen] = useState(false);
+  const [splitTrip1Quantities, setSplitTrip1Quantities] = useState<Record<string, number>>({});
+  const [splittingTrip, setSplittingTrip] = useState(false);
 
-  const handleGoodsFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    const newItems: GoodsPhotoItem[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      try {
-        const compressed = await compressImage(file);
-        const preview = URL.createObjectURL(compressed);
-        newItems.push({
-          id: `photo_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}`,
-          file: compressed,
-          preview: preview
-        });
-      } catch (err) {
-        console.warn('Failed to compress selected image:', err);
+  const openSplitTripModal = () => {
+    const init: Record<string, number> = {};
+    detailItems.forEach(item => {
+      init[item.id] = Number(item.quantity) || 0;
+    });
+    setSplitTrip1Quantities(init);
+    setSplitModalOpen(true);
+  };
+
+  const handleConfirmSplitTrip = async () => {
+    let hasSplitItem = false;
+    for (const item of detailItems) {
+      const q1 = splitTrip1Quantities[item.id] ?? Number(item.quantity);
+      const totalQ = Number(item.quantity) || 0;
+      if (q1 <= 0 || q1 > totalQ) {
+        toast(`Invalid Trip 1 quantity for ${item.product_name}. Must be between 0 and ${totalQ}.`, 'error');
+        return;
+      }
+      if (q1 < totalQ) {
+        hasSplitItem = true;
       }
     }
-    if (newItems.length > 0) {
-      setGoodsPhotos(prev => [...prev, ...newItems]);
-      toast(`Added ${newItems.length} goods photo${newItems.length > 1 ? 's' : ''}`, 'success');
+
+    if (!hasSplitItem) {
+      toast('Please reduce the quantity of at least one item to move it into Trip 2.', 'error');
+      return;
     }
-    if (goodsFileInputRef.current) goodsFileInputRef.current.value = '';
+
+    setSplittingTrip(true);
+    try {
+      const trip1Items = detailItems.map(item => ({
+        id: item.id,
+        quantity: splitTrip1Quantities[item.id] ?? Number(item.quantity)
+      }));
+
+      await api.post(`/dispatches/${detail.id}/split-trip`, {
+        trip1_items: trip1Items
+      });
+
+      toast('Order successfully split into Trip 1 & Trip 2! Single bill applies.', 'success');
+      setSplitModalOpen(false);
+      onRefresh();
+      onClose();
+    } catch (err: any) {
+      toast(err?.message || 'Failed to split trip', 'error');
+    } finally {
+      setSplittingTrip(false);
+    }
   };
 
   const handleRemoveGoodsPhoto = (id: string) => {
@@ -609,7 +657,10 @@ export default function DispatchDashboard({
 
   // Completion Logic
   const [isCompletedLocal, setIsCompletedLocal] = useState(false);
-  const allVerified = detailItems.every(item => {
+  const allVerified = detailItems.length > 0 && detailItems.every(item => {
+    if (isMismatchApproved) {
+      return true; // Admin approved discrepancy / mismatch: immediately unlock verification requirement!
+    }
     const iv = itemVerification[item.id];
     if (!iv) return false;
     const prod = products.find(p => p.id === item.product_id);
@@ -619,17 +670,17 @@ export default function DispatchDashboard({
     const requiresWeight = !isAac && !isCement && !isLiquid && (prod?.standard_weight ? prod.standard_weight > 0 : false);
 
     if (requiresWeight) {
-      return iv.verified || (isMismatchApproved && Boolean(iv.weight));
+      return iv.verified || Boolean(iv.weight && Number(iv.weight) > 0);
     }
     if (isCement) {
       const expectedQty = Math.round(Number(item.quantity) || 1);
-      return iv.verified && isCementMatch(iv.cementText || iv.enteredQty, expectedQty);
+      return iv.verified || isCementMatch(iv.cementText || iv.enteredQty, expectedQty);
     }
     const expectedQty = Number(item.quantity) || 0;
-    return iv.verified && isQuantityMatch(iv.enteredQty, expectedQty);
+    return iv.verified || isQuantityMatch(iv.enteredQty, expectedQty);
   });
   
-  const canSendToBilling = allVerified && detail.status === 'pending';
+  const canSendToBilling = (allVerified || isMismatchApproved) && detail.status === 'pending';
   const canLoadAndComplete = detail.status === 'ready_for_loading';
   
   const [completing, setCompleting] = useState(false);
@@ -776,7 +827,7 @@ export default function DispatchDashboard({
     <div className="flex flex-col min-h-[85vh] bg-slate-50 dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800">
       
       {/* Sticky Header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 px-6 py-3.5">
         <div>
           <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
             <button onClick={onClose} className="hover:text-indigo-600 transition flex items-center gap-1">
@@ -787,7 +838,39 @@ export default function DispatchDashboard({
             <span>/</span>
             <span className="font-semibold text-slate-700 dark:text-slate-300">{detail.dispatch_no}</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Dispatch Verification</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Dispatch Verification</h1>
+            {(detail.total_trips || 1) > 1 && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                Trip {detail.trip_number || 1} of {detail.total_trips}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right Header Badges & Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {detail.verifying_by && (
+            <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1.5 shadow-sm">
+              <UserCheck size={14} className="text-amber-600" />
+              <span>Verifying: <strong>{detail.verifying_by}</strong></span>
+            </span>
+          )}
+          {detail.dispatched_by && (
+            <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 shadow-sm">
+              <Truck size={14} className="text-blue-600" />
+              <span>Dispatched: <strong>{detail.dispatched_by}</strong></span>
+            </span>
+          )}
+          {detail.status === 'pending' && (detail.total_trips || 1) <= 1 && (
+            <button
+              type="button"
+              onClick={openSplitTripModal}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 flex items-center gap-1.5 shadow-sm transition active:scale-95"
+            >
+              <Truck size={14} /> Split Trip (Capacity)
+            </button>
+          )}
         </div>
       </header>
 
@@ -829,6 +912,21 @@ export default function DispatchDashboard({
             <DispatchStatusBadge status={detail.status} />
           </div>
         </div>
+
+        {/* Multi-Trip Info Banner */}
+        {detail.total_trips && detail.total_trips > 1 && (
+          <div className="p-3.5 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 rounded-xl border border-purple-200 dark:border-purple-800 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <Truck size={16} className="text-purple-600 dark:text-purple-400 shrink-0" />
+              <span className="font-bold text-purple-900 dark:text-purple-200">
+                Multi-Trip Dispatch: <strong>Trip {detail.trip_number || 1} of {detail.total_trips}</strong>
+              </span>
+              <span className="text-purple-700 dark:text-purple-300">
+                (Only one single customer bill is billed across all trips for this order)
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Items Verification Section */}
         <div>
@@ -1623,34 +1721,16 @@ export default function DispatchDashboard({
                   </div>
                 ))}
 
-                {/* Add Photo Actions */}
+                {/* Add Photo Actions (Live Camera Only) */}
                 <div className="flex items-center gap-1.5">
-                  <input
-                    ref={goodsFileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleGoodsFilesSelected}
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => goodsFileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-bold transition shadow-sm"
-                    title="Upload goods photos from device gallery"
-                  >
-                    <Upload size={15} />
-                    <span>Upload Photos</span>
-                  </button>
-
                   <button 
                     type="button"
                     onClick={() => startVehicleCamera()}
-                    className="flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold transition shadow-sm"
-                    title="Take photo with camera"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md hover:shadow-lg transition active:scale-95 cursor-pointer"
+                    title="Take live photo with camera only"
                   >
-                    <Camera size={15} />
-                    <span>Camera</span>
+                    <Camera size={16} />
+                    <span>Live Camera Photo</span>
                   </button>
                 </div>
               </div>
@@ -1818,6 +1898,88 @@ export default function DispatchDashboard({
             >×</button>
           </div>
         </div>
+      )}
+
+      {/* Split Trip Modal for Vehicle Capacity */}
+      {splitModalOpen && (
+        <Modal open={splitModalOpen} onClose={() => { if (!splittingTrip) setSplitModalOpen(false); }} title="🚚 Split Trip for Vehicle Capacity">
+          <div className="space-y-4">
+            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+              <p className="font-bold">Vehicle Capacity Limit Split:</p>
+              <p>If vehicle capacity is limited (e.g., carrying 150 of 300 bags), specify how much to load in <strong>Trip 1</strong> now. The remaining quantities will be moved into <strong>Trip 2</strong>.</p>
+              <p className="font-extrabold text-indigo-700 dark:text-indigo-300 pt-1">
+                ⭐ Only ONE single customer bill will be billed for this order across both trips.
+              </p>
+            </div>
+
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {detailItems.map((item) => {
+                const totalQty = Number(item.quantity) || 0;
+                const trip1Qty = splitTrip1Quantities[item.id] ?? totalQty;
+                const trip2Qty = Math.max(0, round2(totalQty - trip1Qty));
+
+                return (
+                  <div key={item.id} className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">{item.product_name}</h4>
+                        <span className="text-xs text-slate-500">Total in Order: <strong>{totalQty} {item.unit || 'units'}</strong></span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="label text-xs mb-1 font-bold text-indigo-700 dark:text-indigo-300">
+                          Trip 1 Quantity ({item.unit || 'units'})
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          max={totalQty}
+                          value={trip1Qty}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setSplitTrip1Quantities(prev => ({ ...prev, [item.id]: val }));
+                          }}
+                          className="input font-bold text-indigo-700 dark:text-indigo-300"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="label text-xs mb-1 font-bold text-slate-600 dark:text-slate-400">
+                          Trip 2 (Remaining)
+                        </label>
+                        <div className="h-10 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center font-bold text-slate-700 dark:text-slate-300">
+                          {trip2Qty} {item.unit || 'units'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setSplitModalOpen(false)}
+                disabled={splittingTrip}
+                className="btn-secondary text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSplitTrip}
+                disabled={splittingTrip}
+                className="btn-primary text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center gap-1.5"
+              >
+                <Truck size={14} /> {splittingTrip ? 'Splitting Trip...' : 'Confirm & Create Trip 2'}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Confirmation Modal */}

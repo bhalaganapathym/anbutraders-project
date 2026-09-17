@@ -64,9 +64,35 @@ def create_bill(bill_in: BillCreate, background_tasks: BackgroundTasks, db: Sess
             old_b.paid_amount = round(float(old_b.paid_amount or 0) + deduction, 2)
             remaining_to_deduct -= deduction
 
+    # If this dispatch is a split trip and an order bill already exists, reuse the single bill
+    if dispatch.bill_id:
+        existing_bill = db.query(Bill).filter(Bill.id == dispatch.bill_id).first()
+        if existing_bill:
+            dispatch.status = "ready_for_loading"
+            dispatch.ready_for_loading_at = datetime.now(timezone.utc)
+            if driver:
+                dispatch.vehicle_number = driver.vehicle_number
+                dispatch.driver_name = driver.name
+                dispatch.driver_mobile = driver.phone_number
+                driver.status = "engaged"
+                background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "drivers"})
+            db.commit()
+            background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+            return existing_bill
+
     bill = Bill(**bill_data)
     db.add(bill)
+    db.flush()
     
+    # Single bill linkage across order & split trips
+    dispatch.bill_id = bill.id
+    sibling_trips = db.query(Dispatch).filter(
+        Dispatch.order_id == dispatch.order_id,
+        Dispatch.id != dispatch.id
+    ).all()
+    for sib in sibling_trips:
+        sib.bill_id = bill.id
+
     # Update Dispatch status
     dispatch.status = "ready_for_loading"
     dispatch.ready_for_loading_at = datetime.now(timezone.utc)

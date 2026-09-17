@@ -12,6 +12,7 @@ from schemas.all import (
     CustomerCreate, CustomerResponse, CustomerLocationIn, ProductCreate, ProductResponse, BrandPriceAdjustRequest,
     OrderCreate, OrderResponse, DispatchCreate, DispatchResponse, DispatchDraftUpdate,
     WeightMismatchDecision, DiscountApprovalRequest, DiscountDecisionRequest,
+    StartVerifyingPayload, SplitTripPayload,
     NotificationCreate, NotificationResponse, BulkDeleteRequest,
     DriverHandoverCreate, DriverHandoverResponse
 )
@@ -950,12 +951,119 @@ async def upload_dispatch_voice_note(
 
     dispatch.mismatch_voice_note_url = voice_url
     dispatch.mismatch_voice_note_path = voice_path
+    dispatch.mismatch_approval_status = "pending"
+    dispatch.mismatch_requested_at = datetime.now(timezone.utc)
     if reason:
         dispatch.mismatch_reason = reason
+
+    # Create high-priority Admin notification with chime & banner
+    customer_name = dispatch.customer.name if dispatch.customer else "Customer"
+    notif = Notification(
+        type="weight_mismatch_approval",
+        title=f"⚠️ Weight Mismatch Approval Needed — {dispatch.dispatch_no}",
+        message=f"Dispatcher recorded a voice note for weight mismatch on {dispatch.dispatch_no} ({customer_name}). Admin review required.",
+        dispatch_id=dispatch.id,
+        order_id=dispatch.order_id,
+        customer_name=customer_name
+    )
+    db.add(notif)
+    db.commit()
+    db.refresh(dispatch)
+
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "notifications"})
+    return {"url": voice_url, "mismatch_approval_status": "pending"}
+
+@router.patch("/dispatches/{id}/start-verifying")
+def start_verifying(
+    id: UUID,
+    payload: StartVerifyingPayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    
+    dispatch.verifying_by = payload.verifying_by
     db.commit()
     db.refresh(dispatch)
     background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
-    return {"url": voice_url}
+    return {"status": "ok", "verifying_by": dispatch.verifying_by}
+
+@router.post("/dispatches/{id}/split-trip", response_model=DispatchResponse)
+def split_dispatch_trip(
+    id: UUID,
+    payload: SplitTripPayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
+    if not dispatch:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    
+    if dispatch.trip_number and dispatch.trip_number > 1:
+        raise HTTPException(status_code=400, detail="Cannot split a secondary trip")
+    
+    existing_trip2 = db.query(Dispatch).filter(Dispatch.master_dispatch_id == dispatch.id).first()
+    if existing_trip2:
+        raise HTTPException(status_code=400, detail="This dispatch has already been split into trips")
+
+    # Update Trip 1 quantities
+    trip1_map = {item.item_id: (item.trip1_quantity, item.trip2_quantity) for item in payload.trip1_items}
+    
+    trip2_items_data = []
+    for d_item in dispatch.items:
+        if d_item.id in trip1_map:
+            t1_qty, t2_qty = trip1_map[d_item.id]
+            d_item.quantity = t1_qty
+            if t2_qty > 0:
+                trip2_items_data.append({
+                    "product_id": d_item.product_id,
+                    "product_name": d_item.product_name,
+                    "quantity": t2_qty,
+                    "unit": d_item.unit
+                })
+
+    dispatch.trip_number = 1
+    dispatch.total_trips = 2
+    dispatch_notes_suffix = f" [Trip 1 of 2: {payload.vehicle_capacity_note or 'Split for vehicle capacity'}]"
+    dispatch.notes = (dispatch.notes or "") + dispatch_notes_suffix
+
+    # Create Trip 2 Dispatch (links to same order and bill)
+    trip2_dispatch = Dispatch(
+        dispatch_no=f"{dispatch.dispatch_no}-T2",
+        order_id=dispatch.order_id,
+        customer_id=dispatch.customer_id,
+        status="pending",
+        delivery_address=dispatch.delivery_address,
+        dispatch_team=dispatch.dispatch_team,
+        verifying_by=dispatch.verifying_by,
+        trip_number=2,
+        total_trips=2,
+        master_dispatch_id=dispatch.id,
+        bill_id=dispatch.bill_id,
+        notes=f"Trip 2 of 2 (Remaining goods from {dispatch.dispatch_no}): {payload.vehicle_capacity_note or 'Split for vehicle capacity'}"
+    )
+    db.add(trip2_dispatch)
+    db.flush()
+
+    for it_data in trip2_items_data:
+        t2_item = DispatchItem(
+            dispatch_id=trip2_dispatch.id,
+            product_id=it_data["product_id"],
+            product_name=it_data["product_name"],
+            quantity=it_data["quantity"],
+            unit=it_data["unit"]
+        )
+        db.add(t2_item)
+
+    db.commit()
+    db.refresh(dispatch)
+    db.refresh(trip2_dispatch)
+
+    background_tasks.add_task(manager.broadcast, {"event": "postgres_changes", "table": "dispatches"})
+    return trip2_dispatch
 
 @router.get("/dispatches/{id}/voice-note")
 def get_dispatch_voice_note(id: UUID, db: Session = Depends(get_db)):

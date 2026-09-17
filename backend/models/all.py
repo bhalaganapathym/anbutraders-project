@@ -128,6 +128,11 @@ class Dispatch(Base):
     vehicle_leave_photo_url = Column(String, nullable=True)
     dispatch_team = Column(String)
     dispatched_by = Column(String, nullable=True)
+    verifying_by = Column(String, nullable=True)
+    trip_number = Column(Integer, default=1, nullable=False)
+    total_trips = Column(Integer, default=1, nullable=False)
+    master_dispatch_id = Column(UUID(as_uuid=True), ForeignKey("dispatches.id", ondelete="SET NULL"), nullable=True)
+    bill_id = Column(UUID(as_uuid=True), ForeignKey("bills.id", ondelete="SET NULL"), nullable=True)
     phase1_draft = Column(JSON, nullable=True)
     mismatch_approval_status = Column(String, nullable=True)  # 'pending', 'approved', 'rejected'
     mismatch_voice_note_url = Column(String, nullable=True)

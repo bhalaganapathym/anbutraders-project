@@ -517,6 +517,21 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
 
                     <div className="text-right flex flex-col items-end gap-1">
                       <DispatchStatusBadge status={d.status} />
+                      {d.total_trips && d.total_trips > 1 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-purple-800 bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
+                          Trip {d.trip_number || 1}/{d.total_trips}
+                        </span>
+                      )}
+                      {d.verifying_by && d.status === 'pending' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                          🔍 Verifying: {d.verifying_by}
+                        </span>
+                      )}
+                      {d.dispatched_by && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                          📦 {d.dispatched_by}
+                        </span>
+                      )}
                       {d.mismatch_approval_status === 'pending' && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
                           <Mic size={11} className="animate-pulse text-amber-600" /> Mismatch Pending
@@ -675,9 +690,16 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                         </td>
                       )}
                       <td className="td">
-                        <button onClick={() => setDetail(d)} className="font-semibold text-slate-800 dark:text-slate-100 hover:underline">
-                          {d.dispatch_no}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setDetail(d)} className="font-semibold text-slate-800 dark:text-slate-100 hover:underline">
+                            {d.dispatch_no}
+                          </button>
+                          {d.total_trips && d.total_trips > 1 && (
+                            <span className="inline-flex items-center text-[10px] font-black text-purple-800 bg-purple-100 dark:bg-purple-950/60 dark:text-purple-300 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
+                              Trip {d.trip_number || 1}/{d.total_trips}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="td font-medium">{d.customer?.name ?? 'Unknown'}</td>
                       <td className="td">
@@ -692,6 +714,16 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       <td className="td">
                         <div className="flex flex-col gap-1 items-start">
                           <DispatchStatusBadge status={d.status} />
+                          {d.verifying_by && d.status === 'pending' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                              🔍 Verifying: {d.verifying_by}
+                            </span>
+                          )}
+                          {d.dispatched_by && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                              📦 {d.dispatched_by}
+                            </span>
+                          )}
                           {d.mismatch_approval_status === 'pending' && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
                               <Mic size={10} className="animate-pulse text-amber-600" /> Mismatch Pending
