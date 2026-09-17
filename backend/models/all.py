@@ -166,7 +166,7 @@ class Dispatch(Base):
     items = relationship("DispatchItem", back_populates="dispatch", cascade="all, delete-orphan")
     weights = relationship("Weight", back_populates="dispatch", cascade="all, delete-orphan")
     photos = relationship("Photo", back_populates="dispatch", cascade="all, delete-orphan")
-    bill = relationship("Bill", back_populates="dispatch", uselist=False, cascade="all, delete-orphan")
+    bill = relationship("Bill", back_populates="dispatch", uselist=False, foreign_keys="[Bill.dispatch_id]", cascade="all, delete-orphan")
 
 class DispatchItem(Base):
     __tablename__ = "dispatch_items"
@@ -239,7 +239,7 @@ class Bill(Base):
     billed_by = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
-    dispatch = relationship("Dispatch", back_populates="bill")
+    dispatch = relationship("Dispatch", back_populates="bill", foreign_keys=[dispatch_id])
     order = relationship("Order")
     customer = relationship("Customer")
     driver = relationship("Driver")
