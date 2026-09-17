@@ -18,6 +18,7 @@ export const translations = {
     delivery: 'Delivery / POD',
     delivery_pod: 'Delivery / POD',
     billing: 'Billing',
+    marketing: 'Marketing',
     reconciliation: 'Daily Settlement',
     daily_reconciliation: 'Daily Cash Settlement',
     customer_ledger: 'Customer Ledger & Dues',
@@ -33,6 +34,7 @@ export const translations = {
     role_billing: 'Billing Panel',
     role_dispatch: 'Dispatch Panel',
     role_driver: 'Driver Portal',
+    role_marketing: 'Marketing Panel',
 
     // General Actions & Controls
     search: 'Search...',
@@ -232,6 +234,7 @@ export const translations = {
     delivery: 'டெலிவரி / POD',
     delivery_pod: 'டெலிவரி ஆதாரம் (POD)',
     billing: 'பில்லிங்',
+    marketing: 'மார்க்கெட்டிங்',
     reconciliation: 'தினசரி வசூல்',
     daily_reconciliation: 'தினசரி வசூல் கணக்கு',
     customer_ledger: 'வாடிக்கையாளர் பாக்கி கணக்கு',
@@ -247,6 +250,7 @@ export const translations = {
     role_billing: 'பில்லிங் பிரிவு',
     role_dispatch: 'டெலிவரி விநியோகப் பிரிவு',
     role_driver: 'ஓட்டுநர் தளம்',
+    role_marketing: 'மார்க்கெட்டிங் பிரிவு (Marketing)',
 
     // General Actions & Controls
     search: 'தேடுக...',

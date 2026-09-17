@@ -35,6 +35,14 @@ users_to_create = [
         "role": "dispatch",
         "secret_question": "What is your favorite color?",
         "secret_answer": "blue"
+    },
+    {
+        "username": "marketing",
+        "email": "marketing@anbutraders.com",
+        "password": "marketing123",
+        "role": "marketing",
+        "secret_question": "What is your favorite color?",
+        "secret_answer": "blue"
     }
 ]
 

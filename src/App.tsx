@@ -192,6 +192,9 @@ function AppContent() {
       if (role === 'billing' || role === 'cashier') {
         return ['dashboard', 'orders', 'pricelist', 'billing', 'reconciliation', 'customers', 'products', 'notifications'].includes(item.id);
       }
+      if (role === 'marketing') {
+        return ['orders'].includes(item.id);
+      }
       if (role === 'dispatch') {
         return ['dashboard', 'dispatches', 'delivery', 'products', 'notifications'].includes(item.id);
       }
@@ -208,7 +211,11 @@ function AppContent() {
     }));
   }, [user, t]);
 
-  const defaultViewForRole = (user?.role || '').toLowerCase() === 'driver' ? 'delivery' : 'dashboard';
+  const defaultViewForRole = (user?.role || '').toLowerCase() === 'driver'
+    ? 'delivery'
+    : (user?.role || '').toLowerCase() === 'marketing'
+    ? 'orders'
+    : 'dashboard';
   const activeView = view === 'new_order' ? 'new_order' : (navItems.find((n) => n.id === view)?.id || navItems[0]?.id || defaultViewForRole);
 
   const navigate = (v: string, pushHistory = true) => {
@@ -269,6 +276,7 @@ function AppContent() {
     if (user.role === 'admin') return t('role_admin');
     if (user.role === 'billing') return t('role_billing');
     if (user.role === 'dispatch') return t('role_dispatch');
+    if (user.role === 'marketing') return t('role_marketing');
     if (user.role === 'driver') return 'ஓட்டுநர் (Driver)';
     return user.role;
   };
@@ -404,7 +412,7 @@ function AppContent() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
+      <div className={`flex flex-1 flex-col overflow-hidden ${navItems.length > 1 ? 'pb-16' : ''} lg:pb-0`}>
         <header className="sticky top-0 z-20 flex shrink-0 h-14 sm:h-16 items-center gap-2 sm:gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-3 sm:px-4 backdrop-blur lg:px-8">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -534,103 +542,105 @@ function AppContent() {
       </div>
 
       {/* Mobile Bottom Navigation Bar (Role-Based with Dispatches) */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 flex h-16 items-center justify-around border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2 shadow-lg lg:hidden">
-        {user.role !== 'driver' && (
-          <button
-            onClick={() => navigate('dashboard')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'dashboard' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-            }`}
-          >
-            <LayoutDashboard size={20} className={activeView === 'dashboard' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('home')}</span>
-          </button>
-        )}
+      {navItems.length > 1 && (
+        <nav className="fixed bottom-0 inset-x-0 z-30 flex h-16 items-center justify-around border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2 shadow-lg lg:hidden">
+          {user.role !== 'driver' && user.role !== 'marketing' && (
+            <button
+              onClick={() => navigate('dashboard')}
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+                activeView === 'dashboard' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <LayoutDashboard size={20} className={activeView === 'dashboard' ? 'scale-110' : ''} />
+              <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('home')}</span>
+            </button>
+          )}
 
-        {(user.role === 'admin' || user.role === 'billing' || user.role === 'cashier') && (
-          <button
-            onClick={() => navigate('orders')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'orders' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-            }`}
-          >
-            <ShoppingCart size={20} className={activeView === 'orders' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('estimate')}</span>
-          </button>
-        )}
+          {(user.role === 'admin' || user.role === 'billing' || user.role === 'cashier' || user.role === 'marketing') && (
+            <button
+              onClick={() => navigate('orders')}
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+                activeView === 'orders' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <ShoppingCart size={20} className={activeView === 'orders' ? 'scale-110' : ''} />
+              <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('estimate')}</span>
+            </button>
+          )}
 
-        {(user.role === 'admin' || user.role === 'dispatch') && (
-          <button
-            onClick={() => navigate('dispatches')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'dispatches' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-            }`}
-          >
-            <Truck size={20} className={activeView === 'dispatches' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('dispatches')}</span>
-          </button>
-        )}
+          {(user.role === 'admin' || user.role === 'dispatch') && (
+            <button
+              onClick={() => navigate('dispatches')}
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+                activeView === 'dispatches' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <Truck size={20} className={activeView === 'dispatches' ? 'scale-110' : ''} />
+              <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('dispatches')}</span>
+            </button>
+          )}
 
-        {(user.role === 'admin' || user.role === 'billing' || user.role === 'cashier') && (
-          <button
-            onClick={() => navigate('billing')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'billing' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-            }`}
-          >
-            <Receipt size={20} className={activeView === 'billing' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('billing')}</span>
-          </button>
-        )}
+          {(user.role === 'admin' || user.role === 'billing' || user.role === 'cashier') && (
+            <button
+              onClick={() => navigate('billing')}
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+                activeView === 'billing' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <Receipt size={20} className={activeView === 'billing' ? 'scale-110' : ''} />
+              <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('billing')}</span>
+            </button>
+          )}
 
-        {(user.role === 'admin' || user.role === 'dispatch' || user.role === 'driver') && (
-          <button
-            onClick={() => navigate('delivery')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'delivery' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-            }`}
-          >
-            <MapPin size={20} className={activeView === 'delivery' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('delivery')}</span>
-          </button>
-        )}
+          {(user.role === 'admin' || user.role === 'dispatch' || user.role === 'driver') && (
+            <button
+              onClick={() => navigate('delivery')}
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+                activeView === 'delivery' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <MapPin size={20} className={activeView === 'delivery' ? 'scale-110' : ''} />
+              <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('delivery')}</span>
+            </button>
+          )}
 
-        {(user.role === 'dispatch') && (
-          <button
-            onClick={() => navigate('products')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'products' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-            }`}
-          >
-            <Package size={20} className={activeView === 'products' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('products')}</span>
-          </button>
-        )}
+          {(user.role === 'dispatch') && (
+            <button
+              onClick={() => navigate('products')}
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+                activeView === 'products' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <Package size={20} className={activeView === 'products' ? 'scale-110' : ''} />
+              <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('products')}</span>
+            </button>
+          )}
 
-        {(user.role === 'billing' || user.role === 'cashier') && (
-          <button
-            onClick={() => navigate('pricelist')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'pricelist' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-            }`}
-          >
-            <Tags size={20} className={activeView === 'pricelist' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('price_list')}</span>
-          </button>
-        )}
+          {(user.role === 'billing' || user.role === 'cashier') && (
+            <button
+              onClick={() => navigate('pricelist')}
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+                activeView === 'pricelist' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <Tags size={20} className={activeView === 'pricelist' ? 'scale-110' : ''} />
+              <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('price_list')}</span>
+            </button>
+          )}
 
-        {(user.role === 'billing' || user.role === 'cashier') && (
-          <button
-            onClick={() => navigate('reconciliation')}
-            className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
-              activeView === 'reconciliation' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-            }`}
-          >
-            <DollarSign size={20} className={activeView === 'reconciliation' ? 'scale-110' : ''} />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('reconciliation')}</span>
-          </button>
-        )}
-      </nav>
+          {(user.role === 'billing' || user.role === 'cashier') && (
+            <button
+              onClick={() => navigate('reconciliation')}
+              className={`flex flex-col items-center justify-center flex-1 py-1.5 transition ${
+                activeView === 'reconciliation' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+              }`}
+            >
+              <DollarSign size={20} className={activeView === 'reconciliation' ? 'scale-110' : ''} />
+              <span className="text-[10px] mt-0.5 tracking-tight font-medium">{t('reconciliation')}</span>
+            </button>
+          )}
+        </nav>
+      )}
 
       {/* Offline Outbox Queue Management Modal */}
       <OfflineQueueModal isOpen={isQueueModalOpen} onClose={() => setIsQueueModalOpen(false)} />

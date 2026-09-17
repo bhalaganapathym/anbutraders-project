@@ -39,6 +39,7 @@ try:
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR;"))
         conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS billed_by VARCHAR;"))
         conn.execute(text("ALTER TABLE dispatches ADD COLUMN IF NOT EXISTS dispatched_by VARCHAR;"))
+        conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by VARCHAR;"))
         conn.commit()
 except Exception as e:
     print(f"Schema sync notice: {e}")
@@ -61,6 +62,8 @@ def seed_initial_team_members():
         {"username": "prasath", "full_name": "Prasath", "email": "prasath@anbu.com", "password": "prasath@anbu123", "role": "dispatch"},
         {"username": "sathish", "full_name": "Sathish", "email": "sathish@anbu.com", "password": "sathish@anbu123", "role": "dispatch"},
         {"username": "hariharan", "full_name": "Hariharan", "email": "hariharan@anbu.com", "password": "hariharan@anbu123", "role": "dispatch"},
+        # Marketing Team
+        {"username": "marketing", "full_name": "Marketing Team", "email": "marketing@anbu.com", "password": "marketing123", "role": "marketing"},
     ]
     
     db = SessionLocal()

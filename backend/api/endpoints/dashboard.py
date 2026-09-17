@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_, case
 from datetime import datetime, date, time, timezone, timedelta
 from api.deps import get_db, get_current_active_user, get_current_admin_user
-from models.all import Customer, Product, Order, Dispatch, User, Bill, Weight
+from models.all import Customer, Product, Order, OrderItem, Dispatch, User, Bill, Weight
 from typing import Dict, Any, Optional, List
 
 router = APIRouter()
@@ -152,6 +152,7 @@ def get_staff_performance(
     all_users = db.query(User).filter(User.is_active == True).all()
     billing_members = [u for u in all_users if (u.role or "").lower() in ["billing", "cashier"]]
     dispatch_members = [u for u in all_users if (u.role or "").lower() == "dispatch"]
+    marketing_members = [u for u in all_users if (u.role or "").lower() == "marketing"]
 
     bill_query = db.query(Bill)
     if filter_start:
@@ -285,16 +286,103 @@ def get_staff_performance(
             if not entry["last_active"] or last_dt.isoformat() > entry["last_active"]:
                 entry["last_active"] = last_dt.isoformat()
 
+    # Marketing Team aggregation
+    order_query = db.query(Order).options(joinedload(Order.items).joinedload(OrderItem.product))
+    if filter_start:
+        order_query = order_query.filter(Order.created_at >= filter_start)
+    if filter_end:
+        order_query = order_query.filter(Order.created_at <= filter_end)
+    orders = order_query.all()
+
+    marketing_stats: Dict[str, Dict[str, Any]] = {}
+    for u in marketing_members:
+        display_name = u.full_name or u.username.title()
+        marketing_stats[display_name] = {
+            "staff_name": display_name,
+            "username": u.username,
+            "role": u.role,
+            "orders_count": 0,
+            "confirmed_count": 0,
+            "total_order_value": 0.0,
+            "average_order_value": 0.0,
+            "last_active": None
+        }
+
+    for o in orders:
+        raw_name = (o.created_by or "").strip()
+        if not raw_name:
+            continue
+
+        matched_key = None
+        for k, v in marketing_stats.items():
+            if raw_name.lower() in [k.lower(), v["username"].lower()]:
+                matched_key = k
+                break
+
+        if not matched_key:
+            matching_user = next((u for u in all_users if raw_name.lower() in [u.username.lower(), (u.full_name or "").lower()]), None)
+            if matching_user and (matching_user.role or "").lower() == "marketing":
+                matched_key = matching_user.full_name or matching_user.username.title()
+                if matched_key not in marketing_stats:
+                    marketing_stats[matched_key] = {
+                        "staff_name": matched_key,
+                        "username": matching_user.username,
+                        "role": "marketing",
+                        "orders_count": 0,
+                        "confirmed_count": 0,
+                        "total_order_value": 0.0,
+                        "average_order_value": 0.0,
+                        "last_active": None
+                    }
+            elif not matching_user and "market" in raw_name.lower():
+                matched_key = raw_name.title()
+                if matched_key not in marketing_stats:
+                    marketing_stats[matched_key] = {
+                        "staff_name": matched_key,
+                        "username": raw_name.lower(),
+                        "role": "marketing",
+                        "orders_count": 0,
+                        "confirmed_count": 0,
+                        "total_order_value": 0.0,
+                        "average_order_value": 0.0,
+                        "last_active": None
+                    }
+
+        if matched_key and matched_key in marketing_stats:
+            entry = marketing_stats[matched_key]
+            entry["orders_count"] += 1
+            if o.status in ["confirmed", "completed", "dispatched", "delivered"]:
+                entry["confirmed_count"] += 1
+
+            order_val = sum(
+                float(it.quantity or 0) * float(it.product.price or 0)
+                for it in (o.items or [])
+                if it.product
+            ) + float(o.transport_charge or 0) + float(o.unloading_charge or 0) - float(o.discount_amount or 0)
+            entry["total_order_value"] = round(entry["total_order_value"] + max(0.0, order_val), 2)
+
+            if o.created_at:
+                if not entry["last_active"] or o.created_at.isoformat() > entry["last_active"]:
+                    entry["last_active"] = o.created_at.isoformat()
+
+    for entry in marketing_stats.values():
+        if entry["orders_count"] > 0:
+            entry["average_order_value"] = round(entry["total_order_value"] / entry["orders_count"], 2)
+
     billing_list = sorted(billing_stats.values(), key=lambda x: x["total_revenue"], reverse=True)
     dispatch_list = sorted(dispatch_stats.values(), key=lambda x: (x["completed_count"], x["total_weight_kg"]), reverse=True)
+    marketing_list = sorted(marketing_stats.values(), key=lambda x: (x["total_order_value"], x["orders_count"]), reverse=True)
 
     total_revenue = round(sum(b["total_revenue"] for b in billing_list), 2)
     total_bills = sum(b["bills_count"] for b in billing_list)
     total_weight = round(sum(d["total_weight_kg"] for d in dispatch_list), 2)
     total_dispatches = sum(d["dispatches_count"] for d in dispatch_list)
+    total_marketing_orders = sum(m["orders_count"] for m in marketing_list)
+    total_marketing_value = round(sum(m["total_order_value"] for m in marketing_list), 2)
 
     top_billing = billing_list[0]["staff_name"] if billing_list and billing_list[0]["bills_count"] > 0 else "None"
     top_dispatch = dispatch_list[0]["staff_name"] if dispatch_list and dispatch_list[0]["dispatches_count"] > 0 else "None"
+    top_marketing = marketing_list[0]["staff_name"] if marketing_list and marketing_list[0]["orders_count"] > 0 else "None"
 
     return {
         "timeframe": timeframe,
@@ -306,10 +394,14 @@ def get_staff_performance(
             "total_weight_kg": total_weight,
             "total_weight_tons": round(total_weight / 1000, 2),
             "total_dispatches": total_dispatches,
+            "total_marketing_orders": total_marketing_orders,
+            "total_marketing_value": total_marketing_value,
             "top_billing_staff": top_billing,
-            "top_dispatch_staff": top_dispatch
+            "top_dispatch_staff": top_dispatch,
+            "top_marketing_staff": top_marketing
         },
         "billing_team": billing_list,
-        "dispatch_team": dispatch_list
+        "dispatch_team": dispatch_list,
+        "marketing_team": marketing_list
     }
 

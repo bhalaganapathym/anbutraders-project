@@ -12,7 +12,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     secret_question = Column(String, nullable=True)
     secret_answer_hash = Column(String, nullable=True)
-    role = Column(String, default="Cashier")  # admin, billing, dispatch
+    role = Column(String, default="Cashier")  # admin, billing, dispatch, marketing
     is_active = Column(Boolean, default=True)
 
 class Customer(Base):
@@ -75,6 +75,7 @@ class Order(Base):
     discount_amount = Column(Numeric, default=0, nullable=False)
     discount_details = Column(JSON, nullable=True)
     total_weight_kg = Column(Numeric, default=0, nullable=True)
+    created_by = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     confirmed_at = Column(DateTime(timezone=True), nullable=True)
     

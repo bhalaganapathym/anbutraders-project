@@ -324,11 +324,20 @@ export default function Dashboard({ onNavigate }: { onNavigate: (view: string) =
   };
 
   const getQuickAccessItems = () => {
-    const role = user?.role;
+    const role = (user?.role || '').toLowerCase();
     if (role === 'dispatch') {
       return [
         allQuickAccessMap.dispatches,
         allQuickAccessMap.delivery,
+        allQuickAccessMap.products,
+      ];
+    }
+    if (role === 'marketing') {
+      return [
+        allQuickAccessMap.new_order,
+        allQuickAccessMap.orders,
+        allQuickAccessMap.pricelist,
+        allQuickAccessMap.customers,
         allQuickAccessMap.products,
       ];
     }

@@ -49,8 +49,8 @@ def login_access_token(
             db.add(user)
             db.commit()
             db.refresh(user)
-        elif identifier in ["billing", "dispatch", "admin", "driver"]:
-            default_pwd = "dispatch123" if identifier == "dispatch" else "driver123" if identifier == "driver" else "password123"
+        elif identifier in ["billing", "dispatch", "admin", "driver", "marketing"]:
+            default_pwd = "marketing123" if identifier == "marketing" else "dispatch123" if identifier == "dispatch" else "driver123" if identifier == "driver" else "password123"
             user = User(
                 username=identifier,
                 full_name=identifier.title(),

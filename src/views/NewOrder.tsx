@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { api, type Customer, type Product, type Order } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { useAuth } from '@/context/AuthContext';
 import {
   ArrowLeft, Search, Plus, Trash2, CheckCircle2, User, Phone, MapPin, 
   Minus, Plus as PlusIcon, ShoppingBag, MessageCircle, FileText, Mic, MicOff, Zap,
@@ -24,6 +25,7 @@ type NewOrderProps = {
 
 export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -816,6 +818,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
           estimate_adjustment: estimateAdjustment
         },
         total_weight_kg: estimatedWeight,
+        created_by: user?.full_name || user?.username || 'Staff',
         items: lines.map(l => ({ product_id: l.product_id, quantity: l.quantity, unit: l.unit }))
       };
       

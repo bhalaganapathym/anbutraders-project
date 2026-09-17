@@ -7,7 +7,7 @@ import Modal from '@/components/Modal';
 import {
   Users, Award, Key, Plus, RefreshCw, Trash2, Edit3, CheckCircle2,
   XCircle, Shield, ShoppingCart, Truck, Calendar, Clock,
-  DollarSign, Package, AlertTriangle, ArrowUpRight, Copy, Check
+  DollarSign, Package, AlertTriangle, ArrowUpRight, Copy, Check, Megaphone, TrendingUp
 } from 'lucide-react';
 
 type UserItem = {
@@ -25,8 +25,11 @@ type PerformanceSummary = {
   total_weight_kg: number;
   total_weight_tons: number;
   total_dispatches: number;
+  total_marketing_orders?: number;
+  total_marketing_value?: number;
   top_billing_staff: string;
   top_dispatch_staff: string;
+  top_marketing_staff?: string;
 };
 
 type BillingStaffPerf = {
@@ -54,6 +57,17 @@ type DispatchStaffPerf = {
   last_active: string | null;
 };
 
+type MarketingStaffPerf = {
+  staff_name: string;
+  username: string;
+  role: string;
+  orders_count: number;
+  confirmed_count: number;
+  total_order_value: number;
+  average_order_value: number;
+  last_active: string | null;
+};
+
 function formatStaffName(fullName?: string | null, username?: string | null): string {
   if (fullName && fullName.trim()) return fullName.trim();
   if (!username) return 'Staff Member';
@@ -68,13 +82,13 @@ export default function TeamPerformance() {
   const [activeTab, setActiveTab] = useState<'members' | 'performance'>('members');
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [roleFilter, setRoleFilter] = useState<'all' | 'billing' | 'dispatch' | 'admin'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'billing' | 'dispatch' | 'marketing' | 'admin'>('all');
 
   // Add Member Modal State
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [newFullName, setNewFullName] = useState('');
   const [newUsername, setNewUsername] = useState('');
-  const [newRole, setNewRole] = useState<'billing' | 'dispatch'>('billing');
+  const [newRole, setNewRole] = useState<'billing' | 'dispatch' | 'marketing'>('billing');
   const [newPassword, setNewPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [submittingAdd, setSubmittingAdd] = useState(false);
@@ -88,7 +102,7 @@ export default function TeamPerformance() {
   // Edit Member Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editFullName, setEditFullName] = useState('');
-  const [editRole, setEditRole] = useState<'billing' | 'dispatch' | 'admin'>('billing');
+  const [editRole, setEditRole] = useState<'billing' | 'dispatch' | 'marketing' | 'admin'>('billing');
   const [editIsActive, setEditIsActive] = useState(true);
   const [submittingEdit, setSubmittingEdit] = useState(false);
 
@@ -99,6 +113,7 @@ export default function TeamPerformance() {
   const [perfSummary, setPerfSummary] = useState<PerformanceSummary | null>(null);
   const [billingPerf, setBillingPerf] = useState<BillingStaffPerf[]>([]);
   const [dispatchPerf, setDispatchPerf] = useState<DispatchStaffPerf[]>([]);
+  const [marketingPerf, setMarketingPerf] = useState<MarketingStaffPerf[]>([]);
   const [loadingPerf, setLoadingPerf] = useState(false);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -129,6 +144,7 @@ export default function TeamPerformance() {
       setPerfSummary(data.summary);
       setBillingPerf(data.billing_team || []);
       setDispatchPerf(data.dispatch_team || []);
+      setMarketingPerf(data.marketing_team || []);
     } catch (e: any) {
       toast(e.message || 'Failed to fetch staff performance', 'error');
     } finally {
@@ -313,7 +329,7 @@ export default function TeamPerformance() {
                   Team Management & Staff Performance
                 </h1>
                 <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                  Assign individual credentials for Billing & Dispatch teams and track their revenue & dispatch output.
+                  Assign individual credentials for Billing, Dispatch, and Marketing teams and track their revenue & order output.
                 </p>
               </div>
             </div>
@@ -353,7 +369,7 @@ export default function TeamPerformance() {
           {/* Controls Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              {(['all', 'billing', 'dispatch', 'admin'] as const).map(role => (
+              {(['all', 'billing', 'dispatch', 'marketing', 'admin'] as const).map(role => (
                 <button
                   key={role}
                   onClick={() => setRoleFilter(role)}
@@ -399,12 +415,15 @@ export default function TeamPerformance() {
                 const roleLower = (u.role || '').toLowerCase();
                 const isBilling = roleLower === 'billing' || roleLower === 'cashier';
                 const isDispatch = roleLower === 'dispatch';
+                const isMarketing = roleLower === 'marketing';
                 const isAdmin = roleLower === 'admin';
 
                 const badgeBg = isBilling
                   ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-800'
                   : isDispatch
                   ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 border-sky-300 dark:border-sky-800'
+                  : isMarketing
+                  ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300 border-pink-300 dark:border-pink-800'
                   : 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border-purple-300 dark:border-purple-800';
 
                 const avatarLetter = (u.full_name || u.username || 'S').charAt(0).toUpperCase();
@@ -427,6 +446,8 @@ export default function TeamPerformance() {
                                 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'
                                 : isDispatch
                                 ? 'bg-gradient-to-br from-sky-400 to-sky-600 text-white'
+                                : isMarketing
+                                ? 'bg-gradient-to-br from-pink-500 to-rose-600 text-white'
                                 : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
                             }`}
                           >
@@ -575,79 +596,117 @@ export default function TeamPerformance() {
 
           {/* KPI Summary Cards */}
           {perfSummary && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="glass-panel p-5 rounded-2xl border border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-sm">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
+              <div className="glass-panel p-4 rounded-2xl border border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
-                    Total Billed Revenue
+                  <span className="text-[10px] font-extrabold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                    Billed Revenue
                   </span>
-                  <div className="p-2 bg-emerald-500/20 rounded-xl text-emerald-600">
-                    <DollarSign size={18} />
+                  <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-600">
+                    <DollarSign size={16} />
                   </div>
                 </div>
-                <div className="mt-3">
-                  <h2 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white">
+                <div className="mt-2.5">
+                  <h2 className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate">
                     ₹{(perfSummary.total_revenue ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </h2>
-                  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-1">
+                  <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">
                     {perfSummary.total_bills ?? 0} bills generated
                   </p>
                 </div>
               </div>
 
-              <div className="glass-panel p-5 rounded-2xl border border-sky-500/20 bg-sky-50/40 dark:bg-sky-950/20 shadow-sm">
+              <div className="glass-panel p-4 rounded-2xl border border-sky-500/20 bg-sky-50/40 dark:bg-sky-950/20 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-sky-800 dark:text-sky-300 uppercase tracking-wider">
-                    Total Material Dispatched
+                  <span className="text-[10px] font-extrabold text-sky-800 dark:text-sky-300 uppercase tracking-wider">
+                    Dispatched
                   </span>
-                  <div className="p-2 bg-sky-500/20 rounded-xl text-sky-600">
-                    <Package size={18} />
+                  <div className="p-1.5 bg-sky-500/20 rounded-lg text-sky-600">
+                    <Package size={16} />
                   </div>
                 </div>
-                <div className="mt-3">
-                  <h2 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white">
-                    {perfSummary.total_weight_tons ?? 0} <span className="text-lg font-bold">Tons</span>
+                <div className="mt-2.5">
+                  <h2 className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate">
+                    {perfSummary.total_weight_tons ?? 0} <span className="text-sm font-bold">Tons</span>
                   </h2>
-                  <p className="text-xs font-semibold text-sky-700 dark:text-sky-400 mt-1">
+                  <p className="text-[11px] font-semibold text-sky-700 dark:text-sky-400 mt-0.5">
                     {(perfSummary.total_weight_kg ?? 0).toLocaleString('en-IN')} kg verified
                   </p>
                 </div>
               </div>
 
-              <div className="glass-panel p-5 rounded-2xl border border-amber-500/20 bg-amber-50/40 dark:bg-amber-950/20 shadow-sm">
+              <div className="glass-panel p-4 rounded-2xl border border-pink-500/20 bg-pink-50/40 dark:bg-pink-950/20 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
-                    Top Billing Performer
+                  <span className="text-[10px] font-extrabold text-pink-800 dark:text-pink-300 uppercase tracking-wider">
+                    Marketing Orders
                   </span>
-                  <div className="p-2 bg-amber-500/20 rounded-xl text-amber-600">
-                    <Award size={18} />
+                  <div className="p-1.5 bg-pink-500/20 rounded-lg text-pink-600">
+                    <TrendingUp size={16} />
                   </div>
                 </div>
-                <div className="mt-3">
+                <div className="mt-2.5">
                   <h2 className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate">
-                    {perfSummary.top_billing_staff || 'None'}
+                    ₹{(perfSummary.total_marketing_value ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </h2>
-                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mt-1">
-                    Highest Billing Revenue
+                  <p className="text-[11px] font-semibold text-pink-700 dark:text-pink-400 mt-0.5">
+                    {perfSummary.total_marketing_orders ?? 0} orders created
                   </p>
                 </div>
               </div>
 
-              <div className="glass-panel p-5 rounded-2xl border border-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-sm">
+              <div className="glass-panel p-4 rounded-2xl border border-amber-500/20 bg-amber-50/40 dark:bg-amber-950/20 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">
-                    Top Dispatch Performer
+                  <span className="text-[10px] font-extrabold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+                    Top Billing
                   </span>
-                  <div className="p-2 bg-indigo-500/20 rounded-xl text-indigo-600">
-                    <Truck size={18} />
+                  <div className="p-1.5 bg-amber-500/20 rounded-lg text-amber-600">
+                    <Award size={16} />
                   </div>
                 </div>
-                <div className="mt-3">
-                  <h2 className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white truncate">
+                <div className="mt-2.5">
+                  <h2 className="text-base lg:text-lg font-black text-slate-900 dark:text-white truncate">
+                    {perfSummary.top_billing_staff || 'None'}
+                  </h2>
+                  <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 mt-0.5">
+                    Highest Revenue
+                  </p>
+                </div>
+              </div>
+
+              <div className="glass-panel p-4 rounded-2xl border border-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">
+                    Top Dispatch
+                  </span>
+                  <div className="p-1.5 bg-indigo-500/20 rounded-lg text-indigo-600">
+                    <Truck size={16} />
+                  </div>
+                </div>
+                <div className="mt-2.5">
+                  <h2 className="text-base lg:text-lg font-black text-slate-900 dark:text-white truncate">
                     {perfSummary.top_dispatch_staff || 'None'}
                   </h2>
-                  <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 mt-1">
-                    Most Dispatches Completed
+                  <p className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-400 mt-0.5">
+                    Most Dispatched
+                  </p>
+                </div>
+              </div>
+
+              <div className="glass-panel p-4 rounded-2xl border border-purple-500/20 bg-purple-50/40 dark:bg-purple-950/20 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-purple-800 dark:text-purple-300 uppercase tracking-wider">
+                    Top Marketing
+                  </span>
+                  <div className="p-1.5 bg-purple-500/20 rounded-lg text-purple-600">
+                    <Megaphone size={16} />
+                  </div>
+                </div>
+                <div className="mt-2.5">
+                  <h2 className="text-base lg:text-lg font-black text-slate-900 dark:text-white truncate">
+                    {perfSummary.top_marketing_staff || 'None'}
+                  </h2>
+                  <p className="text-[11px] font-semibold text-purple-700 dark:text-purple-400 mt-0.5">
+                    Highest Order Value
                   </p>
                 </div>
               </div>
@@ -815,6 +874,80 @@ export default function TeamPerformance() {
               </table>
             </div>
           </div>
+
+          {/* Section 3: Marketing Team Performance */}
+          <div className="glass-panel rounded-3xl border border-white/20 dark:border-slate-800 bg-white/70 dark:bg-slate-800/60 p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-pink-500/20 text-pink-600">
+                  <Megaphone size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                    Marketing Team Performance
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Breakdown of estimates and orders created, order value generated, and conversions per marketer.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-700 text-[11px] font-extrabold uppercase text-slate-500 dark:text-slate-400 tracking-wider">
+                    <th className="py-3 px-4">Staff Member</th>
+                    <th className="py-3 px-4 text-center">Orders Created</th>
+                    <th className="py-3 px-4 text-center">Confirmed Orders</th>
+                    <th className="py-3 px-4 text-right">Total Order Value (₹)</th>
+                    <th className="py-3 px-4 text-right">Avg Order Value (₹)</th>
+                    <th className="py-3 px-4 text-right">Last Active</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 text-xs">
+                  {marketingPerf.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                        No marketing activity recorded for this period.
+                      </td>
+                    </tr>
+                  ) : (
+                    marketingPerf.map(m => (
+                      <tr key={m.username} className="hover:bg-pink-50/30 dark:hover:bg-slate-700/30 transition">
+                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-pink-500/20 text-pink-700 dark:text-pink-300 flex items-center justify-center font-black text-xs">
+                            {m.staff_name.charAt(0)}
+                          </div>
+                          <div>
+                            <div>{m.staff_name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">@{m.username}</div>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-black text-slate-800 dark:text-slate-200">
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700">
+                            {m.orders_count}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-extrabold text-emerald-600 dark:text-emerald-400">
+                          {m.confirmed_count}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-white">
+                          ₹{m.total_order_value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3.5 px-4 text-right text-slate-700 dark:text-slate-300">
+                          ₹{m.average_order_value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3.5 px-4 text-right text-slate-400 text-[11px]">
+                          {m.last_active ? new Date(m.last_active).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -854,6 +987,7 @@ export default function TeamPerformance() {
               >
                 <option value="billing">Billing Team</option>
                 <option value="dispatch">Dispatch Team</option>
+                <option value="marketing">Marketing Team</option>
               </select>
             </div>
           </div>
@@ -989,6 +1123,7 @@ export default function TeamPerformance() {
               >
                 <option value="billing">Billing Team</option>
                 <option value="dispatch">Dispatch Team</option>
+                <option value="marketing">Marketing Team</option>
                 <option value="admin">Admin</option>
               </select>
             </div>

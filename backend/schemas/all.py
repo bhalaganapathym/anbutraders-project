@@ -388,6 +388,7 @@ class OrderCreate(BaseModel):
     discount_amount: Optional[float] = 0.0
     discount_details: Optional[Any] = None
     total_weight_kg: Optional[float] = 0.0
+    created_by: Optional[str] = None
     items: Optional[List[OrderItemCreate]] = []
 
 class OrderResponse(BaseModel):
@@ -409,6 +410,7 @@ class OrderResponse(BaseModel):
     discount_amount: Optional[float] = 0.0
     discount_details: Optional[Any] = None
     total_weight_kg: Optional[float] = 0.0
+    created_by: Optional[str] = None
     created_at: datetime
     confirmed_at: Optional[datetime] = None
     
