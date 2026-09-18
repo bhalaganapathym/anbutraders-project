@@ -70,6 +70,8 @@ export function calculateProductPrice(
   const name = (product.name || '').toLowerCase();
   const brand = (product.brand || '').toLowerCase();
 
+  const isKgUnit = unit === 'kg' || unit === 'kgs' || unit === 'kilogram' || unit === 'kilograms';
+
   const isSteel =
     cat.includes('steel') ||
     cat.includes('tmt') ||
@@ -79,7 +81,7 @@ export function calculateProductPrice(
     name.includes('sumangala') ||
     brand.includes('sumangala') ||
     brand.includes('isteel') ||
-    (stdWeight > 0 && (unit === 'nos' || unit === 'piece' || unit === 'rod' || unit === 'bundle' || unit === 'kg'));
+    (stdWeight > 0 && (unit === 'nos' || unit === 'piece' || unit === 'rod' || unit === 'bundle' || isKgUnit));
 
   if (isSteel && stdWeight > 0) {
     // Determine rate per kg vs unit price (price per single piece / rod)
@@ -118,24 +120,29 @@ export function calculateProductPrice(
     };
   }
 
-  // Non-steel products (Cement, accessories, blocks, etc.)
-  const unitPrice = round2(pPrice);
-  const totalWeight = stdWeight > 0 ? round2(quantity * stdWeight) : 0;
+  // Non-steel products or items sold directly by kg / nos / bag (Nails, Binding wire, Cement, AAC, etc.)
+  let unitPrice = round2(pPrice);
+  if (customRatePerKg !== undefined && customRatePerKg !== null && Number(customRatePerKg) > 0) {
+    unitPrice = round2(Number(customRatePerKg));
+  }
+  const totalWeight = isKgUnit ? round2(quantity) : (stdWeight > 0 ? round2(quantity * stdWeight) : 0);
   const totalPrice = round2(quantity * unitPrice);
-  const ratePerKg = stdWeight > 0 ? round2(unitPrice / stdWeight) : 0;
-  const displayBreakdown = `${quantity} ${unit} × ₹${unitPrice.toFixed(2)}`;
+  const ratePerKg = isKgUnit ? unitPrice : (stdWeight > 0 ? round2(unitPrice / stdWeight) : 0);
+  const displayBreakdown = isKgUnit
+    ? `${quantity} kg @ ₹${unitPrice.toFixed(2)}/kg`
+    : `${quantity} ${unit} × ₹${unitPrice.toFixed(2)}`;
 
   return {
     isSteel: false,
     ratePerKg,
     unitPrice,
-    standardWeight: stdWeight,
+    standardWeight: isKgUnit ? 1 : stdWeight,
     totalWeight,
     totalPrice,
     unit,
-    billingRate: unitPrice,
+    billingRate: isKgUnit ? ratePerKg : unitPrice,
     billingPerUnit: (unit || 'nos').toUpperCase(),
-    billingWeightText: '—',
+    billingWeightText: totalWeight > 0 ? `${totalWeight.toFixed(2)} kg` : '—',
     displayBreakdown
   };
 }
@@ -190,6 +197,8 @@ export function calculateDiscountedProductPrice(
   let discountedUnitPrice = base.unitPrice;
   let finalTotalPrice = base.totalPrice;
 
+  const isKgUnit = (base.unit || '').toLowerCase() === 'kg' || (product?.unit || '').toLowerCase() === 'kg';
+
   if (discount.type === 'per_kg') {
     discountPerKg = val;
     discountedRatePerKg = round2(Math.max(0, base.ratePerKg - val));
@@ -199,8 +208,13 @@ export function calculateDiscountedProductPrice(
       totalDiscountAmount = round2(base.totalWeight * discountPerKg);
       finalTotalPrice = round2(Math.max(0, base.totalPrice - totalDiscountAmount));
     } else {
-      totalDiscountAmount = round2(base.totalWeight * discountPerKg);
+      const effWeight = base.totalWeight > 0 ? base.totalWeight : (isKgUnit ? quantity : 0);
+      totalDiscountAmount = round2(effWeight * discountPerKg);
       finalTotalPrice = round2(Math.max(0, base.totalPrice - totalDiscountAmount));
+      if (isKgUnit) {
+        discountPerUnit = discountPerKg;
+        discountedUnitPrice = round2(Math.max(0, base.unitPrice - val));
+      }
     }
   } else if (discount.type === 'per_unit') {
     discountPerUnit = val;
@@ -210,6 +224,9 @@ export function calculateDiscountedProductPrice(
     if (base.standardWeight > 0) {
       discountPerKg = round2(val / base.standardWeight);
       discountedRatePerKg = round2(Math.max(0, base.ratePerKg - discountPerKg));
+    } else if (isKgUnit) {
+      discountPerKg = val;
+      discountedRatePerKg = discountedUnitPrice;
     }
   } else if (discount.type === 'flat') {
     totalDiscountAmount = round2(Math.min(base.totalPrice, val));
@@ -218,8 +235,9 @@ export function calculateDiscountedProductPrice(
       discountPerUnit = round2(totalDiscountAmount / quantity);
       discountedUnitPrice = round2(Math.max(0, base.unitPrice - discountPerUnit));
     }
-    if (base.totalWeight > 0) {
-      discountPerKg = round2(totalDiscountAmount / base.totalWeight);
+    const effWeight = base.totalWeight > 0 ? base.totalWeight : (isKgUnit ? quantity : 0);
+    if (effWeight > 0) {
+      discountPerKg = round2(totalDiscountAmount / effWeight);
       discountedRatePerKg = round2(Math.max(0, base.ratePerKg - discountPerKg));
     }
   }
@@ -227,7 +245,7 @@ export function calculateDiscountedProductPrice(
   return {
     ...base,
     totalPrice: finalTotalPrice,
-    billingRate: base.isSteel ? discountedRatePerKg : discountedUnitPrice,
+    billingRate: base.isSteel || isKgUnit ? discountedRatePerKg : discountedUnitPrice,
     discountType: discount.type,
     discountValue: val,
     discountPerKg,

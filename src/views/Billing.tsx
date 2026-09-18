@@ -47,6 +47,9 @@ export function getItemBillingInfo(
   const stdWt = round2(prod?.standard_weight || prod?.piece_weight_kg || 0);
   const recordedWt = dispatch?.weights?.find(w => w.notes?.includes(item.product_name))?.actual_weight;
 
+  const rawUnit = (item.unit || prod?.unit || 'NOS').toUpperCase();
+  const isKg = rawUnit === 'KG' || rawUnit === 'KGS' || rawUnit === 'KILOGRAM' || rawUnit === 'KILOGRAMS';
+
   // Steel / Weighed product detection
   const cat = (prod?.category || '').toUpperCase();
   const name = (item.product_name || '').toUpperCase();
@@ -104,11 +107,15 @@ export function getItemBillingInfo(
     };
   }
 
-  // Non-steel product (Cement, AAC, Paste, Liquid, etc.)
+  // Non-steel product (Nails, Binding Wire, Cement, AAC, Paste, Liquid, etc.)
   const defaultUnitPrice = item.original_price ?? item.price ?? 0;
   let unitPrice = isDiscountApproved ? (item.price || 0) : defaultUnitPrice;
   if (customRate !== undefined && customRate !== null && Number(customRate) > 0) {
     unitPrice = round2(Number(customRate));
+  } else if (isDiscountApproved && item.discount_per_kg && Number(item.discount_per_kg) > 0 && isKg) {
+    unitPrice = round2(Math.max(0, defaultUnitPrice - Number(item.discount_per_kg)));
+  } else if (isDiscountApproved && item.discount_amount && Number(item.discount_amount) > 0 && qty > 0) {
+    unitPrice = round2(Math.max(0, defaultUnitPrice - (Number(item.discount_amount) / qty)));
   }
   const lineTotal = round2(unitPrice * qty);
 
@@ -116,10 +123,10 @@ export function getItemBillingInfo(
     isSteel: false,
     qty,
     unit: item.unit || 'NOS',
-    stdWt: 0,
-    totalWeight: 0,
-    weightText: '—',
-    ratePerKg: 0,
+    stdWt: isKg ? 1 : 0,
+    totalWeight: isKg ? round2(qty) : 0,
+    weightText: isKg ? `${qty.toFixed(2)} kg` : '—',
+    ratePerKg: isKg ? unitPrice : 0,
     defaultRatePerKg: defaultUnitPrice,
     rateText: Number(unitPrice).toFixed(2),
     perUnit: (item.unit || 'NOS').toUpperCase(),

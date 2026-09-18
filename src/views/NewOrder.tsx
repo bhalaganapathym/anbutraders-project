@@ -578,12 +578,14 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const totalQty = lines.reduce((acc, l) => acc + l.quantity, 0);
   const estimatedWeight = round2(lines.reduce((acc, l) => {
     const customRate = customItemRates[l.product_id];
-    const p = calculateProductPrice(l.product, l.quantity, customRate);
+    const prod = { ...l.product, unit: l.unit || l.product.unit };
+    const p = calculateProductPrice(prod, l.quantity, customRate);
     return acc + p.totalWeight;
   }, 0));
   const itemSubtotal = round2(lines.reduce((acc, l) => {
     const customRate = customItemRates[l.product_id];
-    const p = calculateProductPrice(l.product, l.quantity, customRate);
+    const prod = { ...l.product, unit: l.unit || l.product.unit };
+    const p = calculateProductPrice(prod, l.quantity, customRate);
     return acc + p.totalPrice;
   }, 0));
 
@@ -591,7 +593,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
   const discountDetailsPayload = lines.map(l => {
     const disc = itemDiscounts[l.product_id] || { type: 'per_kg', value: 0 };
     const customRate = customItemRates[l.product_id];
-    const pInfo = calculateDiscountedProductPrice(l.product, l.quantity, disc, customRate);
+    const prod = { ...l.product, unit: l.unit || l.product.unit };
+    const pInfo = calculateDiscountedProductPrice(prod, l.quantity, disc, customRate);
     return {
       product_id: l.product_id,
       product_name: l.product.name,
@@ -632,10 +635,16 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
     lines.forEach((l, idx) => {
       const disc = itemDiscounts[l.product_id] || { type: 'per_kg', value: 0 };
       const customRate = customItemRates[l.product_id];
-      const p = calculateDiscountedProductPrice(l.product, l.quantity, disc, customRate);
+      const prod = { ...l.product, unit: l.unit || l.product.unit };
+      const isKg = (l.unit || l.product.unit || '').toLowerCase() === 'kg';
+      const p = calculateDiscountedProductPrice(prod, l.quantity, disc, customRate);
       msg += `${idx + 1}. *${l.product.name}*\n`;
       if (p.isSteel) {
         msg += `   ${l.quantity} nos × ${p.standardWeight} kg = *${p.totalWeight.toFixed(2)} kg* @ ₹${p.discountedRatePerKg.toFixed(2)}/kg = *₹${p.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*`;
+        if (p.totalDiscountAmount > 0) msg += ` _(Saved ₹${p.totalDiscountAmount.toFixed(2)})_`;
+        msg += `\n`;
+      } else if (isKg) {
+        msg += `   *${l.quantity} kg* @ ₹${p.discountedUnitPrice.toFixed(2)}/kg = *₹${p.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*`;
         if (p.totalDiscountAmount > 0) msg += ` _(Saved ₹${p.totalDiscountAmount.toFixed(2)})_`;
         msg += `\n`;
       } else {
@@ -1587,8 +1596,10 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                   <div className="divide-y divide-slate-100">
                     {lines.map((line, idx) => {
                       const customRate = customItemRates[line.product_id];
-                      const pricing = calculateProductPrice(line.product, line.quantity, customRate);
+                      const prodWithUnit = { ...line.product, unit: line.unit || line.product.unit };
+                      const pricing = calculateProductPrice(prodWithUnit, line.quantity, customRate);
                       const isSteel = pricing.isSteel && pricing.standardWeight > 0;
+                      const isKg = (line.unit || line.product.unit || '').toLowerCase() === 'kg';
                       const lineMode = lineUnitModes[line.product_id] || 'nos';
 
                       return (
@@ -1613,12 +1624,11 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                       onFocus={(e) => e.target.select()}
                                       onChange={(e) => {
                                         const text = e.target.value;
-                                        // Allow only numbers and at most 1 decimal place
-                                        if (text !== '' && !/^\d*(\.\d{0,1})?$/.test(text)) return;
+                                        if (text !== '' && !/^\d*(\.\d{0,2})?$/.test(text)) return;
                                         setRateInputs(prev => ({ ...prev, [line.product_id]: text }));
                                         const val = parseFloat(text);
                                         if (!isNaN(val) && val > 0) {
-                                          setCustomItemRates(prev => ({ ...prev, [line.product_id]: Math.round(val * 10) / 10 }));
+                                          setCustomItemRates(prev => ({ ...prev, [line.product_id]: round2(val) }));
                                         } else if (text === '') {
                                           setCustomItemRates(prev => {
                                             const next = { ...prev };
@@ -1637,7 +1647,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                         }
                                       }}
                                       className="w-16 text-center font-black text-xs text-amber-900 bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-amber-500 rounded px-0.5"
-                                      title="Edit Rate / kg (1 decimal place)"
+                                      title="Edit Rate / kg"
                                     />
                                     <span className="text-xs font-bold text-amber-700 ml-0.5">/ kg</span>
                                   </div>
@@ -1669,9 +1679,141 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                   <span className="text-slate-300">•</span>
                                   <span className="text-blue-700 font-medium">{line.quantity} nos × {pricing.standardWeight} kg = <strong>{pricing.totalWeight.toFixed(2)} kg</strong></span>
                                 </>
+                              ) : isKg ? (
+                                <>
+                                  <div className="inline-flex items-center bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 shadow-sm">
+                                    <span className="text-xs font-bold text-amber-800 mr-0.5">₹</span>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={
+                                        rateInputs[line.product_id] !== undefined
+                                          ? rateInputs[line.product_id]
+                                          : (customItemRates[line.product_id] !== undefined
+                                            ? customItemRates[line.product_id].toFixed(2)
+                                            : pricing.unitPrice.toFixed(2))
+                                      }
+                                      onFocus={(e) => e.target.select()}
+                                      onChange={(e) => {
+                                        const text = e.target.value;
+                                        if (text !== '' && !/^\d*(\.\d{0,2})?$/.test(text)) return;
+                                        setRateInputs(prev => ({ ...prev, [line.product_id]: text }));
+                                        const val = parseFloat(text);
+                                        if (!isNaN(val) && val > 0) {
+                                          setCustomItemRates(prev => ({ ...prev, [line.product_id]: round2(val) }));
+                                        } else if (text === '') {
+                                          setCustomItemRates(prev => {
+                                            const next = { ...prev };
+                                            delete next[line.product_id];
+                                            return next;
+                                          });
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        if (!rateInputs[line.product_id] || rateInputs[line.product_id].trim() === '') {
+                                          setRateInputs(prev => {
+                                            const next = { ...prev };
+                                            delete next[line.product_id];
+                                            return next;
+                                          });
+                                        }
+                                      }}
+                                      className="w-16 text-center font-black text-xs text-amber-900 bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-amber-500 rounded px-0.5"
+                                      title="Edit Rate / kg"
+                                    />
+                                    <span className="text-xs font-bold text-amber-700 ml-0.5">/ kg</span>
+                                  </div>
+                                  {(customItemRates[line.product_id] !== undefined || rateInputs[line.product_id] !== undefined) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRateInputs(prev => {
+                                          const next = { ...prev };
+                                          delete next[line.product_id];
+                                          return next;
+                                        });
+                                        setCustomItemRates(prev => {
+                                          const next = { ...prev };
+                                          delete next[line.product_id];
+                                          return next;
+                                        });
+                                      }}
+                                      className="text-[11px] text-amber-700 hover:text-amber-900 font-bold underline"
+                                      title="Reset to catalog rate"
+                                    >
+                                      Reset
+                                    </button>
+                                  )}
+                                  <span className="text-slate-300">•</span>
+                                  <span className="text-blue-700 font-medium"><strong>{line.quantity} kg</strong></span>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="text-slate-600 font-semibold">Total: ₹{pricing.totalPrice.toFixed(2)}</span>
+                                </>
                               ) : (
                                 <>
-                                  <span>₹{pricing.unitPrice.toFixed(2)} / {line.product.unit || 'nos'}</span>
+                                  <div className="inline-flex items-center bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 shadow-sm">
+                                    <span className="text-xs font-bold text-slate-700 mr-0.5">₹</span>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={
+                                        rateInputs[line.product_id] !== undefined
+                                          ? rateInputs[line.product_id]
+                                          : (customItemRates[line.product_id] !== undefined
+                                            ? customItemRates[line.product_id].toFixed(2)
+                                            : pricing.unitPrice.toFixed(2))
+                                      }
+                                      onFocus={(e) => e.target.select()}
+                                      onChange={(e) => {
+                                        const text = e.target.value;
+                                        if (text !== '' && !/^\d*(\.\d{0,2})?$/.test(text)) return;
+                                        setRateInputs(prev => ({ ...prev, [line.product_id]: text }));
+                                        const val = parseFloat(text);
+                                        if (!isNaN(val) && val > 0) {
+                                          setCustomItemRates(prev => ({ ...prev, [line.product_id]: round2(val) }));
+                                        } else if (text === '') {
+                                          setCustomItemRates(prev => {
+                                            const next = { ...prev };
+                                            delete next[line.product_id];
+                                            return next;
+                                          });
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        if (!rateInputs[line.product_id] || rateInputs[line.product_id].trim() === '') {
+                                          setRateInputs(prev => {
+                                            const next = { ...prev };
+                                            delete next[line.product_id];
+                                            return next;
+                                          });
+                                        }
+                                      }}
+                                      className="w-16 text-center font-black text-xs text-slate-800 bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-0.5"
+                                      title={`Edit Rate / ${line.unit || line.product.unit || 'nos'}`}
+                                    />
+                                    <span className="text-xs font-bold text-slate-600 ml-0.5">/ {line.unit || line.product.unit || 'nos'}</span>
+                                  </div>
+                                  {(customItemRates[line.product_id] !== undefined || rateInputs[line.product_id] !== undefined) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRateInputs(prev => {
+                                          const next = { ...prev };
+                                          delete next[line.product_id];
+                                          return next;
+                                        });
+                                        setCustomItemRates(prev => {
+                                          const next = { ...prev };
+                                          delete next[line.product_id];
+                                          return next;
+                                        });
+                                      }}
+                                      className="text-[11px] text-slate-500 hover:text-slate-800 font-bold underline"
+                                      title="Reset to catalog rate"
+                                    >
+                                      Reset
+                                    </button>
+                                  )}
                                   {pricing.standardWeight > 0 && (
                                     <>
                                       <span className="text-slate-300">|</span>
@@ -1685,14 +1827,22 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                           
                           <div className="flex flex-wrap items-center gap-3">
                             {isSteel && (
-                              <select
-                                value={lineMode}
-                                onChange={(e) => setLineUnitModes(prev => ({ ...prev, [line.product_id]: e.target.value as 'nos' | 'kg' }))}
-                                className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1.5 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-blue-500 cursor-pointer"
-                              >
-                                <option value="nos">📦 Items (nos)</option>
-                                <option value="kg">⚖️ Weight (kg)</option>
-                              </select>
+                              <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setLineUnitModes(prev => ({ ...prev, [line.product_id]: 'nos' }))}
+                                  className={`rounded-md px-2 py-1 font-bold transition ${lineMode === 'nos' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                  Nos
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setLineUnitModes(prev => ({ ...prev, [line.product_id]: 'kg' }))}
+                                  className={`rounded-md px-2 py-1 font-bold transition ${lineMode === 'kg' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                  Kg
+                                </button>
+                              </div>
                             )}
 
                             {isSteel && lineMode === 'kg' ? (
@@ -1735,9 +1885,11 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
 
                             <div className="w-28 text-right">
                               <p className="font-bold text-slate-900 text-lg">₹{pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              {pricing.isSteel && (
+                              {pricing.isSteel ? (
                                 <p className="text-[11px] text-slate-400">{pricing.totalWeight.toFixed(2)} kg @ ₹{pricing.ratePerKg.toFixed(2)}/kg</p>
-                              )}
+                              ) : isKg ? (
+                                <p className="text-[11px] text-slate-400">{line.quantity} kg @ ₹{pricing.unitPrice.toFixed(2)}/kg</p>
+                              ) : null}
                             </div>
                             <button onClick={() => removeLine(line.product_id)} className="text-slate-400 hover:text-red-600 transition p-2 hover:bg-red-50 rounded-lg">
                               <Trash2 size={18} />
@@ -1958,7 +2110,11 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
               {lines.map((line, idx) => {
                 const disc = itemDiscounts[line.product_id] || { type: 'per_kg', value: 0 };
                 const customRate = customItemRates[line.product_id];
-                const pInfo = calculateDiscountedProductPrice(line.product, line.quantity, disc, customRate);
+                const prodWithUnit = { ...line.product, unit: line.unit || line.product.unit };
+                const isKg = (line.unit || line.product.unit || '').toLowerCase() === 'kg';
+                const pInfo = calculateDiscountedProductPrice(prodWithUnit, line.quantity, disc, customRate);
+                const catalogInfo = calculateProductPrice(prodWithUnit, line.quantity, null);
+                const baseCatalogRate = catalogInfo.isSteel || isKg ? (catalogInfo.ratePerKg || catalogInfo.unitPrice) : catalogInfo.unitPrice;
 
                 return (
                   <div
@@ -1971,7 +2127,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                           {line.product.name}
                         </h4>
                         <p className="text-[11px] text-slate-500">
-                          {line.quantity} {line.unit || line.product.unit} {pInfo.isSteel ? `· Weight: ${pInfo.totalWeight.toFixed(2)} kg` : ''} · Catalog Rate: ₹{pInfo.unitPrice.toFixed(2)}
+                          {line.quantity} {line.unit || line.product.unit} {pInfo.isSteel || isKg ? `· Weight: ${pInfo.totalWeight.toFixed(2)} kg` : ''} · Catalog Rate: ₹{baseCatalogRate.toFixed(2)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -1995,14 +2151,12 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                         </div>
                         {customItemRates[line.product_id] !== undefined && (
                           <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
-                            Effective Rate: ₹{customItemRates[line.product_id].toFixed(2)} {pInfo.isSteel ? '/kg' : `/${line.unit || 'unit'}`}
+                            Effective Rate: ₹{customItemRates[line.product_id].toFixed(2)} {pInfo.isSteel || isKg ? '/kg' : `/${line.unit || 'unit'}`}
                           </span>
                         )}
                       </div>
 
                       {(() => {
-                        const catalogInfo = calculateProductPrice(line.product, line.quantity, null);
-                        const baseCatalogRate = catalogInfo.isSteel ? catalogInfo.ratePerKg : catalogInfo.unitPrice;
                         const currentCustomRate = customItemRates[line.product_id];
                         const diff = currentCustomRate !== undefined ? round2(currentCustomRate - baseCatalogRate) : 0;
                         return (
@@ -2012,7 +2166,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">+/-</span>
                                 <input
                                   type="number"
-                                  step="0.1"
+                                  step="0.01"
                                   value={currentCustomRate !== undefined ? diff : ''}
                                   onChange={(e) => {
                                     const val = e.target.value;
