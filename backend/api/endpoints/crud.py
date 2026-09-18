@@ -1010,12 +1010,27 @@ def split_dispatch_trip(
         raise HTTPException(status_code=400, detail="This dispatch has already been split into trips")
 
     # Update Trip 1 quantities
-    trip1_map = {item.item_id: (item.trip1_quantity, item.trip2_quantity) for item in payload.trip1_items}
+    trip1_map = {}
+    for item in payload.trip1_items:
+        iid = item.item_id or item.id
+        if iid:
+            # support UUID or string UUID comparison
+            trip1_map[str(iid)] = (
+                item.trip1_quantity if item.trip1_quantity is not None else item.quantity,
+                item.trip2_quantity
+            )
     
     trip2_items_data = []
     for d_item in dispatch.items:
-        if d_item.id in trip1_map:
-            t1_qty, t2_qty = trip1_map[d_item.id]
+        key = str(d_item.id)
+        if key in trip1_map:
+            t1_val, t2_val = trip1_map[key]
+            orig_qty = float(d_item.quantity or 0)
+            t1_qty = float(t1_val) if t1_val is not None else orig_qty
+            if t2_val is not None:
+                t2_qty = float(t2_val)
+            else:
+                t2_qty = max(0.0, orig_qty - t1_qty)
             d_item.quantity = t1_qty
             if t2_qty > 0:
                 trip2_items_data.append({

@@ -307,9 +307,11 @@ class StartVerifyingPayload(BaseModel):
     verifying_by: str
 
 class SplitTripItem(BaseModel):
-    item_id: UUID
-    trip1_quantity: float
-    trip2_quantity: float
+    item_id: Optional[UUID] = None
+    id: Optional[UUID] = None
+    trip1_quantity: Optional[float] = None
+    quantity: Optional[float] = None
+    trip2_quantity: Optional[float] = None
 
 class SplitTripPayload(BaseModel):
     trip1_items: List[SplitTripItem]

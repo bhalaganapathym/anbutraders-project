@@ -38,11 +38,11 @@ export default function Modal({ open, onClose, title, children, size = 'md', dis
 
   return (
     <div 
-      className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-2 sm:p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className={`card animate-fade-in my-auto w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col p-6`}
+        className={`card animate-fade-in my-auto w-full ${sizeClasses[size]} max-h-[92vh] flex flex-col p-3.5 sm:p-6`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between shrink-0">

@@ -475,14 +475,19 @@ export default function DispatchDashboard({
   // Split Trip Modal State (For Vehicle Capacity limits)
   const [splitModalOpen, setSplitModalOpen] = useState(false);
   const [splitTrip1Quantities, setSplitTrip1Quantities] = useState<Record<string, number>>({});
+  const [splitTrip1RawInputs, setSplitTrip1RawInputs] = useState<Record<string, string>>({});
   const [splittingTrip, setSplittingTrip] = useState(false);
 
   const openSplitTripModal = () => {
     const init: Record<string, number> = {};
+    const initRaw: Record<string, string> = {};
     detailItems.forEach(item => {
-      init[item.id] = Number(item.quantity) || 0;
+      const q = Number(item.quantity) || 0;
+      init[item.id] = q;
+      initRaw[item.id] = String(q);
     });
     setSplitTrip1Quantities(init);
+    setSplitTrip1RawInputs(initRaw);
     setSplitModalOpen(true);
   };
 
@@ -507,10 +512,18 @@ export default function DispatchDashboard({
 
     setSplittingTrip(true);
     try {
-      const trip1Items = detailItems.map(item => ({
-        id: item.id,
-        quantity: splitTrip1Quantities[item.id] ?? Number(item.quantity)
-      }));
+      const trip1Items = detailItems.map(item => {
+        const totalQ = Number(item.quantity) || 0;
+        const q1 = splitTrip1Quantities[item.id] ?? totalQ;
+        const q2 = Math.max(0, round2(totalQ - q1));
+        return {
+          item_id: item.id,
+          id: item.id,
+          trip1_quantity: q1,
+          quantity: q1,
+          trip2_quantity: q2
+        };
+      });
 
       await api.post(`/dispatches/${detail.id}/split-trip`, {
         trip1_items: trip1Items
@@ -1933,16 +1946,30 @@ export default function DispatchDashboard({
                           Trip 1 Quantity ({item.unit || 'units'})
                         </label>
                         <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          max={totalQty}
-                          value={trip1Qty}
+                          type="text"
+                          inputMode="decimal"
+                          value={splitTrip1RawInputs[item.id] ?? (trip1Qty > 0 ? String(trip1Qty) : '')}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            setSplitTrip1Quantities(prev => ({ ...prev, [item.id]: val }));
+                            const text = e.target.value;
+                            if (text !== '' && !/^\d*(\.\d{0,3})?$/.test(text)) return;
+                            setSplitTrip1RawInputs(prev => ({ ...prev, [item.id]: text }));
+                            const val = parseFloat(text);
+                            if (!isNaN(val)) {
+                              setSplitTrip1Quantities(prev => ({ ...prev, [item.id]: val }));
+                            } else if (text === '') {
+                              setSplitTrip1Quantities(prev => ({ ...prev, [item.id]: 0 }));
+                            }
+                          }}
+                          onBlur={() => {
+                            const raw = splitTrip1RawInputs[item.id];
+                            if (raw === '' || raw === undefined) {
+                              setSplitTrip1RawInputs(prev => ({ ...prev, [item.id]: String(totalQty) }));
+                              setSplitTrip1Quantities(prev => ({ ...prev, [item.id]: totalQty }));
+                            }
                           }}
                           className="input font-bold text-indigo-700 dark:text-indigo-300"
+                          placeholder={`Max ${totalQty}`}
                         />
                       </div>
 

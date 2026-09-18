@@ -1009,7 +1009,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
       )}
 
       {/* Generate / View Bill Modal */}
-      <Modal open={!!selectedDispatch} onClose={() => setSelectedDispatch(null)} title="Generate Bill / Estimate" size="lg">
+      <Modal open={!!selectedDispatch} onClose={() => setSelectedDispatch(null)} title="Generate Bill / Estimate" size="xl">
         {selectedDispatch && (
           <div className="space-y-6">
             
@@ -1182,37 +1182,40 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                 </div>
               </div>
 
-              {/* Mobile View (< 768px): Bold, Non-Scrollable Cards */}
-              <div className="md:hidden space-y-3">
+              {/* Mobile View (< 768px): Spacious, Thumb-Friendly POS Cards with Prominent Rate Config */}
+              <div className="md:hidden space-y-4">
                 {selectedDispatch.items?.map((item, idx) => {
                   const itemKey = item.product_id || item.id;
                   const customRate = customItemRates[item.product_id] ?? customItemRates[item.id];
                   const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customRate);
                   const isCustom = customItemRates[item.product_id] !== undefined || customItemRates[item.id] !== undefined;
+                  const defaultRate = info.isSteel ? (info.defaultRatePerKg || info.ratePerKg || 0) : (info.defaultRatePerKg || Number(info.rateText) || 0);
+                  const effectiveCurrentRate = isCustom && customRate ? customRate : (info.isSteel ? info.ratePerKg : defaultRate);
                   const itemRateInput = rateInputs[itemKey] !== undefined 
                     ? rateInputs[itemKey] 
                     : (rateInputs[item.id] !== undefined
                       ? rateInputs[item.id]
-                      : (isCustom && customRate ? customRate.toFixed(1) : (info.ratePerKg || 0).toFixed(1)));
+                      : (isCustom && customRate ? customRate.toFixed(1) : (effectiveCurrentRate ? effectiveCurrentRate.toFixed(1) : '')));
 
                   return (
                     <div 
                       key={item.id || idx} 
-                      className="rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3"
+                      className="rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3.5"
                     >
+                      {/* Card Header: Product Name + Total Price */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
                               Item #{idx + 1}
                             </span>
                             {info.isSteel && (
-                              <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800">
-                                Steel Rate: ₹{info.rateText}/kg
+                              <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-800">
+                                Steel / TMT
                               </span>
                             )}
                             {isDiscountApproved && (item.discount_amount || 0) > 0 && (
-                              <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+                              <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
                                 {item.discount_per_kg ? `-₹${item.discount_per_kg.toFixed(2)}/kg` : `-₹${item.discount_amount?.toFixed(2)}`}
                               </span>
                             )}
@@ -1221,110 +1224,160 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                             {item.product_name}
                           </h4>
                         </div>
-                        <div className="text-right shrink-0">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Price</span>
-                          <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                        <div className="text-right shrink-0 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-xl">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">Item Total</span>
+                          <p className="text-xl font-black text-emerald-700 dark:text-emerald-300">
                             ₹{info.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
+                      {/* Quantity & Weight Stats */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
                           <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
                             Quantity
                           </span>
-                          <span className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
+                          <span className="text-base font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
                             {item.quantity} <span className="text-xs font-bold text-slate-500">{item.unit || 'NOS'}</span>
                           </span>
                         </div>
-                        <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
+
+                        <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
                           <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
-                            Total Weight
+                            {info.isSteel ? 'Total Weight' : 'Unit Type'}
                           </span>
-                          <span className={`text-sm font-black mt-0.5 block ${info.isSteel ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}`}>
-                            {info.isSteel ? info.weightText : '—'}
+                          <span className={`text-base font-black mt-0.5 block ${info.isSteel ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-700 dark:text-slate-300'}`}>
+                            {info.isSteel ? info.weightText : (item.unit || 'NOS').toUpperCase()}
                           </span>
-                        </div>
-                        <div className="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-700">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
-                              {info.isSteel ? 'Rate / kg' : 'Rate / Unit'}
-                            </span>
-                            {info.isSteel && isCustom && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updatedRates = { ...customItemRates };
-                                  delete updatedRates[itemKey];
-                                  delete updatedRates[item.id];
-                                  delete updatedRates[item.product_id];
-                                  setRateInputs(prev => {
-                                    const next = { ...prev };
-                                    delete next[itemKey];
-                                    delete next[item.id];
-                                    delete next[item.product_id];
-                                    return next;
-                                  });
-                                  setCustomItemRates(updatedRates);
-                                  autoSaveCustomRates(updatedRates);
-                                }}
-                                className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5"
-                                title="Reset to default rate"
-                              >
-                                <RotateCcw size={10} /> Reset
-                              </button>
-                            )}
-                          </div>
-                          {info.isSteel ? (
-                            <div className="relative mt-1 flex items-center">
-                              <span className="text-xs font-bold text-amber-700 dark:text-amber-400 mr-1">₹</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={itemRateInput}
-                                onFocus={(e) => e.target.select()}
-                                onChange={(e) => {
-                                  const text = e.target.value;
-                                  // Allow only numbers and at most 1 decimal place
-                                  if (text !== '' && !/^\d*(\.\d{0,1})?$/.test(text)) return;
-                                  setRateInputs(prev => ({ ...prev, [itemKey]: text, [item.id]: text }));
-                                  const val = parseFloat(text);
-                                  if (!isNaN(val) && val > 0) {
-                                    const rounded = Math.round(val * 10) / 10;
-                                    setCustomItemRates(prev => ({ ...prev, [itemKey]: rounded, [item.id]: rounded }));
-                                  } else if (text === '') {
-                                    setCustomItemRates(prev => {
-                                      const next = { ...prev };
-                                      delete next[itemKey];
-                                      delete next[item.id];
-                                      delete next[item.product_id];
-                                      return next;
-                                    });
-                                  }
-                                }}
-                                onBlur={() => {
-                                  if (!rateInputs[itemKey] || rateInputs[itemKey].trim() === '') {
-                                    setRateInputs(prev => {
-                                      const next = { ...prev };
-                                      delete next[itemKey];
-                                      delete next[item.id];
-                                      delete next[item.product_id];
-                                      return next;
-                                    });
-                                  }
-                                  autoSaveCustomRates();
-                                }}
-                                className="w-full text-xs font-black text-amber-900 dark:text-amber-200 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                title="Edit rate per kg (1 decimal place)"
-                              />
-                              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 ml-1">/kg</span>
-                            </div>
-                          ) : (
-                            <span className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
-                              ₹{info.rateText} <span className="text-[10px] font-bold text-slate-500">/{info.perUnit}</span>
+                          {info.isSteel && info.recordedWt && (
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                              ⚖️ Weighbridge Verified
                             </span>
                           )}
+                        </div>
+                      </div>
+
+                      {/* DEDICATED RATE CONFIGURATION SECTION (PROMINENT, LARGE, TOUCH-FRIENDLY) */}
+                      <div className="p-3.5 bg-gradient-to-br from-amber-50/90 to-orange-50/60 dark:from-slate-800 dark:to-amber-950/30 rounded-xl border-2 border-amber-300 dark:border-amber-600/80 space-y-2.5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-black uppercase text-amber-900 dark:text-amber-200 tracking-wider">
+                              🏷️ Configure Rate
+                            </span>
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                              {info.isSteel ? '₹ / KG' : `₹ / ${info.perUnit}`}
+                            </span>
+                          </div>
+                          {isCustom && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedRates = { ...customItemRates };
+                                delete updatedRates[itemKey];
+                                delete updatedRates[item.id];
+                                delete updatedRates[item.product_id];
+                                setRateInputs(prev => {
+                                  const next = { ...prev };
+                                  delete next[itemKey];
+                                  delete next[item.id];
+                                  delete next[item.product_id];
+                                  return next;
+                                });
+                                setCustomItemRates(updatedRates);
+                                autoSaveCustomRates(updatedRates);
+                              }}
+                              className="text-xs font-black text-amber-800 dark:text-amber-300 bg-white dark:bg-slate-850 px-2.5 py-1 rounded-lg border border-amber-300 dark:border-amber-700 hover:bg-amber-100 flex items-center gap-1 shadow-xs transition active:scale-95"
+                              title="Reset to default rate"
+                            >
+                              <RotateCcw size={12} /> Reset
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Large Touch-Friendly Rate Input */}
+                        <div className="flex items-stretch rounded-xl overflow-hidden border-2 border-amber-400 dark:border-amber-500 shadow-inner bg-white dark:bg-slate-900">
+                          <div className="bg-amber-100 dark:bg-amber-950 px-3.5 flex items-center justify-center font-black text-amber-800 dark:text-amber-200 text-lg border-r border-amber-300 dark:border-amber-700">
+                            ₹
+                          </div>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={itemRateInput}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const text = e.target.value;
+                              if (text !== '' && !/^\d*(\.\d{0,2})?$/.test(text)) return;
+                              setRateInputs(prev => ({ ...prev, [itemKey]: text, [item.id]: text }));
+                              const val = parseFloat(text);
+                              if (!isNaN(val) && val > 0) {
+                                const rounded = Math.round(val * 100) / 100;
+                                setCustomItemRates(prev => ({ ...prev, [itemKey]: rounded, [item.id]: rounded }));
+                              } else if (text === '') {
+                                setCustomItemRates(prev => {
+                                  const next = { ...prev };
+                                  delete next[itemKey];
+                                  delete next[item.id];
+                                  delete next[item.product_id];
+                                  return next;
+                                });
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!rateInputs[itemKey] || rateInputs[itemKey].trim() === '') {
+                                setRateInputs(prev => {
+                                  const next = { ...prev };
+                                  delete next[itemKey];
+                                  delete next[item.id];
+                                  delete next[item.product_id];
+                                  return next;
+                                });
+                              }
+                              autoSaveCustomRates();
+                            }}
+                            className="flex-1 text-center font-black text-2xl py-2.5 text-amber-950 dark:text-amber-100 bg-transparent focus:outline-none focus:ring-0"
+                            placeholder="0.00"
+                          />
+                          <div className="bg-amber-100 dark:bg-amber-950 px-3 flex items-center justify-center font-black text-amber-800 dark:text-amber-200 text-xs border-l border-amber-300 dark:border-amber-700">
+                            /{info.perUnit}
+                          </div>
+                        </div>
+
+                        {/* Quick Touch Adjustment Steppers (-1.0, -0.5, +0.5, +1.0) */}
+                        <div className="flex items-center gap-1.5 pt-0.5">
+                          <span className="text-[10px] font-extrabold uppercase text-amber-800 dark:text-amber-300">Quick:</span>
+                          {[-1.0, -0.5, 0.5, 1.0].map((step) => {
+                            const currentNum = parseFloat(itemRateInput) || effectiveCurrentRate || 0;
+                            return (
+                              <button
+                                key={step}
+                                type="button"
+                                onClick={() => {
+                                  const nextVal = Math.max(0.1, Math.round((currentNum + step) * 100) / 100);
+                                  const formatted = nextVal.toFixed(1);
+                                  setRateInputs(prev => ({ ...prev, [itemKey]: formatted, [item.id]: formatted }));
+                                  const nextRates = { ...customItemRates, [itemKey]: nextVal, [item.id]: nextVal };
+                                  setCustomItemRates(nextRates);
+                                  autoSaveCustomRates(nextRates);
+                                }}
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-black border transition active:scale-95 shadow-xs ${
+                                  step < 0 
+                                    ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 hover:bg-rose-100'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                                }`}
+                              >
+                                {step > 0 ? `+₹${step}` : `-₹${Math.abs(step)}`}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Real-time Calculation Summary */}
+                        <div className="text-[11px] font-bold text-slate-600 dark:text-slate-400 bg-white/70 dark:bg-slate-900/70 p-2 rounded-lg border border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between">
+                          <span>Calculation:</span>
+                          <span className="font-mono text-amber-900 dark:text-amber-200">
+                            ₹{(parseFloat(itemRateInput) || effectiveCurrentRate || 0).toFixed(2)} × {info.isSteel ? `${info.totalWeight.toFixed(2)} kg` : `${item.quantity} ${item.unit || 'NOS'}`} = ₹{info.lineTotal.toFixed(2)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1332,15 +1385,15 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                 })}
               </div>
 
-              {/* Desktop / Tablet View (>= 768px): High-Contrast, Clean 5-Column Table */}
+              {/* Desktop / Tablet View (>= 768px): High-Contrast, Clean 5-Column Table with Full Rate Editing */}
               <div className="hidden md:block border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700">
                     <tr>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">Item Name</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-center">Nos / Quantity</th>
-                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-center">Total Weight (kg)</th>
-                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Rate</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-center">Total Weight</th>
+                      <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Configured Rate</th>
                       <th className="px-5 py-3.5 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-right">Total Price</th>
                     </tr>
                   </thead>
@@ -1350,11 +1403,13 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                       const customRate = customItemRates[item.product_id] ?? customItemRates[item.id];
                       const info = getItemBillingInfo(item, selectedDispatch, products, isDiscountApproved, customRate);
                       const isCustom = customItemRates[item.product_id] !== undefined || customItemRates[item.id] !== undefined;
+                      const defaultRate = info.isSteel ? (info.defaultRatePerKg || info.ratePerKg || 0) : (info.defaultRatePerKg || Number(info.rateText) || 0);
+                      const effectiveCurrentRate = isCustom && customRate ? customRate : (info.isSteel ? info.ratePerKg : defaultRate);
                       const itemRateInput = rateInputs[itemKey] !== undefined 
                         ? rateInputs[itemKey] 
                         : (rateInputs[item.id] !== undefined
                           ? rateInputs[item.id]
-                          : (isCustom && customRate ? customRate.toFixed(1) : (info.ratePerKg || 0).toFixed(1)));
+                          : (isCustom && customRate ? customRate.toFixed(1) : (effectiveCurrentRate ? effectiveCurrentRate.toFixed(1) : '')));
 
                       return (
                         <tr key={item.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -1373,61 +1428,39 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                             <span className={info.isSteel ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}>
                               {info.isSteel ? info.weightText : '—'}
                             </span>
+                            {info.isSteel && info.recordedWt && (
+                              <div className="text-[10px] font-bold text-emerald-600">⚖️ Verified</div>
+                            )}
                           </td>
                           <td className="px-5 py-4 text-right font-bold text-slate-900 dark:text-slate-100 text-sm">
-                            {info.isSteel ? (
-                              <div className="inline-flex flex-col items-end gap-1">
-                                <div className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 rounded-lg px-2 py-1 shadow-sm">
-                                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400">₹</span>
-                                  <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={itemRateInput}
-                                    onFocus={(e) => e.target.select()}
-                                    onChange={(e) => {
-                                      const text = e.target.value;
-                                      // Allow only numbers and at most 1 decimal place
-                                      if (text !== '' && !/^\d*(\.\d{0,1})?$/.test(text)) return;
-                                      setRateInputs(prev => ({ ...prev, [itemKey]: text, [item.id]: text }));
-                                      const val = parseFloat(text);
-                                      if (!isNaN(val) && val > 0) {
-                                        const rounded = Math.round(val * 10) / 10;
-                                        setCustomItemRates(prev => ({ ...prev, [itemKey]: rounded, [item.id]: rounded }));
-                                      } else if (text === '') {
-                                        setCustomItemRates(prev => {
-                                          const next = { ...prev };
-                                          delete next[itemKey];
-                                          delete next[item.id];
-                                          delete next[item.product_id];
-                                          return next;
-                                        });
-                                      }
-                                    }}
-                                    onBlur={() => {
-                                      if (!rateInputs[itemKey] || rateInputs[itemKey].trim() === '') {
-                                        setRateInputs(prev => {
-                                          const next = { ...prev };
-                                          delete next[itemKey];
-                                          delete next[item.id];
-                                          delete next[item.product_id];
-                                          return next;
-                                        });
-                                      }
-                                      autoSaveCustomRates();
-                                    }}
-                                    className="w-20 text-right text-xs font-black text-amber-900 dark:text-amber-200 bg-transparent focus:outline-none focus:ring-0"
-                                    title="Edit rate per kg (1 decimal place)"
-                                  />
-                                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">/kg</span>
-                                </div>
-                                {isCustom && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const updatedRates = { ...customItemRates };
-                                      delete updatedRates[itemKey];
-                                      delete updatedRates[item.id];
-                                      delete updatedRates[item.product_id];
+                            <div className="inline-flex flex-col items-end gap-1">
+                              <div className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 rounded-lg px-2 py-1 shadow-sm">
+                                <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400">₹</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={itemRateInput}
+                                  onFocus={(e) => e.target.select()}
+                                  onChange={(e) => {
+                                    const text = e.target.value;
+                                    if (text !== '' && !/^\d*(\.\d{0,2})?$/.test(text)) return;
+                                    setRateInputs(prev => ({ ...prev, [itemKey]: text, [item.id]: text }));
+                                    const val = parseFloat(text);
+                                    if (!isNaN(val) && val > 0) {
+                                      const rounded = Math.round(val * 100) / 100;
+                                      setCustomItemRates(prev => ({ ...prev, [itemKey]: rounded, [item.id]: rounded }));
+                                    } else if (text === '') {
+                                      setCustomItemRates(prev => {
+                                        const next = { ...prev };
+                                        delete next[itemKey];
+                                        delete next[item.id];
+                                        delete next[item.product_id];
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (!rateInputs[itemKey] || rateInputs[itemKey].trim() === '') {
                                       setRateInputs(prev => {
                                         const next = { ...prev };
                                         delete next[itemKey];
@@ -1435,21 +1468,39 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                                         delete next[item.product_id];
                                         return next;
                                       });
-                                      setCustomItemRates(updatedRates);
-                                      autoSaveCustomRates(updatedRates);
-                                    }}
-                                    className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5"
-                                    title="Reset to default rate"
-                                  >
-                                    <RotateCcw size={10} /> Reset
-                                  </button>
-                                )}
+                                    }
+                                    autoSaveCustomRates();
+                                  }}
+                                  className="w-24 text-right text-xs font-black text-amber-900 dark:text-amber-200 bg-transparent focus:outline-none focus:ring-0"
+                                  title={`Edit rate per ${info.perUnit}`}
+                                />
+                                <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">/{info.perUnit}</span>
                               </div>
-                            ) : (
-                              <>
-                                ₹{info.rateText} <span className="text-xs font-semibold text-slate-500">/{info.perUnit}</span>
-                              </>
-                            )}
+                              {isCustom && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updatedRates = { ...customItemRates };
+                                    delete updatedRates[itemKey];
+                                    delete updatedRates[item.id];
+                                    delete updatedRates[item.product_id];
+                                    setRateInputs(prev => {
+                                      const next = { ...prev };
+                                      delete next[itemKey];
+                                      delete next[item.id];
+                                      delete next[item.product_id];
+                                      return next;
+                                    });
+                                    setCustomItemRates(updatedRates);
+                                    autoSaveCustomRates(updatedRates);
+                                  }}
+                                  className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-0.5"
+                                  title="Reset to default rate"
+                                >
+                                  <RotateCcw size={10} /> Reset
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td className="px-5 py-4 text-right font-black text-emerald-600 dark:text-emerald-400 text-base">
                             ₹{info.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1464,13 +1515,13 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
             {/* Payment Method Selector */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                <CreditCard size={16} /> Payment Method *
+              <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
+                <CreditCard size={18} className="text-blue-600 dark:text-blue-400" /> Payment Method *
               </label>
               <select
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
-                className="input font-semibold"
+                className="input h-12 text-base font-bold bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 rounded-xl px-3 w-full shadow-xs"
               >
                 {paymentMethods.map(pm => (
                   <option key={pm} value={pm}>{pm.toUpperCase()}</option>
@@ -1494,7 +1545,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
             {/* Payment Details / Amount Paid & To Collect Breakdown */}
             {/* Optional Charges: Unloading & Delivery Charge */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-850 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-850 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-800">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Unloading Charge (₹) <span className="text-slate-400 font-normal">(Optional)</span>
@@ -1506,7 +1557,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   placeholder="e.g. 150.00"
                   min="0"
                   step="any"
-                  className="input text-xs font-semibold"
+                  className="input h-11 text-sm font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3"
                 />
               </div>
               <div>
@@ -1520,19 +1571,19 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                   placeholder="e.g. 300.00"
                   min="0"
                   step="any"
-                  className="input text-xs font-semibold"
+                  className="input h-11 text-sm font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3"
                 />
               </div>
             </div>
 
             {/* Customer Prior Pending Dues & Payment Section */}
-            <div className="bg-orange-50/70 dark:bg-slate-900 border border-orange-200/90 dark:border-orange-950 p-4 rounded-xl space-y-3">
+            <div className="bg-orange-50/70 dark:bg-slate-900 border-2 border-orange-200 dark:border-orange-950 p-4 rounded-xl space-y-3 shadow-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-orange-900 dark:text-orange-300 flex items-center gap-1.5">
-                  <Clock size={14} className="text-orange-600" />
+                <span className="text-xs font-black uppercase tracking-wider text-orange-900 dark:text-orange-300 flex items-center gap-1.5">
+                  <Clock size={15} className="text-orange-600" />
                   Customer Prior Pending Dues
                 </span>
-                <span className="text-xs font-black px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-950/80 text-orange-900 dark:text-orange-200 border border-orange-300 dark:border-orange-800">
+                <span className="text-xs font-black px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-900 dark:text-orange-200 border border-orange-300 dark:border-orange-800">
                   Old Outstanding: ₹{customerPriorDues.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
@@ -1543,7 +1594,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                     Prior Dues Paid in this Bill (₹) <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <div className="relative">
-                    <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="number"
                       value={priorPendingPaid}
@@ -1551,22 +1602,22 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                       placeholder="0.00"
                       min="0"
                       step="any"
-                      className="input pl-8 font-bold text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800"
+                      className="input h-12 pl-9 text-base font-black text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl"
                     />
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">Amount paying toward old pending dues</p>
                 </div>
 
-                <div className="flex flex-col justify-center bg-white/80 dark:bg-slate-800/80 p-3 rounded-xl border border-orange-100 dark:border-slate-700 text-xs space-y-1.5">
+                <div className="flex flex-col justify-center bg-white dark:bg-slate-800/80 p-3.5 rounded-xl border border-orange-200 dark:border-slate-700 text-xs space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Remaining Prior Dues:</span>
-                    <strong className="text-orange-700 dark:text-orange-400 font-bold">
+                    <span className="text-slate-500 font-medium">Remaining Prior Dues:</span>
+                    <strong className="text-orange-700 dark:text-orange-400 font-black text-sm">
                       ₹{remainingPriorDues.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </strong>
                   </div>
-                  <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-700">
+                  <div className="flex justify-between items-center pt-1.5 border-t border-slate-100 dark:border-slate-700">
                     <span className="text-slate-700 dark:text-slate-200 font-extrabold">Total Collected in Hand:</span>
-                    <strong className="text-emerald-700 dark:text-emerald-400 font-black text-sm">
+                    <strong className="text-emerald-700 dark:text-emerald-400 font-black text-base">
                       ₹{totalReceivedInTransaction.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </strong>
                   </div>
@@ -1575,24 +1626,24 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
             </div>
 
             {/* Payment & Collection Breakdown Box */}
-            <div className="bg-amber-50/50 dark:bg-slate-900 border border-amber-200/80 dark:border-slate-700 p-4 rounded-xl space-y-3">
+            <div className="bg-amber-50/60 dark:bg-slate-900 border-2 border-amber-200 dark:border-slate-700 p-4 rounded-xl space-y-3 shadow-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <IndianRupee size={14} className="text-amber-600" />
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <IndianRupee size={15} className="text-amber-600" />
                   Payment & Collection Breakdown
                 </span>
-                <span className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                <span className="text-xs font-black px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
                   Total Bill: ₹{effectiveTotalBill.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500"></span> Amount Paid / Advance Received (₹)
+                  <label className="block text-xs font-black text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span> Amount Paid / Advance Received (₹)
                   </label>
                   <div className="relative">
-                    <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
                     <input
                       type="number"
                       value={paidAmount}
@@ -1600,18 +1651,18 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                       placeholder="0.00"
                       min="0"
                       step="any"
-                      className="input pl-8 font-bold text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800"
+                      className="input h-12 pl-9 text-lg font-black text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-800 border-2 border-emerald-400 dark:border-emerald-600 rounded-xl"
                     />
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">Amount received by cashier / advance</p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-rose-500"></span> Amount to Collect on Site / Balance (₹)
+                  <label className="block text-xs font-black text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-rose-500"></span> Amount to Collect on Site / Balance (₹)
                   </label>
                   <div className="relative">
-                    <IndianRupee size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <IndianRupee size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-600" />
                     <input
                       type="number"
                       value={toCollectAmount}
@@ -1619,7 +1670,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                       placeholder="0.00"
                       min="0"
                       step="any"
-                      className="input pl-8 font-bold text-rose-700 dark:text-rose-400 bg-white dark:bg-slate-800"
+                      className="input h-12 pl-9 text-lg font-black text-rose-700 dark:text-rose-400 bg-white dark:bg-slate-800 border-2 border-rose-400 dark:border-rose-600 rounded-xl"
                     />
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">Amount driver must collect upon delivery</p>
@@ -1742,10 +1793,10 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
             </div>
 
             {/* Mobile Sticky Bottom Bar for fast billing */}
-            <div className="sm:hidden sticky bottom-0 -mx-4 -mb-4 p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl flex items-center justify-between gap-2 z-20">
+            <div className="sm:hidden sticky bottom-0 -mx-3.5 -mb-3.5 p-3.5 bg-white dark:bg-slate-900 border-t-2 border-slate-200 dark:border-slate-800 shadow-2xl flex items-center justify-between gap-2 z-20">
               <div>
                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block uppercase">Total Bill</span>
-                <span className="text-lg font-black text-blue-600 dark:text-blue-400">₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span className="text-xl font-black text-blue-600 dark:text-blue-400">₹{grandTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
