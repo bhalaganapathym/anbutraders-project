@@ -53,12 +53,26 @@ export function getItemBillingInfo(
   // Steel / Weighed product detection
   const cat = (prod?.category || '').toUpperCase();
   const name = (item.product_name || '').toUpperCase();
+  const brand = (prod?.brand || '').toUpperCase();
+
+  const isAac = prod?.is_aac_block === true ||
+                cat.includes('AAC') ||
+                name.includes('AAC') ||
+                brand.includes('RENACON') ||
+                brand.includes('AEROCON') ||
+                brand.includes('CUBECRETE') ||
+                name.includes('RENACON') ||
+                name.includes('AEROCON') ||
+                name.includes('CUBECRETE') ||
+                (cat.includes('BLOCK') && !cat.includes('STEEL'));
+
   const isSteel =
-    cat.includes('STEEL') ||
-    cat.includes('TMT') ||
-    name.includes('STEEL') ||
-    name.includes('TMT') ||
-    (stdWt > 0 && !prod?.is_aac_block && cat !== 'CEMENT');
+    !isAac &&
+    (cat.includes('STEEL') ||
+      cat.includes('TMT') ||
+      name.includes('STEEL') ||
+      name.includes('TMT') ||
+      (stdWt > 0 && cat !== 'CEMENT'));
 
   if (isSteel) {
     // Total weight: use verified weighbridge recorded weight if available, otherwise nominal (qty * stdWt)
@@ -92,6 +106,7 @@ export function getItemBillingInfo(
 
     return {
       isSteel: true,
+      isAac: false,
       qty,
       unit: item.unit || 'NOS',
       stdWt,
@@ -107,9 +122,17 @@ export function getItemBillingInfo(
     };
   }
 
-  // Non-steel product (Nails, Binding Wire, Cement, AAC, Paste, Liquid, etc.)
-  const defaultUnitPrice = item.original_price ?? item.price ?? 0;
-  let unitPrice = isDiscountApproved ? (item.price || 0) : defaultUnitPrice;
+  // Non-steel product (AAC blocks, Nails, Binding Wire, Cement, Paste, Liquid, etc.)
+  let defaultUnitPrice = item.original_price ?? item.price ?? (prod?.price ? Number(prod.price) : 0);
+  // Guard against old corrupted dispatch items where unitPrice was multiplied by standard weight for AAC block
+  if (isAac && stdWt > 0 && prod?.price && defaultUnitPrice > Number(prod.price) * 2 && Math.abs(defaultUnitPrice - round2(Number(prod.price) * stdWt)) < 1) {
+    defaultUnitPrice = Number(prod.price);
+  }
+  let unitPrice = isDiscountApproved ? (item.price || defaultUnitPrice) : defaultUnitPrice;
+  if (isAac && stdWt > 0 && prod?.price && unitPrice > Number(prod.price) * 2 && Math.abs(unitPrice - round2(Number(prod.price) * stdWt)) < 1) {
+    unitPrice = Number(prod.price);
+  }
+
   if (customRate !== undefined && customRate !== null && Number(customRate) > 0) {
     unitPrice = round2(Number(customRate));
   } else if (isDiscountApproved && item.discount_per_kg && Number(item.discount_per_kg) > 0 && isKg) {
@@ -118,18 +141,20 @@ export function getItemBillingInfo(
     unitPrice = round2(Math.max(0, defaultUnitPrice - (Number(item.discount_amount) / qty)));
   }
   const lineTotal = round2(unitPrice * qty);
+  const totalWeight = isKg ? round2(qty) : (stdWt > 0 ? round2(qty * stdWt) : 0);
 
   return {
     isSteel: false,
+    isAac,
     qty,
-    unit: item.unit || 'NOS',
-    stdWt: isKg ? 1 : 0,
-    totalWeight: isKg ? round2(qty) : 0,
-    weightText: isKg ? `${qty.toFixed(2)} kg` : '—',
-    ratePerKg: isKg ? unitPrice : 0,
+    unit: item.unit || prod?.unit || 'NOS',
+    stdWt: isKg ? 1 : stdWt,
+    totalWeight,
+    weightText: totalWeight > 0 ? `${totalWeight.toFixed(2)} kg` : '—',
+    ratePerKg: isKg ? unitPrice : (stdWt > 0 ? round2(unitPrice / stdWt) : 0),
     defaultRatePerKg: defaultUnitPrice,
     rateText: Number(unitPrice).toFixed(2),
-    perUnit: (item.unit || 'NOS').toUpperCase(),
+    perUnit: (item.unit || prod?.unit || 'NOS').toUpperCase(),
     lineTotal,
     totalPrice: lineTotal,
     recordedWt: undefined
@@ -1252,10 +1277,10 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
 
                         <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
                           <span className="text-[10px] font-extrabold uppercase text-slate-500 dark:text-slate-400 block tracking-wide">
-                            {info.isSteel ? 'Total Weight' : 'Unit Type'}
+                            {info.totalWeight > 0 ? 'Total Weight' : 'Unit Type'}
                           </span>
-                          <span className={`text-base font-black mt-0.5 block ${info.isSteel ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-700 dark:text-slate-300'}`}>
-                            {info.isSteel ? info.weightText : (item.unit || 'NOS').toUpperCase()}
+                          <span className={`text-base font-black mt-0.5 block ${info.totalWeight > 0 ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-700 dark:text-slate-300'}`}>
+                            {info.totalWeight > 0 ? info.weightText : (item.unit || 'NOS').toUpperCase()}
                           </span>
                           {info.isSteel && info.recordedWt && (
                             <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 block mt-0.5">
@@ -1432,8 +1457,8 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                             {item.quantity} <span className="font-bold text-xs text-slate-500">{item.unit || 'NOS'}</span>
                           </td>
                           <td className="px-5 py-4 text-center font-bold text-sm">
-                            <span className={info.isSteel ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}>
-                              {info.isSteel ? info.weightText : '—'}
+                            <span className={info.totalWeight > 0 ? 'text-blue-700 dark:text-blue-400 font-extrabold' : 'text-slate-400'}>
+                              {info.totalWeight > 0 ? info.weightText : '—'}
                             </span>
                             {info.isSteel && info.recordedWt && (
                               <div className="text-[10px] font-bold text-emerald-600">⚖️ Verified</div>
@@ -1888,7 +1913,7 @@ export default function Billing({ onNavigate }: { onNavigate?: (view: string) =>
                           <td className="border border-black p-1.5 text-center font-medium">{idx + 1}</td>
                           <td className="border border-black p-1.5 font-bold uppercase">{it.product_name}</td>
                           <td className="border border-black p-1.5 text-center font-semibold">{it.quantity} {it.unit || 'NOS'}</td>
-                          <td className="border border-black p-1.5 text-center font-bold">{info.isSteel ? info.weightText : '—'}</td>
+                          <td className="border border-black p-1.5 text-center font-bold">{info.totalWeight > 0 ? info.weightText : '—'}</td>
                           <td className="border border-black p-1.5 text-right font-medium">{info.rateText}</td>
                           <td className="border border-black p-1.5 text-center uppercase font-medium">{info.perUnit}</td>
                           <td className="border border-black p-1.5 text-right font-black">{info.lineTotal.toFixed(2)}</td>

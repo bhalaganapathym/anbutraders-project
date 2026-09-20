@@ -1,5 +1,6 @@
 export interface ProductPriceInfo {
   isSteel: boolean;
+  isAacBlock: boolean;
   ratePerKg: number;
   unitPrice: number;
   standardWeight: number;
@@ -10,6 +11,36 @@ export interface ProductPriceInfo {
   billingPerUnit: string;
   billingWeightText: string;
   displayBreakdown: string;
+}
+
+/**
+ * Checks if a product is an AAC (Autoclaved Aerated Concrete) block.
+ * AAC blocks are priced per piece/block, NOT per kg, even though they have standard weights.
+ */
+export function isAacBlockProduct(
+  product: {
+    category?: string | null;
+    name?: string | null;
+    brand?: string | null;
+    is_aac_block?: boolean | null;
+  } | null | undefined
+): boolean {
+  if (!product) return false;
+  if (product.is_aac_block === true) return true;
+  const cat = (product.category || '').toLowerCase();
+  const name = (product.name || '').toLowerCase();
+  const brand = (product.brand || '').toLowerCase();
+  return (
+    cat.includes('aac') ||
+    name.includes('aac') ||
+    brand.includes('renacon') ||
+    brand.includes('aerocon') ||
+    brand.includes('cubecrete') ||
+    name.includes('renacon') ||
+    name.includes('aerocon') ||
+    name.includes('cubecrete') ||
+    (cat.includes('block') && !cat.includes('steel'))
+  );
 }
 
 /**
@@ -30,6 +61,9 @@ export function round2(num: number | string | null | undefined): number {
  * - Rate = Rate per kg (₹/kg)
  * - Unit Price = Standard Weight x Rate per kg
  * - Total Line Price = Total Weight x Rate per kg = Quantity x Unit Price
+ * For AAC Blocks:
+ * - Priced per block count: Total Price = Quantity x Unit Price (₹/block)
+ * - Weight is calculated for display and transport loading, but NOT multiplied into price.
  * All weights and prices are rounded to 2 decimal places.
  */
 export function calculateProductPrice(
@@ -50,6 +84,7 @@ export function calculateProductPrice(
   if (!product) {
     return {
       isSteel: false,
+      isAacBlock: false,
       ratePerKg: 0,
       unitPrice: 0,
       standardWeight: 0,
@@ -71,17 +106,19 @@ export function calculateProductPrice(
   const brand = (product.brand || '').toLowerCase();
 
   const isKgUnit = unit === 'kg' || unit === 'kgs' || unit === 'kilogram' || unit === 'kilograms';
+  const isAac = isAacBlockProduct(product);
 
   const isSteel =
-    cat.includes('steel') ||
-    cat.includes('tmt') ||
-    name.includes('steel') ||
-    name.includes('tmt') ||
-    name.includes('isteel') ||
-    name.includes('sumangala') ||
-    brand.includes('sumangala') ||
-    brand.includes('isteel') ||
-    (stdWeight > 0 && (unit === 'nos' || unit === 'piece' || unit === 'rod' || unit === 'bundle' || isKgUnit));
+    !isAac &&
+    (cat.includes('steel') ||
+      cat.includes('tmt') ||
+      name.includes('steel') ||
+      name.includes('tmt') ||
+      name.includes('isteel') ||
+      name.includes('sumangala') ||
+      brand.includes('sumangala') ||
+      brand.includes('isteel') ||
+      (stdWeight > 0 && !cat.includes('cement') && (unit === 'nos' || unit === 'piece' || unit === 'rod' || unit === 'bundle' || isKgUnit)));
 
   if (isSteel && stdWeight > 0) {
     // Determine rate per kg vs unit price (price per single piece / rod)
@@ -107,6 +144,7 @@ export function calculateProductPrice(
 
     return {
       isSteel: true,
+      isAacBlock: false,
       ratePerKg: roundedRatePerKg,
       unitPrice: roundedUnitPrice,
       standardWeight: stdWeight,
@@ -120,7 +158,7 @@ export function calculateProductPrice(
     };
   }
 
-  // Non-steel products or items sold directly by kg / nos / bag (Nails, Binding wire, Cement, AAC, etc.)
+  // Non-steel products or items sold directly by kg / nos / bag (AAC blocks, Cement, Nails, Binding wire, etc.)
   let unitPrice = round2(pPrice);
   if (customRatePerKg !== undefined && customRatePerKg !== null && Number(customRatePerKg) > 0) {
     unitPrice = round2(Number(customRatePerKg));
@@ -128,12 +166,15 @@ export function calculateProductPrice(
   const totalWeight = isKgUnit ? round2(quantity) : (stdWeight > 0 ? round2(quantity * stdWeight) : 0);
   const totalPrice = round2(quantity * unitPrice);
   const ratePerKg = isKgUnit ? unitPrice : (stdWeight > 0 ? round2(unitPrice / stdWeight) : 0);
-  const displayBreakdown = isKgUnit
-    ? `${quantity} kg @ ₹${unitPrice.toFixed(2)}/kg`
-    : `${quantity} ${unit} × ₹${unitPrice.toFixed(2)}`;
+  const displayBreakdown = isAac && stdWeight > 0
+    ? `${quantity} ${unit} × ₹${unitPrice.toFixed(2)} (Weight: ${totalWeight.toFixed(2)} kg)`
+    : (isKgUnit
+      ? `${quantity} kg @ ₹${unitPrice.toFixed(2)}/kg`
+      : `${quantity} ${unit} × ₹${unitPrice.toFixed(2)}`);
 
   return {
     isSteel: false,
+    isAacBlock: isAac,
     ratePerKg,
     unitPrice,
     standardWeight: isKgUnit ? 1 : stdWeight,
@@ -164,6 +205,8 @@ export function calculateDiscountedProductPrice(
     name?: string | null;
     price?: number | string | null;
     standard_weight?: number | string | null;
+    piece_weight_kg?: number | string | null;
+    is_aac_block?: boolean | null;
     unit?: string | null;
     brand?: string | null;
   } | null | undefined,

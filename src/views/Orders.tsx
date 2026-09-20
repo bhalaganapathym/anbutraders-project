@@ -86,7 +86,8 @@ const sendEstimateWhatsApp = (o: OrderWithCustomer) => {
     if (pricing.isSteel) {
       return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? 'nos'} × ${pricing.standardWeight} kg = *${pricing.totalWeight.toFixed(2)} kg*\n  Rate: ₹${pricing.ratePerKg.toFixed(2)} / kg\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
     }
-    return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? ''}\n  Rate: ₹${pricing.unitPrice.toFixed(2)}\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    const wtInfo = pricing.standardWeight > 0 ? ` (Weight: ${pricing.totalWeight.toFixed(2)} kg)` : '';
+    return `• *${prName}*\n  Qty: ${it.quantity} ${it.unit ?? it.product?.unit ?? 'nos'}${wtInfo}\n  Rate: ₹${pricing.unitPrice.toFixed(2)} / ${it.unit ?? it.product?.unit ?? 'nos'}\n  Amount: ₹${pricing.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
   }).join('\n\n');
 
   itemsTotal = round2(itemsTotal);

@@ -80,7 +80,7 @@ export const EstimateBillImage = forwardRef<HTMLDivElement, EstimateBillImagePro
         qty: it.quantity,
         unit: it.unit || prod?.unit || 'nos',
         isSteel: pricing.isSteel,
-        weightKg: pricing.isSteel && pricing.totalWeight > 0 ? pricing.totalWeight : 0,
+        weightKg: pricing.totalWeight > 0 ? pricing.totalWeight : 0,
         rate: pricing.billingRate,
         rateText: pricing.billingRate.toFixed(2),
         perUnit: pricing.billingPerUnit,

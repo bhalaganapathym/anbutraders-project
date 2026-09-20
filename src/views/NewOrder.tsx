@@ -9,7 +9,7 @@ import {
   Tag, Tags, RotateCcw
 } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
-import { calculateProductPrice, calculateDiscountedProductPrice, round2 } from '@/lib/pricing';
+import { calculateProductPrice, calculateDiscountedProductPrice, round2, isAacBlockProduct } from '@/lib/pricing';
 import { parseAndCategorizeAddresses } from '@/lib/address';
 import { EstimateBillImage } from '@/components/EstimateBillImage';
 import Modal from '@/components/Modal';
@@ -648,7 +648,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
         if (p.totalDiscountAmount > 0) msg += ` _(Saved ₹${p.totalDiscountAmount.toFixed(2)})_`;
         msg += `\n`;
       } else {
-        msg += `   ${l.quantity} ${l.unit || l.product.unit} × ₹${p.discountedUnitPrice.toFixed(2)} = *₹${p.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*`;
+        const wtInfo = p.standardWeight > 0 ? ` (Weight: ${p.totalWeight.toFixed(2)} kg)` : '';
+        msg += `   ${l.quantity} ${l.unit || l.product.unit} × ₹${p.discountedUnitPrice.toFixed(2)} = *₹${p.finalTotalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*${wtInfo}`;
         if (p.totalDiscountAmount > 0) msg += ` _(Saved ₹${p.totalDiscountAmount.toFixed(2)})_`;
         msg += `\n`;
       }
@@ -1397,7 +1398,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                             >
                               <span className="font-medium text-slate-900">{p.name}</span>
                               <span className="text-xs text-slate-500">
-                                {p.brand} • {pr.isSteel ? `₹${pr.ratePerKg.toFixed(2)}/kg (Std: ${pr.standardWeight} kg/no)` : `₹${pr.unitPrice}/${p.unit}`}
+                                {p.brand} • {pr.isSteel ? `₹${pr.ratePerKg.toFixed(2)}/kg (Std: ${pr.standardWeight} kg/no)` : pr.standardWeight > 0 ? `₹${pr.unitPrice}/${p.unit} (Std: ${pr.standardWeight} kg)` : `₹${pr.unitPrice}/${p.unit}`}
                               </span>
                             </button>
                           );
@@ -1420,167 +1421,245 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                       </span>
                     </div>
 
-                    {Number(selectedProduct.standard_weight || 0) > 0 ? (
-                      /* Steel Dual Input Box: Nos ⇄ Kg Live Conversion with Select Box */
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-blue-50/80 rounded-xl border border-blue-200">
-                          <div className="flex items-center gap-2">
-                            <label className="text-xs font-black uppercase tracking-wider text-blue-900">
-                              Order Unit Mode:
-                            </label>
-                            <select
-                              value={steelInputMode}
-                              onChange={(e) => setSteelInputMode(e.target.value as 'items' | 'kg')}
-                              className="rounded-lg border-2 border-blue-400 bg-white px-3 py-1.5 text-xs font-black text-blue-950 shadow-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
-                            >
-                              <option value="items">📦 Items (Nos / Pieces)</option>
-                              <option value="kg">⚖️ Weight (Kgs)</option>
-                            </select>
-                          </div>
-                          <span className="text-[11px] font-bold text-blue-700">
-                            {steelInputMode === 'items' ? 'Input count in pieces' : 'Input target weight in kg'}
-                          </span>
-                        </div>
-                        
-                        {steelInputMode === 'items' ? (
-                          <div className="bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
-                            <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
-                              Quantity in Nos (Rods / Pieces)
-                            </label>
-                            <div className="relative flex items-center">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={itemQty}
-                                onChange={e => {
-                                  let val = e.target.value.replace(/[^0-9.]/g, '');
-                                  const parts = val.split('.');
-                                  if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
-                                  handleQtyChange(val);
-                                }}
-                                placeholder="Enter count in pieces (e.g. 10 or 0.5)..."
-                                className="w-full rounded-xl border-2 border-slate-300 p-2.5 pr-14 text-center text-lg font-black text-slate-900 placeholder:text-slate-400 placeholder:font-medium placeholder:text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
-                              />
-                              <span className="absolute right-3 text-xs font-black text-slate-500 pointer-events-none uppercase">nos</span>
-                            </div>
-                            <p className="text-xs font-bold text-slate-600 mt-2">
-                              ➔ Weight: {parseFloat(itemQty) > 0 ? (
-                                <><strong className="text-blue-700">{(parseFloat(itemQty) * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg</strong> ({selectedProduct.standard_weight} kg/no)</>
-                              ) : (
-                                <span className="text-slate-400 font-medium">— kg ({selectedProduct.standard_weight} kg/no)</span>
-                              )}
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
-                            <label className="block text-xs font-extrabold text-blue-900 mb-1.5 flex items-center justify-between">
-                              <span>Target Weight in Kgs</span>
-                              <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Auto-converts to pieces</span>
-                            </label>
-                            <div className="relative flex items-center">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                placeholder="e.g. 50 kg"
-                                value={targetWeightInput}
-                                onChange={e => {
-                                  const sanitized = e.target.value.replace(/[^0-9.]/g, '');
-                                  handleTargetWeightChange(sanitized);
-                                }}
-                                className="w-full rounded-xl border-2 border-blue-300 p-2.5 pr-12 text-center text-lg font-black text-blue-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
-                              />
-                              <span className="absolute right-3 text-xs font-black text-blue-700 pointer-events-none uppercase">kg</span>
-                            </div>
-                            <p className="text-xs font-bold text-blue-800 mt-2">
-                              ➔ Converts to: {parseFloat(itemQty) > 0 ? (
-                                <><strong className="text-amber-600 text-sm">{itemQty} nos</strong> ({(parseFloat(itemQty) * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg actual weight)</>
-                              ) : (
-                                <span className="text-blue-400 font-medium">— nos</span>
-                              )}
-                            </p>
-                          </div>
-                        )}
+                    {(() => {
+                      const isSteel = calculateProductPrice(selectedProduct, 1).isSteel;
+                      const isAac = isAacBlockProduct(selectedProduct);
+                      const stdWeight = Number(selectedProduct.standard_weight || 0);
 
-                        {(() => {
-                          const numQty = parseFloat(itemQty) || 0;
-                          const hasQty = numQty > 0;
-                          const pr = calculateProductPrice(selectedProduct, hasQty ? numQty : 1);
-                          return (
-                            <div className="p-3 bg-blue-100/70 rounded-xl text-xs font-bold text-blue-950 flex flex-wrap items-center justify-between gap-2 border border-blue-200">
-                              <span>
-                                {hasQty 
-                                  ? `Formula: ${itemQty} nos × ${pr.standardWeight} kg = ${pr.totalWeight.toFixed(2)} kg @ ₹${pr.ratePerKg.toFixed(2)}/kg`
-                                  : `Rate: ₹${pr.ratePerKg.toFixed(2)}/kg • Std Weight: ${pr.standardWeight} kg/no`}
-                              </span>
-                              <span className="text-sm font-black text-blue-700">
-                                {hasQty ? `Line Total: ₹${pr.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : `₹${pr.unitPrice.toFixed(2)} / no`}
+                      if (isSteel && stdWeight > 0) {
+                        /* Steel Dual Input Box: Nos ⇄ Kg Live Conversion with Select Box */
+                        return (
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-blue-50/80 rounded-xl border border-blue-200">
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs font-black uppercase tracking-wider text-blue-900">
+                                  Order Unit Mode:
+                                </label>
+                                <select
+                                  value={steelInputMode}
+                                  onChange={(e) => setSteelInputMode(e.target.value as 'items' | 'kg')}
+                                  className="rounded-lg border-2 border-blue-400 bg-white px-3 py-1.5 text-xs font-black text-blue-950 shadow-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                                >
+                                  <option value="items">📦 Items (Nos / Pieces)</option>
+                                  <option value="kg">⚖️ Weight (Kgs)</option>
+                                </select>
+                              </div>
+                              <span className="text-[11px] font-bold text-blue-700">
+                                {steelInputMode === 'items' ? 'Input count in pieces' : 'Input target weight in kg'}
                               </span>
                             </div>
-                          );
-                        })()}
+                            
+                            {steelInputMode === 'items' ? (
+                              <div className="bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
+                                <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
+                                  Quantity in Nos (Rods / Pieces)
+                                </label>
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={itemQty}
+                                    onChange={e => {
+                                      let val = e.target.value.replace(/[^0-9.]/g, '');
+                                      const parts = val.split('.');
+                                      if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                                      handleQtyChange(val);
+                                    }}
+                                    placeholder="Enter count in pieces (e.g. 10 or 0.5)..."
+                                    className="w-full rounded-xl border-2 border-slate-300 p-2.5 pr-14 text-center text-lg font-black text-slate-900 placeholder:text-slate-400 placeholder:font-medium placeholder:text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
+                                  />
+                                  <span className="absolute right-3 text-xs font-black text-slate-500 pointer-events-none uppercase">nos</span>
+                                </div>
+                                <p className="text-xs font-bold text-slate-600 mt-2">
+                                  ➔ Weight: {parseFloat(itemQty) > 0 ? (
+                                    <><strong className="text-blue-700">{(parseFloat(itemQty) * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg</strong> ({selectedProduct.standard_weight} kg/no)</>
+                                  ) : (
+                                    <span className="text-slate-400 font-medium">— kg ({selectedProduct.standard_weight} kg/no)</span>
+                                  )}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
+                                <label className="block text-xs font-extrabold text-blue-900 mb-1.5 flex items-center justify-between">
+                                  <span>Target Weight in Kgs</span>
+                                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Auto-converts to pieces</span>
+                                </label>
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="e.g. 50 kg"
+                                    value={targetWeightInput}
+                                    onChange={e => {
+                                      const sanitized = e.target.value.replace(/[^0-9.]/g, '');
+                                      handleTargetWeightChange(sanitized);
+                                    }}
+                                    className="w-full rounded-xl border-2 border-blue-300 p-2.5 pr-12 text-center text-lg font-black text-blue-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
+                                  />
+                                  <span className="absolute right-3 text-xs font-black text-blue-700 pointer-events-none uppercase">kg</span>
+                                </div>
+                                <p className="text-xs font-bold text-blue-800 mt-2">
+                                  ➔ Converts to: {parseFloat(itemQty) > 0 ? (
+                                    <><strong className="text-amber-600 text-sm">{itemQty} nos</strong> ({(parseFloat(itemQty) * Number(selectedProduct.standard_weight || 0)).toFixed(2)} kg actual weight)</>
+                                  ) : (
+                                    <span className="text-blue-400 font-medium">— nos</span>
+                                  )}
+                                </p>
+                              </div>
+                            )}
 
-                        {/* Add to Order Button positioned below the box */}
-                        <div className="flex justify-end pt-1">
-                          <button
-                            type="button"
-                            onClick={handleAddItem}
-                            className="w-full sm:w-auto rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6 py-2.5 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                          >
-                            <PlusIcon size={18} /> Add to Order
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Non-steel product input */
-                      <div className="space-y-3 bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-4">
-                          <div className="w-56">
-                            <label className="block text-xs font-extrabold text-slate-700 mb-1.5">Quantity</label>
-                            <div className="relative flex items-center">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={itemQty}
-                                onChange={e => {
-                                  let val = e.target.value.replace(/[^0-9.]/g, '');
-                                  const parts = val.split('.');
-                                  if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
-                                  setItemQty(val);
-                                }}
-                                placeholder="Enter quantity (e.g. 5 or 0.5)..."
-                                className="w-full rounded-xl border-2 border-slate-300 p-2 pr-12 text-center text-base font-black text-slate-900 placeholder:text-slate-400 placeholder:font-medium placeholder:text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
-                              />
-                              <span className="absolute right-3 text-xs font-bold text-slate-500 pointer-events-none">{selectedProduct.unit || 'nos'}</span>
+                            {(() => {
+                              const numQty = parseFloat(itemQty) || 0;
+                              const hasQty = numQty > 0;
+                              const pr = calculateProductPrice(selectedProduct, hasQty ? numQty : 1);
+                              return (
+                                <div className="p-3 bg-blue-100/70 rounded-xl text-xs font-bold text-blue-950 flex flex-wrap items-center justify-between gap-2 border border-blue-200">
+                                  <span>
+                                    {hasQty 
+                                      ? `Formula: ${itemQty} nos × ${pr.standardWeight} kg = ${pr.totalWeight.toFixed(2)} kg @ ₹${pr.ratePerKg.toFixed(2)}/kg`
+                                      : `Rate: ₹${pr.ratePerKg.toFixed(2)}/kg • Std Weight: ${pr.standardWeight} kg/no`}
+                                  </span>
+                                  <span className="text-sm font-black text-blue-700">
+                                    {hasQty ? `Line Total: ₹${pr.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : `₹${pr.unitPrice.toFixed(2)} / no`}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Add to Order Button positioned below the box */}
+                            <div className="flex justify-end pt-1">
+                              <button
+                                type="button"
+                                onClick={handleAddItem}
+                                className="w-full sm:w-auto rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6 py-2.5 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                              >
+                                <PlusIcon size={18} /> Add to Order
+                              </button>
                             </div>
                           </div>
-                          {(() => {
-                            const numQty = parseFloat(itemQty) || 0;
-                            const hasQty = numQty > 0;
-                            const pr = calculateProductPrice(selectedProduct, hasQty ? numQty : 1);
-                            return (
-                              <div className="pt-2 text-sm font-bold text-slate-700">
+                        );
+                      }
+
+                      if (isAac || stdWeight > 0) {
+                        /* Dedicated AAC Block / Weighed Non-Steel Item Input Box */
+                        const numQty = parseFloat(itemQty) || 0;
+                        const hasQty = numQty > 0;
+                        const pr = calculateProductPrice(selectedProduct, hasQty ? numQty : 1);
+                        return (
+                          <div className="space-y-3 bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
+                              <div className="w-64">
+                                <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
+                                  {isAac ? 'Quantity in Blocks / Pieces (Nos)' : `Quantity in ${selectedProduct.unit || 'nos'}`}
+                                </label>
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={itemQty}
+                                    onChange={e => {
+                                      let val = e.target.value.replace(/[^0-9.]/g, '');
+                                      const parts = val.split('.');
+                                      if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                                      setItemQty(val);
+                                    }}
+                                    placeholder="Enter count (e.g. 10)..."
+                                    className="w-full rounded-xl border-2 border-slate-300 p-2 pr-12 text-center text-base font-black text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
+                                  />
+                                  <span className="absolute right-3 text-xs font-bold text-slate-500 pointer-events-none">{selectedProduct.unit || 'nos'}</span>
+                                </div>
+                              </div>
+
+                              <div className="pt-2 text-sm font-bold text-slate-700 space-y-1">
                                 {hasQty ? (
-                                  <>{itemQty} {selectedProduct.unit || 'nos'} × ₹{pr.unitPrice.toFixed(2)} = <span className="font-black text-blue-600">₹{pr.totalPrice.toFixed(2)}</span></>
+                                  <>
+                                    <div className="text-slate-900">
+                                      {itemQty} {selectedProduct.unit || 'nos'} × ₹{pr.unitPrice.toFixed(2)} = <span className="font-black text-blue-600">₹{pr.totalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    {stdWeight > 0 && (
+                                      <div className="text-xs text-blue-700 font-semibold">
+                                        ⚖️ Weight: {itemQty} nos × {stdWeight} kg = <strong className="font-extrabold">{pr.totalWeight.toFixed(2)} kg</strong>
+                                        <span className="text-[11px] text-slate-500 font-normal ml-1.5">(Displayed for loading & transport, not charged)</span>
+                                      </div>
+                                    )}
+                                  </>
                                 ) : (
-                                  <>Unit Price: <span className="font-black text-blue-600">₹{pr.unitPrice.toFixed(2)}</span> / {selectedProduct.unit || 'nos'}</>
+                                  <>
+                                    <div>Unit Price: <span className="font-black text-blue-600">₹{pr.unitPrice.toFixed(2)}</span> / {selectedProduct.unit || 'nos'}</div>
+                                    {stdWeight > 0 && (
+                                      <div className="text-xs text-slate-500">Std Weight: {stdWeight} kg / piece (Priced by piece count)</div>
+                                    )}
+                                  </>
                                 )}
                               </div>
-                            );
-                          })()}
-                        </div>
+                            </div>
 
-                        {/* Add to Order Button positioned below the box */}
-                        <div className="flex justify-end pt-1">
-                          <button
-                            type="button"
-                            onClick={handleAddItem}
-                            className="w-full sm:w-auto rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6 py-2.5 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                          >
-                            <PlusIcon size={18} /> Add to Order
-                          </button>
+                            {/* Add to Order Button */}
+                            <div className="flex justify-end pt-1">
+                              <button
+                                type="button"
+                                onClick={handleAddItem}
+                                className="w-full sm:w-auto rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6 py-2.5 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                              >
+                                <PlusIcon size={18} /> Add to Order
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      /* Standard Non-steel product input */
+                      return (
+                        <div className="space-y-3 bg-white p-3.5 rounded-xl border border-blue-200 shadow-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div className="w-56">
+                              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">Quantity</label>
+                              <div className="relative flex items-center">
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={itemQty}
+                                  onChange={e => {
+                                    let val = e.target.value.replace(/[^0-9.]/g, '');
+                                    const parts = val.split('.');
+                                    if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                                    setItemQty(val);
+                                  }}
+                                  placeholder="Enter quantity (e.g. 5 or 0.5)..."
+                                  className="w-full rounded-xl border-2 border-slate-300 p-2 pr-12 text-center text-base font-black text-slate-900 placeholder:text-slate-400 placeholder:font-medium placeholder:text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 bg-white"
+                                />
+                                <span className="absolute right-3 text-xs font-bold text-slate-500 pointer-events-none">{selectedProduct.unit || 'nos'}</span>
+                              </div>
+                            </div>
+                            {(() => {
+                              const numQty = parseFloat(itemQty) || 0;
+                              const hasQty = numQty > 0;
+                              const pr = calculateProductPrice(selectedProduct, hasQty ? numQty : 1);
+                              return (
+                                <div className="pt-2 text-sm font-bold text-slate-700">
+                                  {hasQty ? (
+                                    <>{itemQty} {selectedProduct.unit || 'nos'} × ₹{pr.unitPrice.toFixed(2)} = <span className="font-black text-blue-600">₹{pr.totalPrice.toFixed(2)}</span></>
+                                  ) : (
+                                    <>Unit Price: <span className="font-black text-blue-600">₹{pr.unitPrice.toFixed(2)}</span> / {selectedProduct.unit || 'nos'}</>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Add to Order Button positioned below the box */}
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={handleAddItem}
+                              className="w-full sm:w-auto rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6 py-2.5 shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                            >
+                              <PlusIcon size={18} /> Add to Order
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1816,8 +1895,12 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                   )}
                                   {pricing.standardWeight > 0 && (
                                     <>
-                                      <span className="text-slate-300">|</span>
-                                      <span>{pricing.standardWeight} kg</span>
+                                      <span className="text-slate-300">•</span>
+                                      <span>{pricing.standardWeight} kg / {line.unit || line.product.unit || 'nos'}</span>
+                                      <span className="text-slate-300">•</span>
+                                      <span className="text-blue-700 font-medium">
+                                        {line.quantity} nos × {pricing.standardWeight} kg = <strong>{pricing.totalWeight.toFixed(2)} kg</strong>
+                                      </span>
                                     </>
                                   )}
                                 </>
@@ -1889,6 +1972,8 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                                 <p className="text-[11px] text-slate-400">{pricing.totalWeight.toFixed(2)} kg @ ₹{pricing.ratePerKg.toFixed(2)}/kg</p>
                               ) : isKg ? (
                                 <p className="text-[11px] text-slate-400">{line.quantity} kg @ ₹{pricing.unitPrice.toFixed(2)}/kg</p>
+                              ) : pricing.standardWeight > 0 ? (
+                                <p className="text-[11px] text-slate-400">{line.quantity} {line.unit || 'nos'} @ ₹{pricing.unitPrice.toFixed(2)} ({pricing.totalWeight.toFixed(2)} kg)</p>
                               ) : null}
                             </div>
                             <button onClick={() => removeLine(line.product_id)} className="text-slate-400 hover:text-red-600 transition p-2 hover:bg-red-50 rounded-lg">
@@ -2127,7 +2212,7 @@ export default function NewOrder({ onBack, orderToEdit }: NewOrderProps) {
                           {line.product.name}
                         </h4>
                         <p className="text-[11px] text-slate-500">
-                          {line.quantity} {line.unit || line.product.unit} {pInfo.isSteel || isKg ? `· Weight: ${pInfo.totalWeight.toFixed(2)} kg` : ''} · Catalog Rate: ₹{baseCatalogRate.toFixed(2)}
+                          {line.quantity} {line.unit || line.product.unit} {pInfo.totalWeight > 0 ? `· Weight: ${pInfo.totalWeight.toFixed(2)} kg` : ''} · Catalog Rate: ₹{baseCatalogRate.toFixed(2)}
                         </p>
                       </div>
                       <div className="text-right">
