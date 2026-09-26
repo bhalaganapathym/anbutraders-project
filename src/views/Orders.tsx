@@ -12,6 +12,7 @@ import { calculateProductPrice, round2 } from '@/lib/pricing';
 import html2canvas from 'html2canvas';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { EstimateBillImage } from '@/components/EstimateBillImage';
+import { useAuth } from '@/context/AuthContext';
 
 type OrderWithCustomer = Order & { customer: Pick<Customer, 'name' | 'phone'> | null };
 type OrderItemWithProduct = OrderItem & { product: Product | null };
@@ -148,6 +149,8 @@ _Authorised Signatory_`;
 };
 
 export default function Orders({ onNewOrder, onEditOrder }: { onNewOrder?: () => void; onEditOrder?: (o: OrderWithCustomer) => void } = {}) {
+  const { user } = useAuth();
+  const isAdmin = (user?.role || '').toLowerCase() === 'admin' || (user?.username || '').toLowerCase() === 'admin';
   const { t } = useTranslation();
   const toast = useToast();
   const [orders, setOrders] = useState<OrderWithCustomer[]>([]);
@@ -371,6 +374,10 @@ _Please find attached the official estimate bill image._
   };
 
   const handleBulkDelete = async () => {
+    if (!isAdmin) {
+      toast('Only administrators can delete estimates', 'error');
+      return;
+    }
     if (selectedIds.size === 0) return;
     if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected estimate(s)?`)) return;
     try {
@@ -607,6 +614,10 @@ _Please find attached the official estimate bill image._
   };
 
   const remove = async (o: OrderWithCustomer) => {
+    if (!isAdmin) {
+      toast('Only administrators can delete estimates', 'error');
+      return;
+    }
     if (!confirm('Delete this estimate and its items?')) return;
     try {
       await api.delete(`/orders/${o.id}`);
@@ -767,7 +778,7 @@ _Please find attached the official estimate bill image._
           />
         </div>
 
-        {filtered.length > 0 && (
+        {isAdmin && filtered.length > 0 && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => toggleSelectAll(filtered)}
@@ -834,12 +845,14 @@ _Please find attached the official estimate bill image._
                 >
                   <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelect(o.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                      />
+                      {isAdmin && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(o.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        />
+                      )}
                       <div>
                         <button
                           onClick={() => openDetail(o)}
@@ -948,13 +961,15 @@ _Please find attached the official estimate bill image._
                       <Pencil size={13} />
                     </button>
 
-                    <button
-                      onClick={() => remove(o)}
-                      className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"
-                      title="Delete"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => remove(o)}
+                        className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"
+                        title="Delete"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -966,14 +981,16 @@ _Please find attached the official estimate bill image._
             <table className="w-full">
               <thead className="border-b border-slate-200 bg-slate-50/75">
                 <tr>
-                  <th className="th w-10">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.size === filtered.length && filtered.length > 0}
-                      onChange={() => toggleSelectAll(filtered)}
-                      className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                    />
-                  </th>
+                  {isAdmin && (
+                    <th className="th w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === filtered.length && filtered.length > 0}
+                        onChange={() => toggleSelectAll(filtered)}
+                        className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                      />
+                    </th>
+                  )}
                   <th className="th">Estimate No</th>
                   <th className="th">Customer</th>
                   <th className="th">Advance Booking</th>
@@ -1010,14 +1027,16 @@ _Please find attached the official estimate bill image._
                       key={o.id}
                       className={`hover:bg-slate-50/60 transition ${isSelected ? 'bg-amber-50/30' : ''}`}
                     >
-                      <td className="td">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelect(o.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                        />
-                      </td>
+                      {isAdmin && (
+                        <td className="td">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelect(o.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                          />
+                        </td>
+                      )}
                       <td className="td font-mono font-medium text-slate-800">
                         <button onClick={() => openDetail(o)} className="hover:underline text-left">
                           {o.order_no || o.id.split('-')[0].toUpperCase()}
@@ -1086,9 +1105,11 @@ _Please find attached the official estimate bill image._
                           <button onClick={() => openEdit(o)} className="btn-ghost p-1.5" title="Edit">
                             <Pencil size={15} />
                           </button>
-                          <button onClick={() => remove(o)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" title="Delete">
-                            <Trash2 size={15} />
-                          </button>
+                          {isAdmin && (
+                            <button onClick={() => remove(o)} className="btn-ghost p-1.5 text-rose-500 hover:bg-rose-50" title="Delete">
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1099,7 +1120,7 @@ _Please find attached the official estimate bill image._
           </div>
 
           {/* Floating Bulk Action Bar */}
-          {selectedIds.size > 0 && (
+          {isAdmin && selectedIds.size > 0 && (
             <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in border border-slate-700">
               <span className="text-xs font-semibold">
                 {selectedIds.size} {selectedIds.size === 1 ? 'estimate' : 'estimates'} selected

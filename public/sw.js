@@ -14,6 +14,8 @@ self.addEventListener('push', (event) => {
   let body = 'New activity update in Anbu Traders';
   let url = '/';
   let tag = `anbu-${Date.now()}`;
+  let sound = '/alert-tone.wav';
+  let vibratePattern = [400, 150, 400, 150, 400, 150, 400, 150, 400]; // 3-second pulse cadence
 
   if (event.data) {
     try {
@@ -22,6 +24,8 @@ self.addEventListener('push', (event) => {
       if (data.body) body = data.body;
       if (data.url) url = data.url;
       if (data.tag) tag = data.tag;
+      if (data.sound) sound = data.sound;
+      if (Array.isArray(data.vibrate)) vibratePattern = data.vibrate;
     } catch (e) {
       const text = event.data.text();
       if (text) body = text;
@@ -29,6 +33,7 @@ self.addEventListener('push', (event) => {
   }
 
   const iconUrl = new URL('/pwa-192x192.png', self.location.origin).href;
+  const soundUrl = new URL(sound, self.location.origin).href;
   const options = {
     body,
     icon: iconUrl,
@@ -36,9 +41,9 @@ self.addEventListener('push', (event) => {
     tag,
     renotify: true,
     silent: false,
-    sound: 'default',
-    data: { url },
-    vibrate: [350, 150, 350, 150, 350, 150, 350, 150, 350],
+    sound: soundUrl,
+    data: { url, sound: soundUrl },
+    vibrate: vibratePattern,
     requireInteraction: true
   };
 

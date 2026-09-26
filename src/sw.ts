@@ -50,12 +50,31 @@ registerRoute(
   })
 );
 
+// 3. Cache notification audio tone
+registerRoute(
+  ({ url }) => url.pathname.includes('/alert-tone.wav') || url.pathname.includes('/alert-tone.mp3'),
+  new CacheFirst({
+    cacheName: 'anbu-audio-cache',
+    plugins: [
+      new CacheableResponsePlugin({
+        statuses: [0, 200]
+      }),
+      new ExpirationPlugin({
+        maxEntries: 5,
+        maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+      })
+    ]
+  })
+);
+
 // Background Push Notification Listener
 self.addEventListener('push', (event: PushEvent) => {
   let title = '🔔 Anbu Traders Alert';
   let body = 'New activity update in Anbu Traders';
   let url = '/';
   let tag = `anbu-${Date.now()}`;
+  let sound = '/alert-tone.wav';
+  let vibratePattern = [400, 150, 400, 150, 400, 150, 400, 150, 400]; // 3-second pulse cadence
 
   if (event.data) {
     try {
@@ -64,6 +83,8 @@ self.addEventListener('push', (event: PushEvent) => {
       if (data.body) body = data.body;
       if (data.url) url = data.url;
       if (data.tag) tag = data.tag;
+      if (data.sound) sound = data.sound;
+      if (Array.isArray(data.vibrate)) vibratePattern = data.vibrate;
     } catch (e) {
       const text = event.data.text();
       if (text) body = text;
@@ -71,6 +92,7 @@ self.addEventListener('push', (event: PushEvent) => {
   }
 
   const iconUrl = new URL('/pwa-192x192.png', self.location.origin).href;
+  const soundUrl = new URL(sound, self.location.origin).href;
   const options: NotificationOptions = {
     body,
     icon: iconUrl,
@@ -78,9 +100,9 @@ self.addEventListener('push', (event: PushEvent) => {
     tag,
     renotify: true,
     silent: false,
-    sound: 'default',
-    data: { url },
-    vibrate: [350, 150, 350, 150, 350, 150, 350, 150, 350],
+    sound: soundUrl,
+    data: { url, sound: soundUrl },
+    vibrate: vibratePattern,
     requireInteraction: true
   };
 

@@ -264,17 +264,17 @@ export default function PushNotificationManager({ variant = 'card' }: Props) {
         )}
       </div>
 
-      {/* iPhone / iOS Alert Tone Guidance Note */}
-      <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 rounded-xl text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
+      {/* Mobile Alert Tone & Lock Screen Guidance Note */}
+      <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 rounded-xl text-[11px] text-amber-900 dark:text-amber-200 space-y-1.5">
         <div className="font-bold flex items-center gap-1.5">
           <Smartphone size={13} className="text-amber-600" />
-          <span>iPhone (iOS) Notification Sound Guide:</span>
+          <span>Mobile Phone Lock-Screen Sound Guide:</span>
         </div>
         <p className="text-amber-800 dark:text-amber-300 leading-relaxed">
-          • <strong>Silent Switch:</strong> Turn <strong>OFF</strong> the physical Silent switch on the left side of your iPhone (Ringer mode). Apple completely mutes web alert tones when silent mode is on.
+          • <strong>Android Mobiles:</strong> Go to <em>Settings → Apps → Chrome / Anbu Traders → Notifications</em> and ensure <strong>"Allow sound and vibration"</strong> is enabled and volume is raised so the 3-second alert tone sounds while locked.
         </p>
         <p className="text-amber-800 dark:text-amber-300 leading-relaxed">
-          • <strong>Lock Screen Chime:</strong> Tap <em>Share → Add to Home Screen</em> to install. Ensure Sounds are enabled in iPhone <em>Settings → Notifications → Anbu Traders</em>.
+          • <strong>iPhones (iOS):</strong> Turn <strong>OFF</strong> the physical Silent switch on the left side of your iPhone (Ringer mode). Tap <em>Share → Add to Home Screen</em> to install as an app and enable Sounds in iPhone <em>Settings → Notifications → Anbu Traders</em>.
         </p>
       </div>
     </div>

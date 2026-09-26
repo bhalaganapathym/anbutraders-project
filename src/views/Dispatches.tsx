@@ -91,6 +91,7 @@ function WaitClock({
 export default function Dispatches({ onNavigate }: { onNavigate?: (view: string) => void }) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const isAdmin = (user?.role || '').toLowerCase() === 'admin' || (user?.username || '').toLowerCase() === 'admin';
   const toast = useToast();
   const [dispatches, setDispatches] = useState<DispatchRow[]>([]);
   const [confirmedOrders, setConfirmedOrders] = useState<ConfirmedOrder[]>([]);
@@ -145,6 +146,10 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
   };
 
   const handleBulkDelete = async () => {
+    if (!isAdmin) {
+      toast('Only administrators can delete dispatches', 'error');
+      return;
+    }
     if (selectedIds.size === 0) return;
     if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected dispatch(es)?`)) return;
     try {
@@ -259,6 +264,10 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
   };
 
   const removeDispatch = async (d: DispatchRow) => {
+    if (!isAdmin) {
+      toast('Only administrators can delete dispatches', 'error');
+      return;
+    }
     if (!confirm(`Delete dispatch ${d.dispatch_no}?`)) return;
     try {
       await api.delete(`/dispatches/${d.id}`);
@@ -273,6 +282,10 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
   };
 
   const removeNewOrder = async (order: ConfirmedOrder) => {
+    if (!isAdmin) {
+      toast('Only administrators can delete/cancel estimates', 'error');
+      return;
+    }
     if (!confirm(`Delete/Cancel estimate ${order.order_no || 'ORD-' + order.id.slice(0, 6)}?`)) return;
     try {
       await api.delete(`/orders/${order.id}`);
@@ -363,7 +376,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
           />
         </div>
 
-        {activeTab !== 'new' && filteredDispatches.length > 0 && (
+        {isAdmin && activeTab !== 'new' && filteredDispatches.length > 0 && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => toggleSelectAll(filteredDispatches)}
@@ -452,7 +465,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                     >
                       <Play size={16} /> Start Verification & Dispatch
                     </button>
-                    {user?.role === 'admin' && (
+                    {isAdmin && (
                       <button
                         onClick={() => removeNewOrder(order)}
                         className="btn-ghost p-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
@@ -494,7 +507,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                 >
                   <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                     <div className="flex items-center gap-2.5">
-                      {user?.role === 'admin' && (
+                      {isAdmin && (
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -583,14 +596,14 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                         <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
                           <Mic size={13} className="text-indigo-600 animate-pulse" />
                           {d.mismatch_approval_status === 'pending'
-                            ? (user?.role === 'admin' ? 'Voice Note Awaiting Review' : 'Voice Note Sent for Approval')
+                            ? (isAdmin ? 'Voice Note Awaiting Review' : 'Voice Note Sent for Approval')
                             : 'Voice Note Attached'}
                         </span>
                         <button
                           onClick={() => handleOpenApprovalModal(d)}
                           className="text-[11px] font-black text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded shadow"
                         >
-                          {user?.role === 'admin' ? 'Review Voice Note' : 'Listen Voice Note'}
+                          {isAdmin ? 'Review Voice Note' : 'Listen Voice Note'}
                         </button>
                       </div>
                     )}
@@ -633,7 +646,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       </button>
                     )}
 
-                    {user?.role === 'admin' && (
+                    {isAdmin && (
                       <button
                         onClick={() => removeDispatch(d)}
                         className="btn-ghost p-2 text-rose-500 hover:bg-rose-50 rounded-lg"
@@ -652,7 +665,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
           <div className="hidden md:block w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
             <table className="w-full table-fixed divide-y divide-slate-100 dark:divide-slate-800 text-xs sm:text-sm">
               <colgroup>
-                {user?.role === 'admin' && <col className="w-9" />}
+                {isAdmin && <col className="w-9" />}
                 <col className="w-[14%]" />
                 <col className="w-[23%]" />
                 <col className="w-[18%]" />
@@ -662,7 +675,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
               </colgroup>
               <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80">
                 <tr>
-                  {user?.role === 'admin' && (
+                  {isAdmin && (
                     <th className="px-2 py-2.5 text-center w-9">
                       <input
                         type="checkbox"
@@ -688,7 +701,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                       key={d.id}
                       className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition ${isSelected ? 'bg-amber-50/30' : ''}`}
                     >
-                      {user?.role === 'admin' && (
+                      {isAdmin && (
                         <td className="px-2 py-2 text-center">
                           <input
                             type="checkbox"
@@ -778,7 +791,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                               type="button"
                               onClick={() => handleOpenApprovalModal(d)}
                               className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg shadow-sm transition"
-                              title={user?.role === 'admin' ? "Review Dispatcher Voice Note" : "Listen to Voice Note"}
+                              title={isAdmin ? "Review Dispatcher Voice Note" : "Listen to Voice Note"}
                             >
                               <Mic size={14} className="animate-pulse" />
                             </button>
@@ -801,7 +814,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
                           >
                             <Package size={13} /> Open
                           </button>
-                          {user?.role === 'admin' && (
+                          {isAdmin && (
                             <button 
                               type="button"
                               onClick={() => removeDispatch(d)} 
@@ -821,7 +834,7 @@ export default function Dispatches({ onNavigate }: { onNavigate?: (view: string)
           </div>
 
           {/* Floating Bulk Action Bar */}
-          {user?.role === 'admin' && selectedIds.size > 0 && (
+          {isAdmin && selectedIds.size > 0 && (
             <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in border border-slate-700">
               <span className="text-xs font-semibold">
                 {selectedIds.size} {selectedIds.size === 1 ? 'dispatch' : 'dispatches'} selected

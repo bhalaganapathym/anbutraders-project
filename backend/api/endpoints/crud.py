@@ -670,7 +670,20 @@ def update_order(id: UUID, order_in: OrderCreate, background_tasks: BackgroundTa
     return order
 
 @router.delete("/orders/{id}")
-def delete_order(id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def delete_order(
+    id: UUID, 
+    background_tasks: BackgroundTasks, 
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    role = (current_user.role or "").lower()
+    username = (current_user.username or "").lower()
+    if role != "admin" and username != "admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="Only administrators are permitted to delete estimates."
+        )
+
     order = db.query(Order).filter(Order.id == id).first()
     if order:
         db.query(OrderItem).filter(OrderItem.order_id == id).delete()
@@ -680,7 +693,20 @@ def delete_order(id: UUID, background_tasks: BackgroundTasks, db: Session = Depe
     return {"status": "ok"}
 
 @router.post("/orders/bulk-delete")
-def bulk_delete_orders(payload: BulkDeleteRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def bulk_delete_orders(
+    payload: BulkDeleteRequest, 
+    background_tasks: BackgroundTasks, 
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    role = (current_user.role or "").lower()
+    username = (current_user.username or "").lower()
+    if role != "admin" and username != "admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="Only administrators are permitted to delete estimates."
+        )
+
     if not payload.ids:
         return {"status": "ok", "deleted": 0}
     
@@ -1342,10 +1368,12 @@ def delete_dispatch(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    if (current_user.role or "").lower() == "dispatch":
+    role = (current_user.role or "").lower()
+    username = (current_user.username or "").lower()
+    if role != "admin" and username != "admin":
         raise HTTPException(
             status_code=403, 
-            detail="Dispatch staff are not permitted to delete dispatches. Admin authorization required."
+            detail="Only administrators are permitted to delete dispatches."
         )
 
     dispatch = db.query(Dispatch).filter(Dispatch.id == id).first()
@@ -1375,10 +1403,12 @@ def bulk_delete_dispatches(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    if (current_user.role or "").lower() == "dispatch":
+    role = (current_user.role or "").lower()
+    username = (current_user.username or "").lower()
+    if role != "admin" and username != "admin":
         raise HTTPException(
             status_code=403, 
-            detail="Dispatch staff are not permitted to delete dispatches. Admin authorization required."
+            detail="Only administrators are permitted to delete dispatches."
         )
 
     if not payload.ids:

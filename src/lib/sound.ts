@@ -113,10 +113,10 @@ export async function playNotificationChime(force: boolean = false): Promise<boo
   }
   lastPlayTimestamp = nowMs;
 
-  // 1. Mobile sensory haptic vibration
+  // 1. Mobile sensory haptic vibration (3.0s cadence)
   try {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate([350, 100, 350, 100, 350]);
+      navigator.vibrate([400, 150, 400, 150, 400, 150, 400, 150, 400]);
     }
   } catch {}
 
