@@ -23,13 +23,25 @@ def get_sanitized_db_url(url: str) -> str:
 
 db_url = get_sanitized_db_url(settings.DATABASE_URL)
 
-engine = create_engine(
-    db_url,
-    pool_size=10,
-    max_overflow=20,
-    pool_recycle=180,
-    pool_pre_ping=True,
-    pool_timeout=30
-)
+engine_kwargs = {
+    "pool_size": 10,
+    "max_overflow": 20,
+    "pool_recycle": 180,
+    "pool_pre_ping": True,
+    "pool_timeout": 30
+}
+
+try:
+    engine = create_engine(db_url, **engine_kwargs)
+except ModuleNotFoundError:
+    fallback_url = db_url
+    if "postgresql+psycopg://" in fallback_url:
+        fallback_url = fallback_url.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
+    elif "postgresql+psycopg2://" in fallback_url:
+        fallback_url = fallback_url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
+    elif fallback_url.startswith("postgresql://"):
+        fallback_url = fallback_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    engine = create_engine(fallback_url, **engine_kwargs)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
