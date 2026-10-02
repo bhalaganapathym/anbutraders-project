@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import DispatchStatusBadge from '@/components/DispatchStatusBadge';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Camera, User, Calendar, MapPin, Search, Plus, Truck, UserCheck,
-  Mic, MicOff, Play, Pause, RotateCcw, Volume2, Clock, AlertTriangle, Upload, Eye
+  Mic, MicOff, Play, Pause, RotateCcw, Volume2, Clock, AlertTriangle, Upload, Eye, SwitchCamera, X
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { round2, formatBundleQuantity } from '@/lib/pricing';
@@ -466,7 +466,9 @@ export default function DispatchDashboard({
   const [activeCameraItemId, setActiveCameraItemId] = useState<string | null>(null);
   const [cameraType, setCameraType] = useState<'item' | 'vehicle' | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Multiple Goods / Vehicle Leaving Photos (Live Camera Only)
   const [goodsPhotos, setGoodsPhotos] = useState<GoodsPhotoItem[]>([]);
@@ -548,30 +550,112 @@ export default function DispatchDashboard({
     });
   };
 
-  const startCamera = async (itemId: string) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } }
+  // Bind video stream to video element whenever camera stream or modal state changes
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch((err) => {
+        console.warn('Dispatch video play prevented:', err);
       });
+    }
+  }, [cameraStream, cameraModalOpen]);
+
+  // Clean up camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, []);
+
+  const getCameraStream = async (mode: 'environment' | 'user'): Promise<MediaStream> => {
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      throw new Error('Camera API is not supported in this browser or requires HTTPS.');
+    }
+    // Try ideal resolution and facingMode first
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: mode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+    } catch {
+      // Fallback 1: Just facingMode
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode },
+          audio: false,
+        });
+      } catch {
+        // Fallback 2: Any available camera
+        return await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+    }
+  };
+
+  const startCamera = async (itemId: string, mode: 'environment' | 'user' = facingMode) => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+      setCameraStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    try {
+      const stream = await getCameraStream(mode);
       setCameraStream(stream);
+      setFacingMode(mode);
       setActiveCameraItemId(itemId);
       setCameraType('item');
       setCameraModalOpen(true);
-    } catch {
-      toast('Could not access camera. Please check permissions.', 'error');
+    } catch (err: any) {
+      console.warn('Item camera access error:', err);
+      toast('Could not access live camera. Opening device camera fallback.', 'error');
+      setActiveCameraItemId(itemId);
+      setCameraType('item');
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+      }
     }
   };
   
-  const startVehicleCamera = async () => {
+  const startVehicleCamera = async (mode: 'environment' | 'user' = facingMode) => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+      setCameraStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: { ideal: 'environment' } } 
-      });
+      const stream = await getCameraStream(mode);
       setCameraStream(stream);
+      setFacingMode(mode);
       setCameraType('vehicle');
       setCameraModalOpen(true);
-    } catch {
-      toast('Could not access camera. Please check permissions.', 'error');
+    } catch (err: any) {
+      console.warn('Vehicle camera access error:', err);
+      toast('Could not access live camera. Opening device camera fallback.', 'error');
+      setCameraType('vehicle');
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+      }
+    }
+  };
+
+  const switchCamera = () => {
+    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    if (cameraType === 'item' && activeCameraItemId) {
+      startCamera(activeCameraItemId, nextMode);
+    } else if (cameraType === 'vehicle') {
+      startVehicleCamera(nextMode);
     }
   };
 
@@ -579,6 +663,9 @@ export default function DispatchDashboard({
     if (cameraStream) {
       cameraStream.getTracks().forEach((track) => track.stop());
       setCameraStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setCameraModalOpen(false);
     setActiveCameraItemId(null);
@@ -588,8 +675,8 @@ export default function DispatchDashboard({
   const capturePhoto = (videoEl: HTMLVideoElement | null) => {
     if (!videoEl) return;
     const canvas = document.createElement('canvas');
-    canvas.width = videoEl.videoWidth || 640;
-    canvas.height = videoEl.videoHeight || 480;
+    canvas.width = videoEl.videoWidth || 1280;
+    canvas.height = videoEl.videoHeight || 720;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
@@ -619,7 +706,42 @@ export default function DispatchDashboard({
         setGoodsPhotos(prev => [...prev, newItem]);
         toast(`Goods photo #${goodsPhotos.length + 1} captured!`, 'success');
       }
-    }, 'image/jpeg', 0.6);
+    }, 'image/jpeg', 0.85);
+  };
+
+  const handleNativeFileCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      const preview = URL.createObjectURL(compressed);
+
+      if (cameraType === 'item' && activeCameraItemId) {
+        setItemVerification(prev => ({
+          ...prev,
+          [activeCameraItemId]: {
+            ...prev[activeCameraItemId],
+            photoFile: compressed,
+            photoPreview: preview
+          }
+        }));
+        toast('Item photo attached!', 'success');
+        stopCamera();
+      } else {
+        const newItem: GoodsPhotoItem = {
+          id: `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          file: compressed,
+          preview: preview
+        };
+        setGoodsPhotos(prev => [...prev, newItem]);
+        toast(`Goods photo #${goodsPhotos.length + 1} captured!`, 'success');
+        stopCamera();
+      }
+    } catch {
+      toast('Failed to process captured image', 'error');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   // Calculations
@@ -1869,29 +1991,94 @@ export default function DispatchDashboard({
         </Modal>
       )}
 
+      {/* Hidden input for native camera fallback */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleNativeFileCapture}
+      />
+
       {/* Camera Modal */}
       {cameraModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4">
-          <div className="relative w-full max-w-lg bg-black rounded-xl overflow-hidden shadow-2xl border border-slate-800">
-            <video ref={videoRef} autoPlay playsInline className="w-full aspect-video object-cover bg-slate-900" />
-            <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex justify-between items-center px-6">
-              <button onClick={stopCamera} className="text-white hover:text-rose-400 transition font-medium">Cancel</button>
+          <div className="relative w-full max-w-lg bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
+            {/* Header with Title, Switch Camera & Close */}
+            <div className="p-3 bg-slate-950/80 backdrop-blur border-b border-slate-800 flex items-center justify-between px-4 text-white">
+              <span className="text-xs font-bold tracking-wide uppercase flex items-center gap-1.5">
+                <Camera size={14} className="text-indigo-400" />
+                {cameraType === 'vehicle' ? 'Vehicle / Goods Photo' : 'Item Verification Photo'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={switchCamera}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-xs font-bold flex items-center gap-1.5 transition"
+                  title="Switch Camera (Front / Rear)"
+                >
+                  <SwitchCamera size={14} />
+                  <span>{facingMode === 'environment' ? 'Rear' : 'Front'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="p-1.5 rounded-lg bg-white/20 hover:bg-rose-600 text-white transition"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Live Video Viewfinder */}
+            <div className="relative aspect-video w-full bg-slate-950 flex items-center justify-center overflow-hidden">
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                muted 
+                className="w-full h-full object-cover" 
+              />
+            </div>
+
+            {/* Bottom Controls Bar */}
+            <div className="p-4 bg-gradient-to-t from-black/95 to-black/70 flex justify-between items-center px-6">
               <button 
+                type="button" 
+                onClick={stopCamera} 
+                className="text-white hover:text-rose-400 transition font-medium text-xs"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
                 onClick={() => capturePhoto(videoRef.current)}
-                className="w-16 h-16 rounded-full bg-white/20 border-4 border-white flex items-center justify-center hover:bg-white/40 transition active:scale-95"
+                className="w-16 h-16 rounded-full bg-white/20 border-4 border-white flex items-center justify-center hover:bg-white/40 transition active:scale-95 shadow-xl cursor-pointer"
                 title="Capture Photo"
               >
-                <Camera size={24} className="text-white" />
+                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center">
+                  <Camera size={22} className="text-slate-900" />
+                </div>
               </button>
               {cameraType === 'vehicle' && goodsPhotos.length > 0 ? (
                 <button 
+                  type="button"
                   onClick={stopCamera} 
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg transition"
                 >
                   Done ({goodsPhotos.length})
                 </button>
               ) : (
-                <div className="w-12"></div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer"
+                  title="Use Phone Camera"
+                >
+                  Device Camera
+                </button>
               )}
             </div>
           </div>

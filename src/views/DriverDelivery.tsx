@@ -56,6 +56,7 @@ export default function DriverDelivery() {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const videoRef = useRef<HTMLVideoElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
 
   // Voice Note Recording State
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
@@ -76,6 +77,9 @@ export default function DriverDelivery() {
   useEffect(() => {
     if (videoRef.current && cameraStream) {
       videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch((err) => {
+        console.warn('Driver video play prevented:', err);
+      });
     }
   }, [cameraStream, cameraModalOpen]);
 
@@ -90,24 +94,56 @@ export default function DriverDelivery() {
     };
   }, []);
 
+  const getCameraStream = async (mode: 'environment' | 'user'): Promise<MediaStream> => {
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      throw new Error('Camera API not supported or requires HTTPS.');
+    }
+    // Try ideal resolution and facingMode first
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: mode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+    } catch {
+      // Fallback 1: Just facingMode
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode },
+          audio: false,
+        });
+      } catch {
+        // Fallback 2: Any available camera
+        return await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+    }
+  };
+
   const startCamera = async (mode: 'environment' | 'user' = facingMode) => {
     if (cameraStream) {
       cameraStream.getTracks().forEach((t) => t.stop());
       setCameraStream(null);
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: mode },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-      });
+      const stream = await getCameraStream(mode);
       setCameraStream(stream);
       setFacingMode(mode);
       setCameraModalOpen(true);
-    } catch {
-      toast('மொபைல் கேமராவை இயக்க முடியவில்லை. கேமரா அனுமதியை சரிபார்க்கவும் (Camera access denied)', 'error');
+    } catch (err: any) {
+      console.warn('Live camera access failed:', err);
+      toast('லைவ் கேமரா திறக்க முடியவில்லை. போன் கேமரா திறக்கப்படுகிறது (Opening Device Camera...)', 'error');
+      if (nativeCameraInputRef.current) {
+        nativeCameraInputRef.current.click();
+      }
     }
   };
 
@@ -120,6 +156,9 @@ export default function DriverDelivery() {
     if (cameraStream) {
       cameraStream.getTracks().forEach((track) => track.stop());
       setCameraStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setCameraModalOpen(false);
   };
@@ -144,6 +183,24 @@ export default function DriverDelivery() {
       stopCamera();
       toast('தள புகைப்படம் எடுக்கப்பட்டது! (Photo Captured)', 'success');
     }, 'image/jpeg', 0.85);
+  };
+
+  const handleNativeCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setPodPhotoFile(compressed);
+      if (podPhotoPreview) URL.revokeObjectURL(podPhotoPreview);
+      const preview = URL.createObjectURL(compressed);
+      setPodPhotoPreview(preview);
+      stopCamera();
+      toast('தள புகைப்படம் பதிவு செய்யப்பட்டது! (Photo Captured)', 'success');
+    } catch {
+      toast('புகைப்படத்தை செயலாக்க முடியவில்லை (Failed to process photo)', 'error');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const startVoiceRecording = async () => {
@@ -842,24 +899,46 @@ export default function DriverDelivery() {
                   </div>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => startCamera()}
-                  className="w-full h-36 border-2 border-dashed border-amber-400 dark:border-amber-600 hover:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:bg-amber-100/60 dark:hover:bg-amber-950/40 rounded-2xl flex flex-col items-center justify-center gap-2 text-amber-900 dark:text-amber-200 transition p-4 shadow-sm group active:scale-[0.99]"
-                >
-                  <div className="w-12 h-12 rounded-full bg-amber-500/10 dark:bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition">
-                    <Camera size={26} className="text-amber-600 dark:text-amber-400 animate-pulse" />
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => startCamera()}
+                    className="w-full h-36 border-2 border-dashed border-amber-400 dark:border-amber-600 hover:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:bg-amber-100/60 dark:hover:bg-amber-950/40 rounded-2xl flex flex-col items-center justify-center gap-2 text-amber-900 dark:text-amber-200 transition p-4 shadow-sm group active:scale-[0.99]"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-amber-500/10 dark:bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition">
+                      <Camera size={26} className="text-amber-600 dark:text-amber-400 animate-pulse" />
+                    </div>
+                    <div className="text-center space-y-0.5">
+                      <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
+                        நேரடி கேமராவில் புகைப்படம் எடுக்கவும் (Take Photo with Camera)
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                        கேலரி அனுமதி இல்லை — தளத்தில் கேமரா மூலம் மட்டுமே படம் எடுக்க முடியும்
+                      </p>
+                    </div>
+                  </button>
+
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => nativeCameraInputRef.current?.click()}
+                      className="text-[11px] font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1 py-1 cursor-pointer"
+                    >
+                      <Camera size={13} /> போன் கேமராவை நேரடியாக திறக்க (Open Device Camera directly)
+                    </button>
                   </div>
-                  <div className="text-center space-y-0.5">
-                    <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                      நேரடி கேமராவில் புகைப்படம் எடுக்கவும் (Take Photo with Camera)
-                    </p>
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                      கேலரி அனுமதி இல்லை — தளத்தில் கேமரா மூலம் மட்டுமே படம் எடுக்க முடியும்
-                    </p>
-                  </div>
-                </button>
+                </div>
               )}
+
+              {/* மறைக்கப்பட்ட நேரடி போன் கேமரா ஃபால்பேக் (Hidden native camera input) */}
+              <input
+                ref={nativeCameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleNativeCameraCapture}
+              />
             </div>
 
             {/* பெறுநர் பெயர் / குறிப்புகள் & குரல் குறிப்பு (Receiver Notes & Voice Note) */}
@@ -1073,8 +1152,15 @@ export default function DriverDelivery() {
                 </div>
               </button>
 
-              <div className="w-16 text-right">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">நேரடி படம்</span>
+              <div className="w-20 text-right">
+                <button
+                  type="button"
+                  onClick={() => nativeCameraInputRef.current?.click()}
+                  className="text-[10px] text-amber-400 hover:text-amber-300 font-bold block underline cursor-pointer"
+                  title="போன் கேமராவில் எடுக்க"
+                >
+                  போன் கேமரா
+                </button>
               </div>
             </div>
           </div>
